@@ -1,0 +1,91 @@
+{
+    "name": "cloudblast-ssh",
+    "version": "1.0.0",
+    "description": "Modern SSH Client built with Electron, React and xterm.js",
+    "main": "src/main/main.js",
+    "scripts": {
+        "postinstall": "patch-package",
+        "start": "electron .",
+        "test": "node test/snippets.test.js && node test/host-tags.test.js && node test/backup.test.js && node test/activity.test.js && node test/vnc.test.js && node test/rdp.test.js && node test/telnet.test.js && node test/serial.test.js && node test/session-log.test.js && node test/server-sync.test.js && node test/os-detect.test.js && node test/cloud-snapshot.test.js && node test/jump-host.test.js",
+        "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
+        "dev:vite": "vite",
+        "dev:electron": "wait-on tcp:5173 && electron .",
+        "build:css": "npx tailwindcss -i ./src/renderer/input.css -o ./src/renderer/styles.css",
+        "build:hello": "node scripts/build-hello-helper.js",
+        "build:renderer": "vite build",
+        "build:electron": "electron-builder --win portable",
+        "build": "npm run build:hello && npm run build:css && npm run build:renderer && npm run build:electron"
+    },
+    "build": {
+        "appId": "com.cloudblast.ssh",
+        "productName": "CloudBlast SSH",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "src/main/**/*",
+            "dist/renderer/**/*",
+            "resources/**/*"
+        ],
+        "asarUnpack": [
+            "**/node_modules/@serialport/bindings-cpp/**"
+        ],
+        "extraResources": [
+            {
+                "from": "resources/",
+                "to": "resources/",
+                "filter": [
+                    "**/*"
+                ]
+            }
+        ],
+        "win": {
+            "target": "portable",
+            "icon": "resources/icon.ico"
+        },
+        "portable": {
+            "artifactName": "CloudBlast-SSH-${version}.exe"
+        },
+        "mac": {
+            "target": "dmg",
+            "category": "public.app-category.developer-tools"
+        }
+    },
+    "keywords": [
+        "ssh",
+        "terminal",
+        "electron"
+    ],
+    "author": "CloudBlast",
+    "license": "SEE LICENSE IN LICENSE",
+    "devDependencies": {
+        "@vitejs/plugin-react": "^4.2.1",
+        "autoprefixer": "^10.4.23",
+        "concurrently": "^9.2.1",
+        "electron": "^43.2.0",
+        "electron-builder": "^26.15.3",
+        "patch-package": "^8.0.1",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.17",
+        "vite": "^5.0.12",
+        "wait-on": "^7.2.0"
+    },
+    "dependencies": {
+        "@fontsource/inter": "^5.3.0",
+        "@fontsource/jetbrains-mono": "^5.3.0",
+        "@novnc/novnc": "^1.7.0",
+        "@xterm/addon-fit": "^0.9.0",
+        "@xterm/addon-search": "^0.15.0",
+        "@xterm/addon-web-links": "^0.11.0",
+        "@xterm/addon-webgl": "^0.18.0",
+        "@xterm/xterm": "^5.4.0",
+        "hugeicons-react": "^0.4.0",
+        "ironrdp-wasm": "^1.1.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-hot-toast": "^2.6.0",
+        "serialport": "^12.0.0",
+        "ssh2": "^1.15.0",
+        "ws": "^8.21.1"
+    }
+}

@@ -1,0 +1,106 @@
+CloudTerm License, version 1.0
+Copyright 2026 CloudBlast. All rights reserved.
+
+This is a fair-code license (https://faircode.io): the source is open to read,
+the software is free to use and modify, and commercial reuse is reserved to
+CloudBlast. It is not an open source license as the Open Source Initiative
+defines that term. Everything below is meant to be read without a lawyer.
+
+In this license, "the software" means CloudTerm: the source code in this
+repository, the builds made from it, and any part of either. "You" means the
+person or organisation using it.
+
+
+WHAT YOU MAY DO
+
+Use it, for anything.
+    Run the software for any purpose, personal or professional, on as many
+    machines as you like, at home or at the company that employs you. There is
+    no restriction on who you are, what you connect to, or whether money is
+    being made in the room. Using CloudTerm to do your job, and billing your
+    employer or your client for your own time while you do, is fine and always
+    will be.
+
+Read it and change it.
+    Study the source, modify it, build your own copy and run that instead. Fix a
+    bug, add a protocol, remove a feature you dislike, keep the patch private if
+    you want to.
+
+Share it, free of charge.
+    Give copies to anyone, publish your fork, send a patch back. Keep the
+    copyright notice and a copy of this license with what you pass on, and make
+    clear what you changed.
+
+
+WHAT NEEDS A SEPARATE LICENSE FROM CLOUDBLAST
+
+Selling it.
+    You may not charge a fee, or take any other consideration, for the software,
+    for a modified version of it, or for a copy of any part of its source.
+
+Putting it in something you charge for.
+    You may not include the software, or any part of its source, in a product or
+    service that you sell, license, rent, subscribe out, or otherwise provide
+    for a fee or other consideration. This applies to any part of the code
+    however small, and whether or not the result resembles CloudTerm.
+
+Running it as a paid service.
+    You may not host the software, or anything derived from it, as a service you
+    charge for, including charging for access to it, or for hosting, support or
+    maintenance of it.
+
+Distributing it commercially.
+    You may not bundle the software with hardware, a subscription, or any other
+    paid offering, and you may not distribute it as part of a commercial
+    product, whether or not the software itself is what is being paid for.
+
+
+COMMERCIAL LICENSES
+
+If you want to do any of the above, ask. Commercial licenses are available from
+CloudBlast, and a reasonable request is likely to get a yes:
+
+    https://cloudblast.io
+
+CloudBlast holds the copyright in the software and is not itself restricted by
+this license.
+
+
+NOTICES
+
+Keep this license and the copyright notice above with every copy or substantial
+portion of the source that you distribute, and with every build you pass on.
+
+
+NAMES AND LOGOS
+
+This license grants you no rights in the CloudTerm or CloudBlast names, logos or
+other trademarks. You may state accurately that your work is derived from
+CloudTerm. You may not call it CloudTerm, or present it as coming from
+CloudBlast.
+
+
+THIRD-PARTY COMPONENTS
+
+The software includes components written by other people under their own
+licenses, which continue to govern those components and are not changed by this
+license. Notably, noVNC is under MPL-2.0, and the bundled Inter and JetBrains
+Mono fonts are under OFL-1.1. Nothing in this license restricts any right you
+have in those components under their own terms.
+
+
+IF YOU BREAK THESE TERMS
+
+Your rights under this license end automatically. If it is your first breach and
+you put it right within 30 days of becoming aware of it, your rights are
+restored.
+
+
+NO WARRANTY, NO LIABILITY
+
+The software is provided as is, without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability, fitness
+for a particular purpose and non-infringement. To the fullest extent permitted
+by law, CloudBlast shall not be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from, out
+of, or in connection with the software or its use.

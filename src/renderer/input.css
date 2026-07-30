@@ -1,0 +1,1019 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The app's own colours: the dark elevation ramp, as the bare `r g b` channels
+   Tailwind's `rgb(var(--x) / <alpha-value>)` palette needs. Appearance settings
+   overwrite these six on the root element to retint the whole shell, so this
+   block is the palette the app falls back to rather than the only one it has.
+   Keep it in step with DEFAULT_APP_COLORS in lib/app-colors.js. */
+:root {
+    --app-base: 17 18 25;
+    /* #111219 */
+    --app-raised: 26 27 38;
+    /* #1a1b26 */
+    --app-control: 36 37 58;
+    /* #24253a */
+    --app-hover: 46 48 73;
+    /* #2e3049 */
+    --app-active: 59 61 92;
+    /* #3b3d5c */
+    --app-muted: 86 89 130;
+    /* #565982 */
+}
+
+/* Custom Reset/Utilities */
+html,
+body {
+    height: 100%;
+}
+
+/* The chrome is an application surface, not a document, and dragging a selection
+   across labels and buttons is never what you meant. Anything you genuinely
+   type into, or the terminal (which runs its own selection), opts back in. */
+body {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+.selectable {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Icons and logos should not tear off as drag ghosts. */
+img,
+svg {
+    -webkit-user-drag: none;
+    user-drag: none;
+}
+
+/* A colour input is a swatch here, not a form field. Chromium's default draws
+   the colour as a small square inset in a bordered box, a box inside a box,
+   so the chrome is stripped and the colour fills the whole control. */
+input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid rgb(0 0 0 / 0.12);
+    border-radius: 0.625rem;
+}
+
+/* Dark backgrounds need the outline the other way round, or a near-black
+   swatch has no edge at all. */
+.dark input[type="color"]::-webkit-color-swatch {
+    border-color: rgb(255 255 255 / 0.16);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-neutral-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-neutral-600;
+}
+
+/* Ripple Animation */
+.ripple {
+    @apply absolute rounded-full pointer-events-none z-10;
+    background: rgba(0, 0, 0, 0.1);
+    transform: scale(0);
+    animation: ripple-animation 0.6s linear;
+}
+
+.dark .ripple {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes ripple-animation {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+.app-drag {
+    -webkit-app-region: drag;
+}
+
+.app-no-drag {
+    -webkit-app-region: no-drag;
+}
+
+/* Toast animations */
+@keyframes slide-in-right {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+}
+
+/* Fade in animation for backdrop */
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+}
+
+/* Auth tab active state */
+.auth-tab-active {
+    @apply bg-white text-gray-900 shadow-sm;
+}
+
+.dark .auth-tab-active {
+    background-color: rgb(var(--app-active)) !important;
+    color: white !important;
+}
+
+/* Connecting state: a halo breathing out from the host badge, plus a slim
+   indeterminate bar. Colours come from `currentColor` so the overlay adapts to
+   whichever terminal theme is active. */
+@keyframes connect-halo {
+    /* Starts flush with the 56px badge (64px ring x 0.875) so it reads as
+       emanating from the edge rather than popping out of the middle. */
+    0% {
+        transform: scale(0.875);
+        opacity: 0.35;
+    }
+
+    70% {
+        transform: scale(1.45);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1.45);
+        opacity: 0;
+    }
+}
+
+.connect-halo {
+    animation: connect-halo 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Tinted from the terminal theme's own foreground rather than a flat grey, so
+   the badge sits in the theme instead of on top of it. The rgba line is the
+   fallback for engines without color-mix(). */
+.connect-badge {
+    background-color: rgba(127, 127, 127, 0.12);
+    background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.connect-track {
+    background-color: rgba(127, 127, 127, 0.18);
+    background-color: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.connect-halo-delayed {
+    animation-delay: 0.8s;
+}
+
+@keyframes connect-sweep {
+    0% {
+        transform: translateX(-110%);
+    }
+
+    100% {
+        transform: translateX(340%);
+    }
+}
+
+.connect-sweep {
+    animation: connect-sweep 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes connect-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.connect-fade-in {
+    animation: connect-fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* SFTP Drag and Drop animations */
+@keyframes sftp-drop-pulse {
+
+    0%,
+    100% {
+        border-color: rgba(59, 130, 246, 0.5);
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    50% {
+        border-color: rgba(59, 130, 246, 1);
+        background-color: rgba(59, 130, 246, 0.15);
+    }
+}
+
+.sftp-drop-zone-active {
+    animation: sftp-drop-pulse 1s ease-in-out infinite;
+}
+
+/* Queued and scanning transfers have no measurable progress yet, so the bar
+   sweeps instead of filling. */
+@keyframes sftp-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.sftp-indeterminate {
+    animation: sftp-indeterminate 1.2s ease-in-out infinite;
+}
+
+/* File rows. Absolutely positioned by the windowing layer, so no transitions
+   on layout properties, only colour. */
+.sftp-row {
+    transition: background-color 0.12s ease-out;
+}
+
+.sftp-row-selected {
+    @apply bg-blue-500/10 dark:bg-blue-400/[0.12];
+}
+
+.sftp-row-selected:hover {
+    @apply bg-blue-500/[0.14] dark:bg-blue-400/[0.16];
+}
+
+/* The keyboard cursor, drawn inside the row so it never shifts the layout. */
+.sftp-row-focused::after {
+    content: '';
+    position: absolute;
+    inset: 1px 2px;
+    border-radius: 6px;
+    pointer-events: none;
+    @apply ring-1 ring-inset ring-blue-500/60 dark:ring-blue-400/60;
+}
+
+.sftp-row-drop {
+    @apply bg-blue-500/20 dark:bg-blue-400/20;
+    box-shadow: inset 0 0 0 1px rgb(59 130 246 / 0.7);
+}
+
+/* The path bar scrolls horizontally; a visible scrollbar would eat its height. */
+.sftp-pathbar::-webkit-scrollbar {
+    height: 0;
+}
+
+/* Right-click menu slide in. Used wherever ui/ContextMenu.jsx is opened, which
+   is the file browser and the tab strip. */
+@keyframes context-menu-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.context-menu {
+    animation: context-menu-in 0.15s ease-out;
+}
+
+
+/* Checkbox tick. The stroke is drawn on rather than faded in, which reads as a
+   deliberate confirmation instead of a flicker. Paired with ui/Checkbox.jsx:
+   the colours live there as Tailwind peer variants. */
+.cb-mark {
+    stroke-dasharray: 16;
+    stroke-dashoffset: 16;
+    opacity: 0;
+    transition: stroke-dashoffset 0.2s cubic-bezier(0.16, 1, 0.3, 1) 0.03s,
+                opacity 0.08s ease-out;
+}
+
+.cb-input:checked+.cb-box .cb-mark {
+    stroke-dashoffset: 0;
+    opacity: 1;
+}
+
+/* Indeterminate: a dash that grows out from the middle. */
+.cb-dash {
+    opacity: 0;
+    transform: scaleX(0.2);
+    transition: opacity 0.1s ease-out, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cb-input:indeterminate+.cb-box .cb-dash {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+.cb-input:indeterminate+.cb-box .cb-mark {
+    opacity: 0;
+    stroke-dashoffset: 16;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .cb-mark,
+    .cb-dash {
+        transition-duration: 0.01ms;
+    }
+}
+
+/* Dialog entrance */
+@keyframes dialog-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.animate-dialog-in {
+    animation: dialog-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* Tooltips -----------------------------------------------------------------
+   These open the instant the pointer lands, so the entrance has to be short
+   enough not to become the delay it was meant to replace: long enough to read
+   as a movement, over before anyone waits on it. `--tip-x/--tip-y` are set per
+   side in ui/Tooltip.jsx, so the bubble comes out of its trigger rather than
+   drifting in from a fixed direction. */
+@keyframes tooltip-in {
+    from {
+        opacity: 0;
+        transform: translate(var(--tip-x, 0), var(--tip-y, 0)) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.tooltip-bubble {
+    animation: tooltip-in 0.12s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tooltip-bubble {
+        animation-duration: 0.01ms;
+    }
+}
+
+
+/* Split panes -------------------------------------------------------------
+   A tab's panes are absolutely positioned boxes rather than nested flex
+   containers, so that rearranging the layout never moves a terminal to a new
+   place in the DOM. See src/renderer/lib/panes.js */
+
+/* Geometry is animated, so a split or a zoom resolves rather than jumps. The
+   terminal inside refits once the box has settled, not on every frame. */
+.pane-box {
+    transition:
+        left 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+        top 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+        width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+        height 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A dragged divider has to track the pointer exactly; easing it would put the
+   pane a frame or two behind the handle the user is holding. */
+body.pane-resizing-x .pane-box,
+body.pane-resizing-y .pane-box {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-box {
+        transition: none;
+    }
+}
+
+/* The frame around a pane, drawn over the terminal so it reads as part of the
+   pane. Only the focused one is stated outright; the rest are just separated. */
+.pane-ring {
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.10);
+    transition: box-shadow 0.2s ease-out;
+}
+
+.dark .pane-ring {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.pane-ring-active {
+    box-shadow: inset 0 0 0 1.5px rgba(17, 24, 39, 0.38);
+}
+
+.dark .pane-ring-active {
+    box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.30);
+}
+
+.pane-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    /* Or a drag on a touch screen scrolls the pane instead of resizing it. */
+    touch-action: none;
+}
+
+/* The handle is 8px, which is a small target. The hit area is grown either
+   side without taking any more room from the panes. */
+.pane-divider::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+}
+
+.pane-divider-x {
+    cursor: col-resize;
+}
+
+.pane-divider-y {
+    cursor: row-resize;
+}
+
+/* Invisible until it is worth noticing, then a short bar under the pointer
+   rather than a full-height rule: it marks the grab point instead of drawing
+   a border the layout does not otherwise have. */
+.pane-grip {
+    border-radius: 999px;
+    background-color: transparent;
+    transition:
+        background-color 0.15s ease-out,
+        transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pane-divider-x .pane-grip {
+    width: 2px;
+    height: 22px;
+}
+
+.pane-divider-y .pane-grip {
+    width: 22px;
+    height: 2px;
+}
+
+.pane-divider:hover .pane-grip,
+.pane-divider:focus-visible .pane-grip {
+    background-color: rgba(17, 24, 39, 0.28);
+}
+
+.dark .pane-divider:hover .pane-grip,
+.dark .pane-divider:focus-visible .pane-grip {
+    background-color: rgba(255, 255, 255, 0.28);
+}
+
+.pane-divider-x:hover .pane-grip,
+.pane-divider-x:focus-visible .pane-grip {
+    transform: scaleY(1.9);
+}
+
+.pane-divider-y:hover .pane-grip,
+.pane-divider-y:focus-visible .pane-grip {
+    transform: scaleX(1.9);
+}
+
+.pane-divider[data-dragging="true"] .pane-grip {
+    background-color: rgba(17, 24, 39, 0.5);
+}
+
+.dark .pane-divider[data-dragging="true"] .pane-grip {
+    background-color: rgba(255, 255, 255, 0.45);
+}
+
+/* The pointer leaves the 8px handle within a frame of starting to drag, so the
+   cursor and the no-select rule are put on the whole window for the duration.
+   The terminals stop taking pointer events too, or a drag across one starts
+   selecting its text. */
+body.pane-resizing-x,
+body.pane-resizing-x * {
+    cursor: col-resize !important;
+}
+
+body.pane-resizing-y,
+body.pane-resizing-y * {
+    cursor: row-resize !important;
+}
+
+body.pane-resizing-x,
+body.pane-resizing-y {
+    user-select: none !important;
+}
+
+body.pane-resizing-x .xterm,
+body.pane-resizing-y .xterm {
+    pointer-events: none;
+}
+
+/* Glassmorphic Cards */
+.glass-card {
+    background: rgba(0, 0, 0, 0.03);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.glass-card:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+/* Solid, not a white overlay: compositing white over the blue-tinted base
+   washes the tint out, so cards drifted grey next to palette-coloured buttons
+   at the same elevation. */
+.dark .glass-card {
+    background: rgb(var(--app-control));
+    border: none;
+}
+
+.dark .glass-card:hover {
+    background: rgb(var(--app-hover));
+}
+
+/* Hosts page cards.
+   Built on the same surface as .glass-card, with the states a card needs once
+   it can be picked up and dropped on. */
+.org-card {
+    background: rgba(0, 0, 0, 0.03);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: none;
+    outline: none;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+
+.org-card:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.org-card:focus-visible {
+    box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.25);
+}
+
+/* Solid rather than a white overlay, for the same reason .glass-card is:
+   compositing white over the blue-tinted base washes the tint out and the card
+   drifts grey next to controls at the same elevation. */
+.dark .org-card {
+    background: rgb(var(--app-control));
+}
+
+.dark .org-card:hover {
+    background: rgb(var(--app-hover));
+}
+
+.dark .org-card:focus-visible {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+/* The slot a carried card came from. Left in place and faded rather than
+   removed: it is the gap the arrangement is being made around, and it is also
+   what tells the pointer "you are back where you started, change nothing". */
+.org-card-dragging {
+    opacity: 0.32;
+}
+
+.org-card-dragging:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.dark .org-card-dragging:hover {
+    background: rgb(var(--app-control));
+}
+
+/* A folder that would receive the drop. The ring is drawn inside the card so a
+   grid of them does not shift as the highlight moves between neighbours. */
+.org-card-into {
+    background: rgba(17, 24, 39, 0.07);
+    box-shadow: inset 0 0 0 2px rgba(17, 24, 39, 0.35);
+    transform: scale(1.02);
+}
+
+.dark .org-card-into {
+    background: rgb(var(--app-hover));
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+/* The list itself, when what would receive the drop is the folder you are
+   standing in — which is where a card carried in through a spring-open goes.
+   There is no card on screen to ring, so the room is ringed instead.
+
+   An outline rather than the inset shadow the cards use: a shadow paints under
+   the content, and the top row of cards sits flush against this edge. Quieter
+   than the card ring on purpose, because it is a much larger shape saying a
+   much weaker thing — "anywhere here" rather than "this one". */
+.org-drop-here {
+    border-radius: 14px;
+    outline: 2px solid rgba(17, 24, 39, 0.22);
+    outline-offset: -2px;
+}
+
+.dark .org-drop-here {
+    outline-color: rgba(255, 255, 255, 0.26);
+}
+
+/* The card under the cursor while it is being carried.
+
+   A fixed layer holding a clone, moved by transform alone from a rAF loop, so
+   dragging costs one compositor property and no layout. Never a hit-test
+   target: the pointer has to be able to see the cards underneath it, which is
+   how the drop position is worked out at all. */
+.org-drag-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9998;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.org-ghost {
+    width: 100%;
+    height: 100%;
+    transform-origin: center;
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 160ms ease-out,
+                opacity 160ms ease-out;
+}
+
+/* Added a frame after the clone lands, and removed again on drop, so putting a
+   card down plays the pick-up in reverse rather than cutting to it.
+
+   Slightly transparent on purpose: a card held over a folder covers the very
+   ring that says it would be filed there, and the drop target matters more than
+   the thing being dropped. */
+.org-ghost-lifted {
+    transform: scale(1.03);
+    opacity: 0.88;
+    box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.28), 0 4px 10px -4px rgba(0, 0, 0, 0.18);
+}
+
+.dark .org-ghost-lifted {
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.65), 0 4px 12px -4px rgba(0, 0, 0, 0.45);
+}
+
+/* How many cards the drop is going to move, when it is more than the one under
+   the cursor. Pinned to the ghost's corner rather than drawn in the card,
+   because it describes the gesture and not the host. */
+.org-ghost-count {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background: #111827;
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+}
+
+.dark .org-ghost-count {
+    color: #000;
+    background: #fff;
+}
+
+/* The cursor has to survive leaving the card it picked up, and nothing under
+   the pointer should look clickable while a card is in the air. */
+body.org-dragging,
+body.org-dragging * {
+    cursor: grabbing !important;
+}
+
+/* Rubber-band selection ---------------------------------------------------
+
+   The box drawn by dragging across the empty space between cards. Positioned
+   inside the scrolling list rather than over it, so it stays anchored to the
+   card it started beside while the list autoscrolls underneath the pointer.
+
+   Never a hit-test target: the band is measured from geometry captured when it
+   started, and a box that swallowed the pointer would also swallow the release
+   that ends it. */
+.org-marquee {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: none;
+    z-index: 5;
+    pointer-events: none;
+    will-change: transform;
+    border-radius: 8px;
+    border: 1px solid rgba(17, 24, 39, 0.45);
+    background: rgba(17, 24, 39, 0.08);
+}
+
+.dark .org-marquee {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.09);
+}
+
+/* A card the band, or a modifier-click, has picked out. The ring alone carries
+   it — the surface is left on the card's own background so a selected card
+   still reads as the same card, and hover still behaves normally. Drawn inset
+   for the same reason .org-card-into is: an outer ring would shift the grid
+   every time the selection grew. */
+.org-card-selected {
+    box-shadow: inset 0 0 0 2px rgba(17, 24, 39, 0.55);
+}
+
+.dark .org-card-selected {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+/* Nothing under the pointer should look clickable while a band is being drawn,
+   and the cursor has to survive crossing the cards it is selecting. */
+body.org-banding,
+body.org-banding * {
+    cursor: crosshair !important;
+}
+
+/* Rises into place, because it appears under the cursor rather than where the
+   pointer is looking, and something that simply exists on the next frame reads
+   as a repaint rather than an answer. */
+.org-selection-bar {
+    animation: selection-bar-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes selection-bar-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .org-ghost,
+    .org-card-into {
+        transition: none;
+        transform: none;
+    }
+
+    .org-selection-bar {
+        animation: none;
+    }
+}
+
+/* Tab strip ---------------------------------------------------------------
+   A tab's width is set by max-width rather than by its share of the strip, so
+   every change to the strip is something CSS can interpolate: the focused tab
+   takes the extra room, its neighbours give it back, and both ends of the move
+   are a transition instead of a jump. flex-grow carries the same weighting for
+   the case where the strip is crowded enough that the share bites before the
+   max-width does. See src/renderer/components/TitleBar.jsx */
+.session-tab {
+    flex: 1 1 0%;
+    min-width: 52px;
+    max-width: 130px;
+    animation: tab-open 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+    transition:
+        max-width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+        min-width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+        flex-grow 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+        background-color 0.15s ease-out,
+        color 0.15s ease-out;
+}
+
+/* The focused tab is the one being read, so it gets the room to be read in:
+   enough for a hostname the others have to truncate. */
+.session-tab[data-active="true"] {
+    flex-grow: 1.45;
+    min-width: 76px;
+    max-width: 172px;
+}
+
+/* Opening a tab. The far end of the animation is left implicit so it lands on
+   whatever width the rules above give this tab, which depends on it opening
+   focused, and on how much room the rest of the strip has left. */
+@keyframes tab-open {
+    from {
+        max-width: 0;
+        min-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        opacity: 0;
+    }
+}
+
+/* Closing one. The tab holds its place while it collapses, so the strip takes
+   the space back over the same beat rather than snapping shut under the
+   pointer that just clicked. */
+@keyframes tab-collapse {
+    to {
+        max-width: 0;
+        min-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        opacity: 0;
+    }
+}
+
+.session-tab[data-closing="true"] {
+    animation: tab-collapse 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    pointer-events: none;
+}
+
+/* The plus turns into the tab it is about to open. */
+.tab-add svg {
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-add:hover svg {
+    transform: rotate(90deg);
+}
+
+.tab-add:active {
+    transform: scale(0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .session-tab,
+    .session-tab[data-closing="true"],
+    .tab-add svg {
+        animation-duration: 0.01ms;
+        transition-duration: 0.01ms;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Settings sliders
+ *
+ * Styled by hand rather than left native: the native track and thumb are drawn
+ * by the platform and stay light-themed in dark mode, which is the one place a
+ * control must not look disabled by accident.
+ * ------------------------------------------------------------------ */
+
+.setting-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 18px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.setting-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.12);
+}
+
+.dark .setting-slider::-webkit-slider-runnable-track {
+    background: rgb(255 255 255 / 0.14);
+}
+
+.setting-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 999px;
+    background: #111827;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    transition: transform 0.12s ease;
+}
+
+.dark .setting-slider::-webkit-slider-thumb {
+    background: #fff;
+}
+
+.setting-slider:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+}
+
+.setting-slider:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid rgb(59 130 246 / 0.6);
+    outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Terminal typography
+ *
+ * Ligatures are a property of the *renderer*, not just the font. WebGL draws
+ * one glyph per cell out of an atlas, so `->` can never become an arrow there;
+ * the DOM renderer emits runs of text as spans, where the font's own contextual
+ * alternates apply. TerminalView drops the WebGL addon when this is on, and
+ * these rules ask for the features explicitly rather than relying on the
+ * browser default, which differs by platform.
+ * ------------------------------------------------------------------ */
+
+.terminal-ligatures .xterm-rows {
+    font-variant-ligatures: contextual common-ligatures;
+    font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Off everywhere else, so switching the setting off actually switches it off
+   rather than leaving whatever the platform does by default. */
+.terminal-view:not(.terminal-ligatures) .xterm-rows {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Broadcast input
+ *
+ * A pane that is about to send what you type to eight other machines has to
+ * look different from one that is not. The ring is drawn inside the pane so it
+ * cannot be mistaken for the focus outline, and it pulses; a static border is
+ * the kind of thing that stops being seen after a minute.
+ * ------------------------------------------------------------------ */
+
+.terminal-view[data-broadcast="true"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 30;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 2px rgb(245 158 11 / 0.85);
+    animation: broadcast-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes broadcast-pulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px rgb(245 158 11 / 0.85); }
+    50% { box-shadow: inset 0 0 0 2px rgb(245 158 11 / 0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .terminal-view[data-broadcast="true"]::after {
+        animation: none;
+    }
+}
+
+/* Inset content card. Spacing comes from the app shell's gutter, so the panel
+   itself carries no margin, see src/renderer/lib/layout.js */
+#main-content {
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 16px;
+}
+
+.dark #main-content {
+    background: rgb(var(--app-raised));
+    border-radius: 16px;
+}

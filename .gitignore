@@ -1,0 +1,8 @@
+node_modules/
+dist/
+resources/*.exe
+*.log
+
+# Local working notes and agent config, not part of the project
+CLAUDE.md
+.claude/
