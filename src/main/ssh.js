@@ -726,6 +726,7 @@ function connect({ tabId, hostId, cols, rows }, { window, requestTrust, requestK
                 hostName: label.name,
                 address: label.address,
                 hostId,
+                protocol: 'ssh',
             });
 
             port1.on('message', (event) => {

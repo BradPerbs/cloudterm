@@ -13,7 +13,7 @@
  *   small reads, and one message each pins the renderer;
  *
  *   the transcript fed from the arriving bytes rather than from the flush, so
- *   it records what the far end sent even when the port has gone away — a
+ *   it records what the far end sent even when the port has gone away. A
  *   window reload leaves the session perfectly alive and unable to be drawn;
  *
  *   multi-byte characters held across reads. A UTF-8 sequence split down the
@@ -35,11 +35,13 @@ const sessionLog = require('./session-log');
  *   tabId     the pane's id, which is the session key everywhere else too
  *   window    where to hand the far end of the port
  *   label     what the transcript header and the log lines name this session
+ *   protocol  which transport this is ('telnet', 'serial'), so the transcript
+ *             settings can decide whether this kind of session is recorded
  *   onInput   bytes typed in the pane, already a string
  *   onResize  the pane's new geometry; transports with no concept of one
  *             simply leave it out
  */
-function createPipe({ tabId, window, label = {}, onInput, onResize }) {
+function createPipe({ tabId, window, label = {}, protocol = '', onInput, onResize }) {
     const { port1, port2 } = new MessageChannelMain();
     const decoder = new StringDecoder('utf8');
 
@@ -51,6 +53,7 @@ function createPipe({ tabId, window, label = {}, onInput, onResize }) {
         hostName: label.hostName || '',
         address: label.address || '',
         hostId: label.hostId || '',
+        protocol,
     });
 
     port1.on('message', (event) => {

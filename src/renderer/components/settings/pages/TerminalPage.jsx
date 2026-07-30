@@ -7,7 +7,6 @@ import Slider from '../ui/Slider';
 import Toggle from '../ui/Toggle';
 import SegmentedControl from '../../ui/SegmentedControl';
 import CustomThemeDialog from '../CustomThemeDialog';
-import SessionLogSection from '../SessionLogSection';
 import {
     CUSTOM_THEME_ID,
     TERMINAL_THEMES,
@@ -404,9 +403,6 @@ export default function TerminalPage({
                     }
                 />
             </SettingCard>
-
-            {/* ---------------- Transcripts ---------------- */}
-            <SessionLogSection />
 
             {editorOpen && (
                 <CustomThemeDialog

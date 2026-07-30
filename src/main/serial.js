@@ -235,6 +235,7 @@ function connect({ tabId, hostId }, { window } = {}) {
                 tabId,
                 window,
                 label: { hostName: label.name, address, hostId },
+                protocol: 'serial',
                 onInput: (data) => {
                     if (!port.isOpen) return;
 

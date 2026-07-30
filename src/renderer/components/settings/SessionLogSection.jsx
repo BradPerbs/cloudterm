@@ -5,6 +5,7 @@ import SettingCard from './ui/SettingCard';
 import SettingRow, { DIVIDED } from './ui/SettingRow';
 import Toggle from './ui/Toggle';
 import SegmentedControl from '../ui/SegmentedControl';
+import Checkbox from '../ui/Checkbox';
 import { toastOptions } from '../../lib/toast';
 import { formatSize } from '../../lib/format';
 
@@ -103,6 +104,33 @@ export default function SessionLogSection() {
 
             <SettingRow
                 className={DIVIDED}
+                align="center"
+                title="Which sessions"
+                description="What kinds of session the switch above records. Recording one
+                    session from its own header ignores this list."
+                control={
+                    <div className="flex items-center gap-4">
+                        {[
+                            { key: 'ssh', label: 'SSH' },
+                            { key: 'telnet', label: 'Telnet' },
+                            { key: 'serial', label: 'Serial' },
+                        ].map(({ key, label }) => (
+                            <Checkbox
+                                key={key}
+                                size="sm"
+                                label={label}
+                                checked={config.protocols?.[key] !== false}
+                                onChange={(event) => update({
+                                    protocols: { ...config.protocols, [key]: event.target.checked },
+                                })}
+                            />
+                        ))}
+                    </div>
+                }
+            />
+
+            <SettingRow
+                className={DIVIDED}
                 title="What to write"
                 description="Readable strips the colour and cursor codes, which is what makes a log
                     greppable. Verbatim keeps every byte, for replaying it through a terminal later."
@@ -133,6 +161,48 @@ export default function SessionLogSection() {
                         disabled={config.format === 'raw'}
                         onChange={(next) => update({ timestamps: next })}
                         ariaLabel="Stamp each line with the time"
+                    />
+                }
+            />
+
+            <SettingRow
+                className={DIVIDED}
+                align="center"
+                title="How long to keep them"
+                description="Older transcripts are deleted, at launch and as sessions open.
+                    One still being written is never touched, whatever its age."
+                control={
+                    <SegmentedControl
+                        ariaLabel="How long to keep transcripts"
+                        value={config.retentionDays}
+                        onChange={(next) => update({ retentionDays: next })}
+                        segments={[
+                            { value: 0, label: 'Forever' },
+                            { value: 7, label: '7 days' },
+                            { value: 30, label: '30 days' },
+                            { value: 90, label: '90 days' },
+                        ]}
+                    />
+                }
+            />
+
+            <SettingRow
+                className={DIVIDED}
+                align="center"
+                title="Cap the folder size"
+                description="Once the folder grows past this, the oldest transcripts are
+                    deleted first until it fits again."
+                control={
+                    <SegmentedControl
+                        ariaLabel="Cap the log folder size"
+                        value={config.maxTotalMB}
+                        onChange={(next) => update({ maxTotalMB: next })}
+                        segments={[
+                            { value: 0, label: 'No cap' },
+                            { value: 100, label: '100 MB' },
+                            { value: 500, label: '500 MB' },
+                            { value: 2048, label: '2 GB' },
+                        ]}
                     />
                 }
             />

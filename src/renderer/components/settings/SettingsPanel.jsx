@@ -3,6 +3,7 @@ import SettingsNav, { SETTINGS_CATEGORIES } from './SettingsNav';
 import GeneralPage from './pages/GeneralPage';
 import AppearancePage from './pages/AppearancePage';
 import TerminalPage from './pages/TerminalPage';
+import LoggingPage from './pages/LoggingPage';
 import SecurityPage from './pages/SecurityPage';
 import AccountPage from './pages/AccountPage';
 import BackupPage from './pages/BackupPage';
@@ -13,6 +14,7 @@ const PAGES = {
     general: GeneralPage,
     appearance: AppearancePage,
     terminal: TerminalPage,
+    logging: LoggingPage,
     security: SecurityPage,
     account: AccountPage,
     backup: BackupPage,

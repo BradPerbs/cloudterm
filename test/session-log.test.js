@@ -348,5 +348,115 @@ const body = (text) => text.split('\n').filter(line => !line.startsWith('#')).jo
         assert.ok(!text.includes('hunter2'), 'nothing typed at it could be');
     });
 
+    /* ---------------- choosing what to record ---------------- */
+
+    console.log('\nchoosing what to record');
+
+    await checkAsync('skips a protocol turned off, records the rest', async () => {
+        sessionLog.setConfig({ enabled: true, protocols: { ssh: true, telnet: false, serial: true } });
+
+        assert.strictEqual(
+            sessionLog.start('tab-11', { hostName: 'switch', address: 'x', protocol: 'telnet' }),
+            null,
+            'telnet is off'
+        );
+
+        const filePath = sessionLog.start('tab-12', { hostName: 'router', address: 'x', protocol: 'ssh' });
+        assert.ok(filePath, 'ssh is still on');
+        sessionLog.close('tab-12');
+        await settle();
+        assert.ok(readLog(filePath).includes('# protocol: ssh'), 'the header names the protocol');
+    });
+
+    await checkAsync('force records a protocol the blanket setting skips', async () => {
+        const filePath = sessionLog.start('tab-13', {
+            hostName: 'forced-telnet', address: 'x', protocol: 'telnet', force: true,
+        });
+        assert.ok(filePath, 'the header control speaks for this one session');
+        sessionLog.close('tab-13');
+        await settle();
+    });
+
+    check('a protocol this module has never heard of is recorded', () => {
+        // The safe failure for an audit trail is a transcript nobody asked
+        // for, not a gap.
+        const filePath = sessionLog.start('tab-14', { hostName: 'future', address: 'x', protocol: 'moon-modem' });
+        assert.ok(filePath, 'unknown means record, not skip');
+        sessionLog.close('tab-14');
+    });
+
+    check('sanitize keeps unknown protocol keys out and unmentioned ones on', () => {
+        const config = sessionLog.sanitize({ protocols: { telnet: false, bogus: true } });
+        assert.strictEqual(config.protocols.telnet, false);
+        assert.strictEqual(config.protocols.ssh, true, 'unmentioned stays on');
+        assert.strictEqual(config.protocols.serial, true);
+        assert.ok(!('bogus' in config.protocols));
+    });
+
+    check('sanitize clamps the retention numbers', () => {
+        assert.strictEqual(sessionLog.sanitize({ retentionDays: -3 }).retentionDays, 0);
+        assert.strictEqual(sessionLog.sanitize({ retentionDays: '30' }).retentionDays, 30);
+        assert.strictEqual(sessionLog.sanitize({ retentionDays: 2.9 }).retentionDays, 2);
+        assert.strictEqual(sessionLog.sanitize({ maxTotalMB: 'lots' }).maxTotalMB, 0);
+    });
+
+    /* ---------------- retention ---------------- */
+
+    console.log('\nretention');
+
+    const DAY = 24 * 60 * 60 * 1000;
+
+    await checkAsync('deletes transcripts older than the retention window', async () => {
+        sessionLog.setConfig({
+            enabled: true,
+            protocols: { ssh: true, telnet: true, serial: true },
+            retentionDays: 0,
+            maxTotalMB: 0,
+        });
+
+        const stale = path.join(userData, 'stale-host_2020-01-01_000000.log');
+        fs.writeFileSync(stale, '# old transcript\n');
+        const old = new Date(Date.now() - 10 * DAY);
+        fs.utimesSync(stale, old, old);
+
+        // Changing the retention setting sweeps right away.
+        sessionLog.setConfig({ retentionDays: 7 });
+
+        assert.ok(!fs.existsSync(stale), 'the stale transcript is gone');
+        sessionLog.setConfig({ retentionDays: 0 });
+    });
+
+    await checkAsync('never deletes a transcript still being written', async () => {
+        const filePath = sessionLog.start('tab-15', { hostName: 'live', address: 'x' });
+        const old = new Date(Date.now() - 10 * DAY);
+        fs.utimesSync(filePath, old, old);
+
+        sessionLog.setConfig({ retentionDays: 7 });
+        assert.ok(fs.existsSync(filePath), 'an open transcript survives the sweep');
+
+        sessionLog.close('tab-15');
+        sessionLog.setConfig({ retentionDays: 0 });
+        await settle();
+    });
+
+    await checkAsync('deletes the oldest transcripts once the folder is over its cap', async () => {
+        const newer = path.join(userData, 'cap-newer_2026-01-01_000000.log');
+        const older = path.join(userData, 'cap-older_2026-01-01_000000.log');
+        fs.writeFileSync(newer, 'x'.repeat(700 * 1024));
+        fs.writeFileSync(older, 'x'.repeat(700 * 1024));
+        const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const dayAgo = new Date(Date.now() - DAY);
+        fs.utimesSync(newer, hourAgo, hourAgo);
+        fs.utimesSync(older, dayAgo, dayAgo);
+
+        sessionLog.setConfig({ maxTotalMB: 1 });
+
+        assert.ok(fs.existsSync(newer), 'the newer transcript still fits under the cap');
+        assert.ok(!fs.existsSync(older), 'the oldest went first');
+
+        sessionLog.setConfig({ maxTotalMB: 0 });
+        fs.rmSync(newer, { force: true });
+    });
+
     console.log(`\n${passed} checks passed`);
 })();

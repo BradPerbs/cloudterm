@@ -189,6 +189,7 @@ function connect({ tabId, hostId, cols, rows }, { window } = {}) {
             tabId,
             window,
             label: { hostName: label.name, address: label.address, hostId },
+            protocol: 'telnet',
             onInput: (data) => {
                 if (socket.writable) socket.write(negotiator.encode(data));
             },

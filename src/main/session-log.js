@@ -37,7 +37,20 @@ const DEFAULTS = {
     // Prefix each line with the local time it was written. `plain` only:
     // stamping a raw stream would corrupt the escape sequences it exists to keep.
     timestamps: false,
+    // Which kinds of session "record every session" records. A session forced
+    // from its own header is recorded regardless: that gesture names one
+    // specific session, so a filter meant for the blanket setting has no say.
+    protocols: { ssh: true, telnet: true, serial: true },
+    // How many days a transcript is kept before the sweep deletes it.
+    // 0 means forever.
+    retentionDays: 0,
+    // The most the log folder is allowed to hold, in megabytes; the sweep
+    // deletes oldest-first once it is past this. 0 means no cap.
+    maxTotalMB: 0,
 };
+
+const RETENTION_MAX_DAYS = 3650;
+const SIZE_CAP_MAX_MB = 1024 * 100;
 
 /**
  * A control sequence, matched so it can be dropped.
@@ -81,13 +94,30 @@ function defaultDirectory() {
     }
 }
 
+/** A non-negative whole number, or the fallback when it is anything else. */
+function clampCount(value, fallback, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) return fallback;
+    return Math.min(Math.floor(number), max);
+}
+
 function sanitize(raw) {
-    const next = { ...DEFAULTS };
+    const next = { ...DEFAULTS, protocols: { ...DEFAULTS.protocols } };
     if (raw && typeof raw === 'object') {
         next.enabled = Boolean(raw.enabled);
         next.directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
         next.format = FORMATS.has(raw.format) ? raw.format : DEFAULTS.format;
         next.timestamps = Boolean(raw.timestamps);
+        // Only the protocols this module knows about, and only the ones the
+        // patch mentions: a config written before a protocol existed keeps
+        // recording it, which is the safe direction for an audit trail.
+        if (raw.protocols && typeof raw.protocols === 'object') {
+            for (const key of Object.keys(next.protocols)) {
+                if (key in raw.protocols) next.protocols[key] = Boolean(raw.protocols[key]);
+            }
+        }
+        next.retentionDays = clampCount(raw.retentionDays, DEFAULTS.retentionDays, RETENTION_MAX_DAYS);
+        next.maxTotalMB = clampCount(raw.maxTotalMB, DEFAULTS.maxTotalMB, SIZE_CAP_MAX_MB);
     }
     // Only ever true where it means something, so the renderer never has to
     // reason about a combination that does nothing.
@@ -101,11 +131,11 @@ function loadConfig() {
         if (fs.existsSync(configPath())) {
             config = sanitize(JSON.parse(fs.readFileSync(configPath(), 'utf8'))?.config);
         } else {
-            config = { ...DEFAULTS };
+            config = sanitize(null);
         }
     } catch (error) {
         console.error('Failed to read the session log settings:', error.message);
-        config = { ...DEFAULTS };
+        config = sanitize(null);
     }
     return config;
 }
@@ -160,6 +190,19 @@ function setConfig(patch) {
     if (before.timestamps !== config.timestamps) {
         changes.push({ field: 'timestamps', from: before.timestamps ? 'on' : 'off', to: config.timestamps ? 'on' : 'off' });
     }
+    for (const key of Object.keys(config.protocols)) {
+        if (before.protocols[key] !== config.protocols[key]) {
+            changes.push({ field: `record ${key}`, from: before.protocols[key] ? 'on' : 'off', to: config.protocols[key] ? 'on' : 'off' });
+        }
+    }
+    const describeDays = (days) => days > 0 ? `${days} days` : 'forever';
+    const describeCap = (mb) => mb > 0 ? `${mb} MB` : 'no cap';
+    if (before.retentionDays !== config.retentionDays) {
+        changes.push({ field: 'retention', from: describeDays(before.retentionDays), to: describeDays(config.retentionDays) });
+    }
+    if (before.maxTotalMB !== config.maxTotalMB) {
+        changes.push({ field: 'size cap', from: describeCap(before.maxTotalMB), to: describeCap(config.maxTotalMB) });
+    }
 
     if (changes.length > 0) {
         activity.record({
@@ -174,6 +217,14 @@ function setConfig(patch) {
 
     if (!config.enabled) {
         for (const tabId of [...open.keys()]) close(tabId, { reason: 'disabled' });
+    }
+
+    // A tightened retention setting means "there is now too much on disk", and
+    // the natural moment to honour that is right away, not at the next session.
+    if (before.retentionDays !== config.retentionDays
+        || before.maxTotalMB !== config.maxTotalMB
+        || before.directory !== config.directory) {
+        sweep();
     }
 
     return getConfig();
@@ -219,10 +270,19 @@ function stamp(date) {
  * a full disk or a directory that has been deleted must not be the reason a
  * connection fails.
  */
-function start(tabId, { hostName = '', address = '', hostId = '', force = false } = {}) {
+function start(tabId, { hostName = '', address = '', hostId = '', protocol = '', force = false } = {}) {
     const current = loadConfig();
     if (!current.enabled && !force) return null;
+    // The per-protocol filter only speaks for the blanket setting. A protocol
+    // this module has no opinion on is recorded: for an audit trail, the safe
+    // failure is a transcript nobody asked for, not a gap.
+    if (!force && protocol && current.protocols[protocol] === false) return null;
     if (open.has(tabId)) return open.get(tabId).filePath;
+
+    // The cheap moment to apply retention: the folder is about to be touched
+    // anyway, and sessions open at nothing like the rate that would make the
+    // directory scan matter.
+    sweep({ throttled: true });
 
     const directory = current.directory || defaultDirectory();
     const startedAt = new Date();
@@ -243,6 +303,7 @@ function start(tabId, { hostName = '', address = '', hostId = '', force = false 
         const header = [
             `# CloudBlast SSH session log`,
             `# host: ${hostName || '(unnamed)'}${address ? ` (${address})` : ''}`,
+            ...(protocol ? [`# protocol: ${protocol}`] : []),
             `# started: ${startedAt.toISOString()}`,
             `# format: ${current.format}${current.timestamps ? ' with timestamps' : ''}`,
             '',
@@ -459,11 +520,125 @@ function list({ limit = 200 } = {}) {
     }
 }
 
+/* ------------------------------------------------------------------ *
+ * Retention
+ * ------------------------------------------------------------------ */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+
+let lastSweepAt = 0;
+
+/**
+ * Delete transcripts the retention settings say have expired: first anything
+ * older than `retentionDays`, then oldest-first until the folder is back under
+ * `maxTotalMB`. A transcript still being written is never deleted, whatever
+ * its age; it still counts against the cap, because its bytes are still on
+ * the disk.
+ *
+ * `throttled` is for the call made on every session start, so a burst of tabs
+ * does not rescan the folder once per tab. Settings changes and app startup
+ * sweep unconditionally.
+ *
+ * Deliberately quiet on failure: retention is housekeeping, and a locked file
+ * or a vanished folder must never take a connection down with it.
+ */
+function sweep({ throttled = false } = {}) {
+    const current = loadConfig();
+    if (current.retentionDays <= 0 && current.maxTotalMB <= 0) return;
+    if (throttled && Date.now() - lastSweepAt < SWEEP_INTERVAL_MS) return;
+    lastSweepAt = Date.now();
+
+    const directory = current.directory || defaultDirectory();
+    let files;
+    try {
+        if (!fs.existsSync(directory)) return;
+        files = fs.readdirSync(directory)
+            .filter(name => name.toLowerCase().endsWith('.log'))
+            .map((name) => {
+                const full = path.join(directory, name);
+                try {
+                    const stats = fs.statSync(full);
+                    return { path: full, bytes: stats.size, modifiedAt: stats.mtimeMs };
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+    } catch (error) {
+        console.error('Could not scan the session log folder:', error.message);
+        return;
+    }
+
+    const active = new Set([...open.values()].map(entry => entry.filePath));
+
+    // path -> why it goes, so age and the cap are decided in one pass and a
+    // file is only ever deleted once.
+    const doomed = new Map();
+
+    if (current.retentionDays > 0) {
+        const cutoff = Date.now() - current.retentionDays * DAY_MS;
+        for (const file of files) {
+            if (file.modifiedAt < cutoff && !active.has(file.path)) {
+                doomed.set(file.path, 'age');
+            }
+        }
+    }
+
+    if (current.maxTotalMB > 0) {
+        const cap = current.maxTotalMB * 1024 * 1024;
+        // Newest first, keeping a running total: everything after the cap is
+        // crossed goes, which is exactly "delete the oldest until it fits".
+        const kept = files
+            .filter(file => !doomed.has(file.path))
+            .sort((a, b) => b.modifiedAt - a.modifiedAt);
+        let total = 0;
+        for (const file of kept) {
+            total += file.bytes;
+            if (total > cap && !active.has(file.path)) doomed.set(file.path, 'size');
+        }
+    }
+
+    if (doomed.size === 0) return;
+
+    let byAge = 0;
+    let bySize = 0;
+    let freed = 0;
+    const byBytes = new Map(files.map(file => [file.path, file.bytes]));
+    for (const [filePath, reason] of doomed) {
+        try {
+            fs.unlinkSync(filePath);
+            if (reason === 'age') byAge += 1; else bySize += 1;
+            freed += byBytes.get(filePath) || 0;
+        } catch (error) {
+            console.error('Could not delete an expired session log:', error.message);
+        }
+    }
+
+    const deleted = byAge + bySize;
+    if (deleted > 0) {
+        const parts = [];
+        if (byAge > 0) parts.push(`${byAge} older than ${current.retentionDays} days`);
+        if (bySize > 0) parts.push(`${bySize} over the ${current.maxTotalMB} MB cap`);
+        activity.record({
+            category: 'security',
+            action: 'sessionlog.retention',
+            outcome: 'info',
+            target: 'Session logging',
+            detail: `Deleted ${deleted} transcript${deleted === 1 ? '' : 's'} `
+                + `(${parts.join(', ')}), freeing ${Math.round(freed / 1024)} KB`,
+        });
+    }
+}
+
 function closeAll() {
     for (const tabId of [...open.keys()]) close(tabId, { reason: 'session' });
 }
 
 if (typeof app?.on === 'function') app.on('will-quit', closeAll);
+// Expired transcripts go at launch too, so retention holds even for someone
+// who records rarely and would otherwise wait for the next session to sweep.
+if (typeof app?.whenReady === 'function') app.whenReady().then(() => sweep());
 
 module.exports = {
     getConfig,
@@ -475,6 +650,7 @@ module.exports = {
     closeAll,
     status,
     list,
+    sweep,
     // Exported for the tests: the stripper and the split-chunk rule are the
     // parts that have to be exactly right.
     clean,
