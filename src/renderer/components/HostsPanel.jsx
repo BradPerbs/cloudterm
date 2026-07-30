@@ -1,6 +1,20 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CloudServerIcon, FolderOpenIcon, SearchRemoveIcon } from 'hugeicons-react';
+import {
+    Cancel01Icon,
+    CloudServerIcon,
+    CommandLineIcon,
+    ComputerIcon,
+    Copy01Icon,
+    Delete02Icon,
+    Edit02Icon,
+    Folder01Icon,
+    FolderAddIcon,
+    FolderOpenIcon,
+    FolderTransferIcon,
+    SearchRemoveIcon,
+    Tag01Icon,
+} from 'hugeicons-react';
 import HostCard from './HostCard';
 import FolderCard from './FolderCard';
 import HostsToolbar from './hosts/HostsToolbar';
@@ -9,10 +23,13 @@ import SelectionBar from './hosts/SelectionBar';
 import MoveToFolderDialog from './hosts/MoveToFolderDialog';
 import GroupIntoFolderDialog from './hosts/GroupIntoFolderDialog';
 import TagSelectionDialog from './hosts/TagSelectionDialog';
+import ContextMenu from './ui/ContextMenu';
 import EmptyFrame from './ui/EmptyFrame';
 import ConfirmDialog from './ui/ConfirmDialog';
 import Tag from './ui/Tag';
 import { toastOptions } from '../lib/toast';
+import { hostOs } from '../lib/os-icons';
+import { hostKind, protocolLabel } from '../lib/protocols';
 import { hostHasTags, tagCounts, toggleTag } from '../lib/tags';
 import { useCardDrag } from '../hooks/useCardDrag';
 import { useFlipOrder } from '../hooks/useFlipOrder';
@@ -45,6 +62,9 @@ const readPreference = (key, allowed, fallback) => {
 
 /** Shared, so clearing an already-empty selection is not a state change. */
 const NOTHING_SELECTED = new Set();
+
+/** The size the icons in a card's menu are drawn at, wherever it is shown. */
+const ICON = 15;
 
 const countLabel = (n) => `${n} item${n === 1 ? '' : 's'}`;
 
@@ -119,9 +139,22 @@ function HostsPanel({
 
     // Cards picked out by the rubber band or a modifier-click, as `kind:id`.
     const [selected, setSelected] = useState(NOTHING_SELECTED);
-    const [choosingDestination, setChoosingDestination] = useState(false);
+    /**
+     * Which cards the move dialog is about, as `kind:id`, or null when it is
+     * shut.
+     *
+     * A set rather than a flag because the dialog is now opened from two places
+     * that mean different things by "these": the selection bar, and a
+     * right-click on one card. Holding what is moving is the only way the
+     * dialog can say how many that is and refuse a destination inside it.
+     */
+    const [moving, setMoving] = useState(null);
     const [naming, setNaming] = useState(false);
     const [tagging, setTagging] = useState(false);
+
+    // Where the right-click menu is and what it is about: `{ x, y, kind, id,
+    // forSelection }`. Null when nothing is open.
+    const [menu, setMenu] = useState(null);
 
     const searchRef = useRef(null);
     const scrollRef = useRef(null);
@@ -139,7 +172,7 @@ function HostsPanel({
     // What the drag in the air is carrying, frozen as the card left the ground.
     //
     // A spring-open changes folder mid-gesture, and the page drops its
-    // selection whenever the folder changes — rightly, since the bar is about
+    // selection whenever the folder changes, rightly, since the bar is about
     // the cards in front of you. The cards already in the air are still going,
     // though, so the drop reads this rather than the live set: without it,
     // carrying five hosts and springing on the way would land one of them.
@@ -154,15 +187,18 @@ function HostsPanel({
      * over the session you switched to; reaching for this page again is the
      * other way of saying you want what is over it gone.
      *
-     * All four are centred dialogs, which have no exit animation to cut short —
-     * they simply stop being rendered. The sheets that do are unmounted through
-     * their own close, further up.
+     * The right-click menu goes the same way, and for the same reason.
+     *
+     * All of them are centred dialogs (or, in the menu's case, a popover) with
+     * no exit animation to cut short: they simply stop being rendered. The
+     * sheets that do have one are unmounted through their own close, further up.
      */
     useEffect(() => {
         setConfirming(null);
-        setChoosingDestination(false);
+        setMoving(null);
         setNaming(false);
         setTagging(false);
+        setMenu(null);
     }, [isActive, reachedForPage]);
 
     /* ------------------------------------------------------------------ *
@@ -175,8 +211,8 @@ function HostsPanel({
     /** Every tag in the collection, most used first: the filter row's contents. */
     const availableTags = useMemo(() => tagCounts(allHosts), [allHosts]);
 
-    // A tag that stops existing — its last host retagged, or deleted, or a sync
-    // that took it away — must not go on filtering from a row it has left.
+    // A tag that stops existing (its last host retagged, or deleted, or a sync
+    // that took it away) must not go on filtering from a row it has left.
     useEffect(() => {
         setTagFilter((current) => {
             if (current.length === 0) return current;
@@ -564,24 +600,33 @@ function HostsPanel({
         toast.success(`Duplicated “${host.name}”`, toastOptions({ duration: 2200 }));
     }, [onDuplicateHost]);
 
+    /**
+     * Open a session on this host, on a named view rather than on the shell.
+     *
+     * The middle argument of `onConnect` is the launcher tab a session should
+     * fill, which this page never has: a connection asked for from here always
+     * gets a tab of its own.
+     */
+    const connectAs = useCallback((host, view) => onConnect(host, null, view), [onConnect]);
+
     /* ------------------------------------------------------------------ *
      * Acting on a selection
      * ------------------------------------------------------------------ */
 
-    /** The one folder everything selected already sits in, if they agree on one. */
-    const selectionSource = useMemo(() => {
+    /** The one folder a set of cards already sits in, if they agree on one. */
+    const commonParent = useCallback((hostIds, folderIds) => {
         const parents = new Set([
-            ...selectedHostIds.map(id => allHosts.find(host => host.id === id)?.folderId || ''),
-            ...selectedFolderIds.map(id => allFolders.find(folder => folder.id === id)?.parentId || ''),
+            ...hostIds.map(id => allHosts.find(host => host.id === id)?.folderId || ''),
+            ...folderIds.map(id => allFolders.find(folder => folder.id === id)?.parentId || ''),
         ]);
         return parents.size === 1 ? [...parents][0] : null;
-    }, [selectedHostIds, selectedFolderIds, allHosts, allFolders]);
+    }, [allHosts, allFolders]);
 
     const handleMoveTo = useCallback(async (destination) => {
-        const keys = selectedRef.current;
+        const keys = moving || NOTHING_SELECTED;
         const asked = keys.size;
 
-        setChoosingDestination(false);
+        setMoving(null);
         const count = await moveSelection(destination, keys);
         clearSelection();
 
@@ -589,7 +634,7 @@ function HostsPanel({
         if (count === 0) toast(`Nothing to move: all of it is already there`, toastOptions({ duration: 2400 }));
         else if (count === asked) toast.success(`Moved ${countLabel(count)} to ${where}`, toastOptions({ duration: 2400 }));
         else toast.success(`Moved ${count} of ${countLabel(asked)} to ${where}`, toastOptions({ duration: 3000 }));
-    }, [moveSelection, clearSelection, labels]);
+    }, [moving, moveSelection, clearSelection, labels]);
 
     /**
      * Gather the selection into a folder that does not exist yet.
@@ -707,6 +752,186 @@ function HostsPanel({
     }, [selectedHostIds, selectedFolderIds, allHosts, allFolders, onDeleteMany, clearSelection]);
 
     /* ------------------------------------------------------------------ *
+     * What a card can be told to do
+     *
+     * One list per card, in ContextMenu's shape, offered twice: from the button
+     * on the card and from a right-click on it. Two menus over one card that
+     * disagreed about what it can do would be a bug waiting to be reported, so
+     * there is one description of it and the card renders it both ways.
+     *
+     * The panel builds them rather than the cards, because most of these are
+     * not things a card could do for itself: filing needs the folder tree,
+     * deleting needs a confirmation, and connecting needs the tab strip.
+     * ------------------------------------------------------------------ */
+
+    const hostMenu = useCallback((host) => {
+        const kind = hostKind(host);
+        // RDP and VNC are not interchangeable to anyone looking for one of
+        // them, so the entry names the one this host is actually set up for.
+        const desktopLabel = host.desktop?.protocol === 'rdp' ? 'RDP' : 'VNC';
+        const hasDesktop = Boolean(host.desktop?.enabled);
+
+        /**
+         * Every way in, in the order they are worth trying.
+         *
+         * Files and a desktop are channels on an SSH connection, so a telnet or
+         * serial host has neither to offer. A desktop-only host is the mirror of
+         * that: it never dials SSH, so the desktop is the only way in there is.
+         */
+        const ways = kind === 'desktop'
+            ? [{
+                label: `Connect via ${desktopLabel}`,
+                icon: <ComputerIcon size={ICON} />,
+                onClick: () => connectAs(host, 'desktop'),
+            }]
+            : [
+                {
+                    label: `Connect via ${protocolLabel(kind)}`,
+                    icon: <CommandLineIcon size={ICON} />,
+                    onClick: () => connectAs(host, 'ssh'),
+                },
+                kind === 'ssh' && {
+                    label: 'Connect via SFTP',
+                    icon: <Folder01Icon size={ICON} />,
+                    onClick: () => connectAs(host, 'sftp'),
+                },
+                kind === 'ssh' && hasDesktop && {
+                    label: `Connect via ${desktopLabel}`,
+                    icon: <ComputerIcon size={ICON} />,
+                    onClick: () => connectAs(host, 'desktop'),
+                },
+                // A Windows box with no desktop set up is the one case where the
+                // missing entry is the surprising part, so it is shown and
+                // turned off rather than left out: the answer to "where is RDP"
+                // should be on screen and not a gap.
+                kind === 'ssh' && !hasDesktop && hostOs(host) === 'windows' && {
+                    label: 'Connect via RDP',
+                    icon: <ComputerIcon size={ICON} />,
+                    onClick: () => {},
+                    disabled: true,
+                    shortcut: 'not set up',
+                },
+            ];
+
+        return [
+            ...ways,
+            { type: 'separator' },
+            { label: 'Edit host', icon: <Edit02Icon size={ICON} />, onClick: () => onEditHost(host) },
+            { label: 'Duplicate', icon: <Copy01Icon size={ICON} />, onClick: () => handleDuplicate(host) },
+            {
+                label: 'Move to folder…',
+                icon: <FolderTransferIcon size={ICON} />,
+                onClick: () => setMoving(new Set([cardKey('host', host.id)])),
+            },
+            { type: 'separator' },
+            {
+                label: 'Delete',
+                icon: <Delete02Icon size={ICON} />,
+                danger: true,
+                onClick: () => confirmDeleteHost(host),
+            },
+        ];
+    }, [connectAs, onEditHost, handleDuplicate, confirmDeleteHost]);
+
+    const folderMenu = useCallback((folder) => [
+        {
+            label: 'Open',
+            icon: <FolderOpenIcon size={ICON} />,
+            // Both narrowings go, not just the query: walking into a folder
+            // while a tag filter was still on would open it onto nothing.
+            onClick: () => { clearFilters(); onNavigateFolder(folder.id); },
+        },
+        { type: 'separator' },
+        { label: 'Rename', icon: <Edit02Icon size={ICON} />, onClick: () => onEditFolder(folder) },
+        {
+            label: 'Move to folder…',
+            icon: <FolderTransferIcon size={ICON} />,
+            onClick: () => setMoving(new Set([cardKey('folder', folder.id)])),
+        },
+        { type: 'separator' },
+        {
+            label: 'Delete',
+            shortcut: 'keeps contents',
+            icon: <Delete02Icon size={ICON} />,
+            danger: true,
+            onClick: () => confirmDeleteFolder(folder),
+        },
+    ], [clearFilters, onNavigateFolder, onEditFolder, confirmDeleteFolder]);
+
+    /**
+     * The menu for a right-click on one of several picked-out cards.
+     *
+     * Same rule as a drag: the selection is the statement of what you meant, so
+     * pointing at one of its cards and asking for a menu is asking about all of
+     * them. Acting on the single card under the pointer instead is how a
+     * carefully built selection of twelve gets one host deleted out of it.
+     *
+     * It offers what the selection bar offers, for the same reason the card menu
+     * doubles as its own right-click menu.
+     */
+    const selectionMenu = useCallback(() => {
+        const total = selectedHostIds.length + selectedFolderIds.length;
+
+        return [
+            {
+                label: `Move ${countLabel(total)}…`,
+                icon: <FolderTransferIcon size={ICON} />,
+                onClick: () => setMoving(selectedRef.current),
+            },
+            { label: 'Group into a folder…', icon: <FolderAddIcon size={ICON} />, onClick: () => setNaming(true) },
+            selectedHostIds.length > 0 && {
+                label: 'Tags…',
+                icon: <Tag01Icon size={ICON} />,
+                onClick: () => setTagging(true),
+            },
+            { type: 'separator' },
+            {
+                label: `Delete ${countLabel(total)}`,
+                icon: <Delete02Icon size={ICON} />,
+                danger: true,
+                onClick: confirmDeleteSelection,
+            },
+            { label: 'Clear selection', icon: <Cancel01Icon size={ICON} />, onClick: clearSelection },
+        ];
+    }, [selectedHostIds, selectedFolderIds, confirmDeleteSelection, clearSelection]);
+
+    /**
+     * Right-click on a card.
+     *
+     * A card outside the selection is a statement about that card, so the
+     * selection steps aside rather than leaving a menu that would quietly act on
+     * cards you are not pointing at.
+     */
+    const openCardMenu = useCallback((kind, id, event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const held = selectedRef.current.has(cardKey(kind, id));
+        if (!held) clearSelection();
+
+        setMenu({
+            x: event.clientX,
+            y: event.clientY,
+            kind,
+            id,
+            forSelection: held && selectedRef.current.size > 1,
+        });
+    }, [clearSelection]);
+
+    const openMenuItems = useMemo(() => {
+        if (!menu) return [];
+        if (menu.forSelection) return selectionMenu();
+
+        if (menu.kind === 'folder') {
+            const folder = allFolders.find(entry => entry.id === menu.id);
+            return folder ? folderMenu(folder) : [];
+        }
+
+        const host = allHosts.find(entry => entry.id === menu.id);
+        return host ? hostMenu(host) : [];
+    }, [menu, selectionMenu, folderMenu, hostMenu, allFolders, allHosts]);
+
+    /* ------------------------------------------------------------------ *
      * Keyboard
      * ------------------------------------------------------------------ */
 
@@ -768,13 +993,20 @@ function HostsPanel({
     const nothingAtAll = allHosts.length === 0 && allFolders.length === 0;
     const empty = visibleFolders.length === 0 && visibleHosts.length === 0;
 
+    // What the cards are told about a gesture that is not their own business:
+    // which one is in the air, which are picked out, and where a press or a
+    // right-click on them goes.
     const dragState = (kind, item) => ({
         view,
         dragging: carrying?.kind === kind && carrying.id === item.id,
         selected: selected.has(cardKey(kind, item.id)),
         onPick: (event) => pickCard(cardKey(kind, item.id), event),
+        onContextMenu: (event) => openCardMenu(kind, item.id, event),
         ...cardProps(kind, item),
     });
+
+    /** What the move dialog is about, when it is open. */
+    const movingParts = moving ? splitCardKeys(moving) : null;
 
     return (
         <div className="relative flex flex-col gap-4 h-full min-h-0" id="hosts-panel">
@@ -806,7 +1038,7 @@ function HostsPanel({
                        menu they were picked from. There are rarely more than
                        two or three, they are what the page is currently about,
                        and dropping one should not cost a trip back into a
-                       dropdown — which is the whole difference between this and
+                       dropdown, which is the whole difference between this and
                        the row of every tag in the collection it replaced. */
                     <div className="flex items-center flex-wrap gap-1.5 min-w-0">
                         <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -866,7 +1098,7 @@ function HostsPanel({
                 // which is the whole of what a spring-open leaves you needing:
                 // it opens the folder under the card, and then the card has to
                 // have somewhere in it to land. Never a target for a card that
-                // already lives here — `canFile` refuses that — so it costs an
+                // already lives here (`canFile` refuses that), so it costs an
                 // ordinary drag nothing.
                 data-drop-body={currentFolderId}
                 className={`relative flex-1 min-h-0 overflow-y-auto -mx-2 px-2 pb-1
@@ -894,12 +1126,11 @@ function HostsPanel({
                                 folder={folder}
                                 counts={counts.get(folder.id) || { hosts: 0, folders: 0 }}
                                 dropInto={into?.id === folder.id}
+                                items={folderMenu(folder)}
                                 // Both narrowings go, not just the query: walking
                                 // into a folder while a tag filter was still on
                                 // would open it onto nothing.
                                 onOpen={() => { clearFilters(); onNavigateFolder(folder.id); }}
-                                onEdit={() => onEditFolder(folder)}
-                                onDelete={() => confirmDeleteFolder(folder)}
                                 {...dragState('folder', folder)}
                             />
                         ))}
@@ -910,9 +1141,7 @@ function HostsPanel({
                                 host={host}
                                 connected={connectedHostIds?.has(host.id)}
                                 folderLabel={filtering ? (labels.get(host.folderId || '') || '') : ''}
-                                onEdit={() => onEditHost(host)}
-                                onDuplicate={() => handleDuplicate(host)}
-                                onDelete={() => confirmDeleteHost(host)}
+                                items={hostMenu(host)}
                                 onConnect={() => onConnect(host)}
                                 onTagClick={handleTagClick}
                                 {...dragState('host', host)}
@@ -926,7 +1155,7 @@ function HostsPanel({
                 <SelectionBar
                     hostCount={selectedHostIds.length}
                     folderCount={selectedFolderIds.length}
-                    onMove={() => setChoosingDestination(true)}
+                    onMove={() => setMoving(selectedRef.current)}
                     onGroup={() => setNaming(true)}
                     onTag={() => setTagging(true)}
                     onDelete={confirmDeleteSelection}
@@ -934,14 +1163,14 @@ function HostsPanel({
                 />
             )}
 
-            {choosingDestination && (
+            {moving && (
                 <MoveToFolderDialog
                     folders={allFolders}
-                    movingFolderIds={selectedFolderIds}
-                    sourceId={selectionSource}
-                    count={selectionCount}
+                    movingFolderIds={movingParts.folderIds}
+                    sourceId={commonParent(movingParts.hostIds, movingParts.folderIds)}
+                    count={moving.size}
                     onMove={handleMoveTo}
-                    onCancel={() => setChoosingDestination(false)}
+                    onCancel={() => setMoving(null)}
                 />
             )}
 
@@ -964,6 +1193,15 @@ function HostsPanel({
             )}
 
             {confirming && <ConfirmDialog {...confirming} onCancel={() => setConfirming(null)} />}
+
+            {menu && openMenuItems.length > 0 && (
+                <ContextMenu
+                    x={menu.x}
+                    y={menu.y}
+                    items={openMenuItems}
+                    onClose={() => setMenu(null)}
+                />
+            )}
         </div>
     );
 }

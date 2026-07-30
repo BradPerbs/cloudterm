@@ -51,8 +51,14 @@ export const isSplit = (node) => node?.kind === 'split';
  * A pane with no host is a picker: it shows the host list and turns into a
  * session once one is chosen. That is how a split opens something *other* than
  * the host you split from.
+ *
+ * `view` is the view the pane should open on: 'sftp' or 'desktop', from a
+ * "Connect via…" on the Hosts page. It is a request rather than a state, read
+ * once by the pane and then owned by the view switcher, because both of those
+ * views need something the pane does not have yet at this point (a live SSH
+ * session, in the one case, and a desktop that may ride on it in the other).
  */
-export function createPane({ id, host = null, title, mode } = {}) {
+export function createPane({ id, host = null, title, mode, view = null } = {}) {
     const resolved = mode || (host ? 'terminal' : 'picker');
     return {
         kind: 'pane',
@@ -60,6 +66,7 @@ export function createPane({ id, host = null, title, mode } = {}) {
         mode: resolved,
         host: host || null,
         title: title || host?.name || 'Choose a host',
+        view,
         connected: false,
     };
 }
@@ -74,7 +81,7 @@ export function createPane({ id, host = null, title, mode } = {}) {
 export function cloneLayout(node) {
     if (!node) return null;
     if (isPane(node)) {
-        return createPane({ host: node.host, title: node.title, mode: node.mode });
+        return createPane({ host: node.host, title: node.title, mode: node.mode, view: node.view });
     }
     return createSplit(node.direction, node.children.map(cloneLayout), node.sizes);
 }

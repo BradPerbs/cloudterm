@@ -15,6 +15,7 @@ import { useRdp } from '../hooks/useRdp';
 import { loadIronRdp, describeIronError } from '../lib/rdp-wasm';
 import { attachInput, sendCtrlAltDel } from '../lib/rdp-input';
 import { formatSize } from '../lib/format';
+import { hostOs } from '../lib/os-icons';
 import { toastOptions } from '../lib/toast';
 import Tooltip from './ui/Tooltip';
 import ConnectingSplash from './ui/ConnectingSplash';
@@ -848,15 +849,15 @@ function RdpView({ paneId, host, isActive, isFocused, isLive, toolbarHost = null
 
                 {/* Coming up: the same screen a shell pane shows, because it is
                     the same wait. `note` carries the two steps ahead of the
-                    connection proper — preparing the session, loading the
-                    decoder — which a shell does not have and the sweep alone
+                    connection proper (preparing the session, loading the
+                    decoder) which a shell does not have and the sweep alone
                     cannot distinguish. */}
                 {busy && (
                     <ConnectingSplash
                         title={host?.name || 'Desktop'}
                         subtitle={dialling}
                         note={status === 'connecting' ? '' : statusUi.label}
-                        os={host?.os}
+                        os={hostOs(host)}
                         distro={host?.distro}
                         className="z-20 bg-gray-50 dark:bg-surface-base text-gray-900 dark:text-white"
                     />

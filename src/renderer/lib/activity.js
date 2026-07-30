@@ -38,6 +38,13 @@ const ACTIONS = {
     'snippet.create': { verb: 'Added snippet %s', kind: 'add' },
     'snippet.update': { verb: 'Edited snippet %s', kind: 'edit' },
     'snippet.delete': { verb: 'Deleted snippet %s', kind: 'delete' },
+    'proxy.create': { verb: 'Added proxy %s', kind: 'add' },
+    'proxy.update': { verb: 'Edited proxy %s', kind: 'edit' },
+    'proxy.delete': { verb: 'Deleted proxy %s', kind: 'delete' },
+    // Filed under connections rather than changes: it opens a real socket to a
+    // real server, and a run of failures is worth seeing next to the sessions
+    // that failed with it.
+    'proxy.test': { verb: 'Checked proxy %s', failed: 'Proxy %s did not answer', kind: 'tunnel' },
     'import.apply': { verb: 'Imported from %s', kind: 'add' },
 
     'key.create': { verb: 'Added key %s', kind: 'key' },
@@ -106,6 +113,10 @@ const FIELD_LABELS = {
     agentPath: 'agent path',
     agentForward: 'agent forwarding',
     tunnels: 'port forwards',
+    proxyId: 'proxy',
+    viaProxyId: 'chained through',
+    remoteDns: 'proxy resolves names',
+    timeout: 'timeout',
     command: 'command',
     description: 'description',
     tags: 'tags',

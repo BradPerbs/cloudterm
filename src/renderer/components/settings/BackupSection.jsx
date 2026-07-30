@@ -188,6 +188,7 @@ const CATEGORY_LABELS = [
     ['folders', 'Folders'],
     ['keys', 'SSH keys'],
     ['snippets', 'Snippets'],
+    ['proxies', 'Proxies'],
 ];
 
 /** What the chosen file holds, and how much of it this machine already has. */
@@ -322,10 +323,13 @@ function RestoreCard({ onRestored }) {
                 return;
             }
 
-            const added = result.hosts.added + result.folders.added
-                + result.keys.added + result.snippets.added;
-            const replaced = result.hosts.replaced + result.folders.replaced
-                + result.keys.replaced + result.snippets.replaced;
+            // A collection older builds did not write is missing from their
+            // report, so every count is read defensively rather than assumed.
+            const total = (field) => CATEGORY_LABELS
+                .reduce((sum, [key]) => sum + (result[key]?.[field] || 0), 0);
+
+            const added = total('added');
+            const replaced = total('replaced');
 
             toast.success(
                 `Restored ${added} new item${added === 1 ? '' : 's'}`

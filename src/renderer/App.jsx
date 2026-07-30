@@ -99,10 +99,10 @@ const BROADCAST_SCOPES = ['off', 'tab', 'window'];
  * the id the main process already knows this connection by, and the id a
  * restored session was saved under.
  */
-const createTerminalTab = (id, host) => ({
+const createTerminalTab = (id, host, view = null) => ({
     id,
     type: 'terminal',
-    layout: createPane({ id, host, title: host.name }),
+    layout: createPane({ id, host, title: host.name, view }),
     focusedPaneId: id,
     zoomedPaneId: null,
 });
@@ -383,11 +383,13 @@ function App() {
     // Opening a tab is all the renderer does. TerminalView dials once it has
     // measured itself, so the PTY is created with the real geometry.
     // `intoTabId` turns an existing launcher tab into the session rather than
-    // stacking an empty tab next to it.
-    const handleConnect = useCallback((host, intoTabId) => {
+    // stacking an empty tab next to it. `view` is which view the session should
+    // open on, for a "Connect via SFTP" or a "Connect via RDP" that asked for
+    // something other than the shell.
+    const handleConnect = useCallback((host, intoTabId, view = null) => {
         if (intoTabId) {
             setTabs(prev => prev.map(tab => tab.id === intoTabId
-                ? createTerminalTab(intoTabId, host)
+                ? createTerminalTab(intoTabId, host, view)
                 : tab));
             setActiveTabId(intoTabId);
             return { success: true };
@@ -396,7 +398,7 @@ function App() {
         tabCounter.current += 1;
         const tabId = `term-${Date.now()}-${tabCounter.current}`;
 
-        setTabs(prev => [...prev, createTerminalTab(tabId, host)]);
+        setTabs(prev => [...prev, createTerminalTab(tabId, host, view)]);
         setActiveTabId(tabId);
 
         return { success: true };

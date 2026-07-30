@@ -7,6 +7,7 @@ const store = require('./store');
 const rdcleanpath = require('./rdcleanpath');
 const { dial } = require('./desktop-dial');
 const { validateDesktop, describeDesktop } = require('./desktop-config');
+const { proxyHops } = require('./proxy-config');
 
 /**
  * Remote desktop (RDP) for a pane.
@@ -94,6 +95,9 @@ function snapshot(session) {
         bytesUp: session.bytesUp,
         bytesDown: session.bytesDown,
         openedAt: session.openedAt,
+        // What this desktop is reached through, for the pane header's route mark.
+        // Names and addresses only; the credentials stay on this side.
+        route: session.route,
     };
 }
 
@@ -198,6 +202,12 @@ function readTpkt(stream, timeoutMs) {
         stream.on('error', onError);
         stream.on('end', onEnd);
         stream.on('close', onEnd);
+
+        // A socket that came through a proxy arrives paused, holding anything the
+        // server sent before the proxy's reply had finished being read: with a
+        // TPKT frame that is exactly the response this function is waiting for.
+        // A no-op on an SSH channel or a direct dial, neither of which was paused.
+        stream.resume();
     });
 }
 
@@ -250,7 +260,7 @@ const isIpLiteral = (host) => net.isIP(host) !== 0;
  *
  * Those certificates are issued with `keyUsage = keyEncipherment,
  * dataEncipherment` and no `digitalSignature`. Every TLS 1.3 suite, and every
- * ECDHE suite before it, has the server *sign* the handshake — so BoringSSL,
+ * ECDHE suite before it, has the server *sign* the handshake, so BoringSSL,
  * which is the TLS Electron's Node is built against, refuses the certificate
  * outright with KEY_USAGE_BIT_INCORRECT. `rejectUnauthorized: false` does not
  * help: this is enforced separately from whether the certificate is trusted.
@@ -261,7 +271,7 @@ const isIpLiteral = (host) => net.isIP(host) !== 0;
  *
  * The cost is forward secrecy, which is why this is a fallback and not the
  * default: a server with a proper certificate keeps 1.3. It is also a smaller
- * cost than it looks here — the certificate is self-signed and unverified in
+ * cost than it looks here: the certificate is self-signed and unverified in
  * either case, and what actually authenticates the session is CredSSP running
  * inside the tunnel this sets up.
  */
@@ -597,6 +607,10 @@ async function open(paneId, hostId) {
         return { success: false, message: 'This host is not configured for RDP' };
     }
 
+    // A proxy the host names and that is no longer there. Reported rather than
+    // dialled around: see the note in store.resolveCredentials.
+    if (config.proxyError) return { success: false, message: config.proxyError };
+
     // The tunnel cannot exist without the SSH session that carries it, and
     // saying so now is better than a refused connection later.
     if (config.transport === 'tunnel' && !ssh.sessions.get(paneId)?.client) {
@@ -616,12 +630,38 @@ async function open(paneId, hostId) {
             username: config.username,
             domain: config.domain,
             scaling: config.scaling,
+            /*
+             * The host's proxy route, which unlike the RDP password has to be
+             * kept: the socket is not opened until the viewer attaches and sends
+             * its X.224 request, so the dial happens long after this call
+             * returns. It stays on this side, `snapshot` names its fields one by
+             * one and this is not among them.
+             */
+            proxyChain: config.proxyChain,
         },
         state: 'ready',
         message: '',
         lastError: '',
+        /*
+         * The path to this desktop, built once here.
+         *
+         * Only a directly dialled desktop has one of its own: under `tunnel` it
+         * is a channel on the pane's SSH session, and that session's own path is
+         * already on the header. So the proxy hops are all there is to add, and
+         * they are the ones from the host record, resolved by the store.
+         */
+        route: config.transport === 'direct'
+            ? [
+                ...proxyHops(config.proxyChain),
+                {
+                    kind: 'host',
+                    label: store.describeHost(hostId).name,
+                    detail: `${config.host}:${config.port}`,
+                },
+            ]
+            : [],
         token: crypto.randomBytes(16).toString('hex'),
-        // IronRDP requires an auth token — it is the Devolutions Gateway's
+        // IronRDP requires an auth token: it is the Devolutions Gateway's
         // proxy credential, and the builder refuses to connect without one.
         // There is no gateway here, so rather than pass a placeholder it is
         // issued per session and checked when the request arrives: the path

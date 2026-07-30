@@ -84,6 +84,26 @@ export function getOsIcon(os, distro) {
     return null;
 }
 
+/**
+ * Which OS to draw a host as.
+ *
+ * `host.os` is whatever the SSH session reported, and it wins wherever it
+ * exists. RDP is the case that never gets one: detection runs a command over an
+ * SSH exec channel, a desktop-only host never dials SSH at all, and so those
+ * cards sat on the generic fallback icon for the rest of their lives, before
+ * and after connecting alike.
+ *
+ * RDP is a Windows protocol, so an RDP host is a Windows host until something
+ * says otherwise, and it is worth saying so from the moment it is saved. A
+ * detected OS still overrides this, which covers the Linux box running xrdp.
+ * VNC gets no such default: it is as likely to be a Mac or a Pi.
+ */
+export function hostOs(host) {
+    if (host?.os) return host.os;
+    if (host?.desktop?.enabled && host.desktop.protocol === 'rdp') return 'windows';
+    return '';
+}
+
 // macOS has no PNG in the icon set.
 function MacOsIcon({ className }) {
     return (

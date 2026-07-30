@@ -1,7 +1,7 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Search01Icon, PlusSignIcon, CloudServerIcon, SearchRemoveIcon } from 'hugeicons-react';
 import EmptyFrame from './ui/EmptyFrame';
-import { OsIcon } from '../lib/os-icons';
+import { OsIcon, hostOs } from '../lib/os-icons';
 
 const RECENT_LIMIT = 5;
 
@@ -39,7 +39,7 @@ function HostRow({ host, folderName, selected, onSelect, onConnect }) {
             data-selected={selected ? 'true' : 'false'}
         >
             <span className="w-7 h-7 flex items-center justify-center shrink-0">
-                <OsIcon os={host.os} distro={host.distro} className="w-6 h-6" />
+                <OsIcon os={hostOs(host)} distro={host.distro} className="w-6 h-6" />
             </span>
 
             <span className="flex flex-col min-w-0 flex-1">

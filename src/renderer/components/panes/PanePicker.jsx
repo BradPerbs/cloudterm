@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Cancel01Icon, Search01Icon } from 'hugeicons-react';
-import { OsIcon } from '../../lib/os-icons';
+import { OsIcon, hostOs } from '../../lib/os-icons';
 
 const RECENT_LIMIT = 4;
 
@@ -144,7 +144,7 @@ function PanePicker({ hosts, isActive, onPick, onCancel }) {
                                         : 'hover:bg-gray-900/[0.04] dark:hover:bg-surface-control'
                                 }`}
                             >
-                                <OsIcon os={host.os} distro={host.distro} className="w-5 h-5 shrink-0" />
+                                <OsIcon os={hostOs(host)} distro={host.distro} className="w-5 h-5 shrink-0" />
                                 <span className="flex flex-col min-w-0 flex-1">
                                     <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
                                         {host.name}

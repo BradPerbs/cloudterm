@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
-import { Delete02Icon, Edit02Icon, MoreVerticalIcon } from 'hugeicons-react';
+import { MoreVerticalIcon } from 'hugeicons-react';
 import IconTile from './hosts/IconTile';
-import MenuButton from './ui/MenuButton';
+import MenuButton, { dropdownItems } from './ui/MenuButton';
 
 /**
  * One folder, as a tile in the grid or a row in the list.
@@ -10,6 +10,10 @@ import MenuButton from './ui/MenuButton';
  * *inside*, which is why it draws a ring rather than an insertion bar when it
  * is the target. `dropInto` and `dropEdge` are mutually exclusive; the panel
  * decides which from where the pointer is.
+ *
+ * `items` is what this folder can be told to do, in `ContextMenu`'s shape,
+ * decided by the panel and offered both from the button on the card and from a
+ * right-click on it.
  */
 
 const stop = (event) => event.stopPropagation();
@@ -29,10 +33,10 @@ function FolderCard({
     dragging = false,
     dropInto = false,
     selected = false,
+    items = [],
     onOpen,
-    onEdit,
-    onDelete,
     onPick,
+    onContextMenu,
     ...dragProps      // data-card-id and the pointer handle, from useCardDrag
 }) {
     const isList = view === 'list';
@@ -56,19 +60,6 @@ function FolderCard({
 
     const contents = describeContents(counts);
 
-    const menuItems = [
-        { label: 'Open', onSelect: onOpen },
-        { label: 'Rename', icon: <Edit02Icon size={14} strokeWidth={2} />, onSelect: onEdit },
-        { separator: true },
-        {
-            label: 'Delete',
-            hint: 'keeps contents',
-            icon: <Delete02Icon size={14} strokeWidth={2} />,
-            danger: true,
-            onSelect: onDelete,
-        },
-    ];
-
     return (
         <div
             className={`folder-card org-card group relative cursor-pointer
@@ -84,6 +75,9 @@ function FolderCard({
             tabIndex={0}
             onClick={handleClick}
             onKeyDown={handleKeyDown}
+            // The whole card, including the controls on it: a right-click
+            // anywhere on a folder should be about that folder.
+            onContextMenu={onContextMenu}
             {...dragProps}
         >
             <div className="flex items-center gap-2.5">
@@ -129,7 +123,7 @@ function FolderCard({
                     <MenuButton
                         icon={<MoreVerticalIcon size={16} strokeWidth={2} />}
                         title="Folder actions"
-                        items={menuItems}
+                        items={dropdownItems(items)}
                     />
                 </div>
             </div>

@@ -1,5 +1,12 @@
 import { memo } from 'react';
-import { ServerStack03Icon, SecurityIcon, FlashIcon, Archive02Icon, Settings01Icon } from 'hugeicons-react';
+import {
+    ServerStack03Icon,
+    SecurityIcon,
+    Route02Icon,
+    FlashIcon,
+    Archive02Icon,
+    Settings01Icon,
+} from 'hugeicons-react';
 import { APP_GUTTER, SIDEBAR_WIDTH } from '../lib/layout';
 import SidebarAccount from './SidebarAccount';
 
@@ -13,6 +20,14 @@ const NAV_ITEMS = [
         id: 'keychain',
         label: 'Keychain',
         icon: <SecurityIcon className="w-5 h-5" size={20} strokeWidth={1.5} />,
+    },
+    // Next to the keychain rather than down with Snippets: both are things a
+    // host points at in order to connect at all, as opposed to something you
+    // reach for once you are in.
+    {
+        id: 'proxies',
+        label: 'Proxies',
+        icon: <Route02Icon className="w-5 h-5" size={20} strokeWidth={1.5} />,
     },
     {
         id: 'snippets',

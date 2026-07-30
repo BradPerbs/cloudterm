@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import HostsPanel from './HostsPanel';
 import KeychainPanel from './KeychainPanel';
+import ProxiesPanel from './ProxiesPanel';
 import SnippetsPanel from './SnippetsPanel';
 import LogsPanel from './LogsPanel';
 import SettingsPanel from './settings/SettingsPanel';
@@ -100,6 +101,13 @@ function HomeView({
                     onDeleteKey={onDeleteKey}
                     onGenerateKey={onGenerateKey}
                 />
+            )}
+
+            {activeNav === 'proxies' && (
+                // `allHosts` so a proxy can say how many hosts are dialling
+                // through it, and so deleting one can name them rather than
+                // quietly putting their traffic back on the local network.
+                <ProxiesPanel isActive={isActive} reachedForPage={reachedForPage} allHosts={allHosts} />
             )}
 
             {activeNav === 'snippets' && (

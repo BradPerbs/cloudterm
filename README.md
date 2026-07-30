@@ -108,6 +108,7 @@ everyone, and the whole source is here to read and change.
 
 - **SSH, telnet and serial** in the same window
 - **Jump hosts** for anything behind a bastion
+- **SOCKS5, SOCKS4 and HTTP proxies**, saved once and used by any connection: terminals, SFTP, port forwards and remote desktops
 - **Passwords, keys, SSH agent, certificates** and Windows Hello keys held in the TPM
 - **2FA prompts** handled properly
 - **Automatic reconnect** after a drop or a laptop waking up

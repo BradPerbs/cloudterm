@@ -1,9 +1,9 @@
 import { memo, useCallback } from 'react';
-import { Copy01Icon, Delete02Icon, Edit02Icon, MoreVerticalIcon } from 'hugeicons-react';
-import { OsIcon } from '../lib/os-icons';
+import { MoreVerticalIcon } from 'hugeicons-react';
+import { OsIcon, hostOs } from '../lib/os-icons';
 import { DEFAULT_PORTS, hostKind, protocolLabel } from '../lib/protocols';
 import IconTile from './hosts/IconTile';
-import MenuButton from './ui/MenuButton';
+import MenuButton, { dropdownItems } from './ui/MenuButton';
 import Tag from './ui/Tag';
 
 /**
@@ -17,6 +17,10 @@ import Tag from './ui/Tag';
  *
  * Both layouts are the same component because they hold the same things in the
  * same order, and the only real difference is whether that runs across or down.
+ *
+ * `items` is what this host can be told to do, in `ContextMenu`'s shape, decided
+ * by the panel: the same list is behind the button on the card and behind a
+ * right-click on it, because they are one question asked two ways.
  */
 
 /** The card is the connect button, so the controls on it opt out of that click. */
@@ -39,11 +43,10 @@ function HostCard({
     connected = false,
     dragging = false,
     selected = false,
-    onEdit,
-    onDuplicate,
-    onDelete,
+    items = [],
     onConnect,
     onPick,
+    onContextMenu,
     onTagClick,
     ...dragProps      // data-card-id and the pointer handle, from useCardDrag
 }) {
@@ -80,7 +83,7 @@ function HostCard({
      * on those cards the line underneath was repeating the line above it, and on
      * the rest it was spending the card's one spare line on the thing least
      * likely to be being looked for. What is written nowhere else is the
-     * protocol and the account — which is also what tells two hosts on the same
+     * protocol and the account, which is also what tells two hosts on the same
      * machine apart. The address is kept on the line's tooltip rather than
      * dropped.
      *
@@ -97,7 +100,7 @@ function HostCard({
      * Telnet and VNC ask for a login over the connection itself, so there is no
      * username on the record to show; RDP signs in with CredSSP and does carry
      * one, on the desktop block rather than at the top level. A serial console
-     * has no user at all and is identified by the cable instead — two of them
+     * has no user at all and is identified by the cable instead. Two of them
      * are told apart by which port they are on, which is why that stays here.
      */
     const detail = kind === 'serial'
@@ -120,6 +123,10 @@ function HostCard({
         kind === 'ssh' && host.tunnels?.length
             ? `${host.tunnels.length} tunnel${host.tunnels.length === 1 ? '' : 's'}`
             : '',
+        // Not which proxy: the card has no proxy list to name one from, and the
+        // point of saying it here is that this host does not dial straight out,
+        // which is worth spotting from the grid. The editor names it.
+        kind !== 'serial' && host.proxyId ? 'via proxy' : '',
     ].filter(Boolean);
 
     const tags = host.tags || [];
@@ -161,14 +168,6 @@ function HostCard({
         </span>
     );
 
-    const menuItems = [
-        { label: 'Connect', onSelect: onConnect },
-        { label: 'Edit host', icon: <Edit02Icon size={14} strokeWidth={2} />, onSelect: onEdit },
-        { label: 'Duplicate', icon: <Copy01Icon size={14} strokeWidth={2} />, onSelect: onDuplicate },
-        { separator: true },
-        { label: 'Delete', icon: <Delete02Icon size={14} strokeWidth={2} />, danger: true, onSelect: onDelete },
-    ];
-
     return (
         <div
             className={`host-card org-card group relative cursor-pointer
@@ -183,12 +182,15 @@ function HostCard({
             tabIndex={0}
             onClick={handleClick}
             onKeyDown={handleKeyDown}
+            // The whole card, including the controls on it: a right-click
+            // anywhere on a host should be about that host.
+            onContextMenu={onContextMenu}
             {...dragProps}
         >
             <div className="flex items-center gap-2.5">
                 <IconTile size={isList ? 'sm' : 'md'}>
                     <OsIcon
-                        os={host.os}
+                        os={hostOs(host)}
                         distro={host.distro}
                         className={isList ? 'w-[18px] h-[18px]' : 'w-[22px] h-[22px]'}
                     />
@@ -261,7 +263,7 @@ function HostCard({
                     <MenuButton
                         icon={<MoreVerticalIcon size={16} strokeWidth={2} />}
                         title="Host actions"
-                        items={menuItems}
+                        items={dropdownItems(items)}
                     />
                 </div>
             </div>

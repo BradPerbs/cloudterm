@@ -1,5 +1,5 @@
-const net = require('net');
 const ssh = require('./ssh');
+const proxy = require('./proxy');
 
 /**
  * Reaching a remote desktop's port, by either of the two transports.
@@ -44,30 +44,32 @@ function dialThroughSsh(paneId, host, port) {
     });
 }
 
-/** Dial the desktop from this machine. For a box on the LAN, or behind a VPN. */
-function dialDirect(host, port) {
-    return new Promise((resolve, reject) => {
-        const socket = net.connect(port, host);
-        socket.setNoDelay(true);
-
-        const onError = (error) => {
-            socket.destroy();
-            reject(new Error(`${host}:${port}: ${error.message}`));
-        };
-
-        socket.once('error', onError);
-        socket.once('connect', () => {
-            socket.removeListener('error', onError);
-            resolve(socket);
-        });
-    });
+/**
+ * Dial the desktop from this machine. For a box on the LAN, or behind a VPN.
+ *
+ * `chain` is the host's proxy route, empty for the ordinary case. A proxied
+ * failure already names the proxy and the destination, so only a direct one is
+ * prefixed with the address.
+ */
+async function dialDirect(host, port, chain = []) {
+    try {
+        return await proxy.openSocket({ host, port, chain });
+    } catch (error) {
+        throw error.proxy ? error : new Error(`${host}:${port}: ${error.message}`);
+    }
 }
 
-/** Dial by whichever transport the host is configured for. */
+/**
+ * Dial by whichever transport the host is configured for.
+ *
+ * A tunnelled desktop is a channel on an SSH connection that has already been
+ * made, and any proxy was applied when *that* was dialled, so the chain on the
+ * config is only read for a direct one.
+ */
 function dial(paneId, config) {
     return config.transport === 'tunnel'
         ? dialThroughSsh(paneId, config.host, config.port)
-        : dialDirect(config.host, config.port);
+        : dialDirect(config.host, config.port, config.proxyChain);
 }
 
 module.exports = {

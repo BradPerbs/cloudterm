@@ -3,6 +3,29 @@ import { createPortal } from 'react-dom';
 import { useTooltip } from './Tooltip';
 
 /**
+ * A `ContextMenu` item list, in the shape this dropdown takes.
+ *
+ * A card's menu is described once and offered twice, from a button and from a
+ * right-click on the card, and the two components were written with slightly
+ * different item objects. This is the translation, kept beside the component
+ * that needs it, so that a card's two menus cannot drift into disagreeing about
+ * what it can do. Headings and custom rows have no dropdown equivalent and are
+ * dropped.
+ */
+export function dropdownItems(items) {
+    return items
+        .filter(item => item && item.type !== 'heading' && item.type !== 'custom')
+        .map(item => (item.type === 'separator' ? { separator: true } : {
+            label: item.label,
+            icon: item.icon,
+            hint: item.shortcut,
+            danger: item.danger,
+            disabled: item.disabled,
+            onSelect: item.onClick,
+        }));
+}
+
+/**
  * An icon button with a dropdown.
  *
  * The menu is portalled to the body and positioned from the button's rectangle,

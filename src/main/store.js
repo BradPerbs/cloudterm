@@ -4,6 +4,7 @@ const fs = require('fs');
 const { normalizeTunnels } = require('./tunnel-config');
 const { normalizeSnippet, normalizeSnippets } = require('./snippet-config');
 const { normalizeDesktop } = require('./desktop-config');
+const { normalizeProxy, describeProxy, MAX_PROXY_HOPS } = require('./proxy-config');
 const { normalizeTags, applyTagEdit, sameTags } = require('./host-tags');
 const {
     normalizeProtocol,
@@ -28,6 +29,14 @@ const SCHEMA_VERSION = 2;
 // rest, and never appears in a host record crossing IPC.
 const SECRET_FIELDS = ['password', 'privateKey', 'passphrase', 'vncPassword', 'rdpPassword'];
 
+/**
+ * The only secret a proxy record has, named separately so a proxy is not written
+ * out carrying four empty fields that belong to hosts and keys. Everything that
+ * walks SECRET_FIELDS over a whole collection still covers it, because it skips
+ * fields that hold nothing.
+ */
+const PROXY_SECRET_FIELDS = ['password'];
+
 const ENC_PREFIX = 'enc.v1:';
 const PLAIN_PREFIX = 'plain.v1:';
 
@@ -40,7 +49,7 @@ let cache = null;
 let protecting = false;
 
 function emptyStore() {
-    return { version: SCHEMA_VERSION, hosts: [], folders: [], keys: [], snippets: [] };
+    return { version: SCHEMA_VERSION, hosts: [], folders: [], keys: [], snippets: [], proxies: [] };
 }
 
 /* ------------------------------------------------------------------ *
@@ -126,7 +135,7 @@ function protectSecrets() {
         const store = cache;
         let upgraded = 0;
 
-        for (const item of [...store.hosts, ...store.keys]) {
+        for (const item of [...store.hosts, ...store.keys, ...store.proxies]) {
             for (const field of SECRET_FIELDS) {
                 const value = item[field];
                 if (!value || vault.isVaultSecret(value)) continue;
@@ -164,9 +173,9 @@ vault.onUnlocked(protectSecrets);
  * `existing`. Otherwise a save that omits a secret would hand us the stored
  * ciphertext and we would encrypt it a second time.
  */
-function mergeSecrets(record, incoming, existing = {}) {
+function mergeSecrets(record, incoming, existing = {}, fields = SECRET_FIELDS) {
     const result = { ...record };
-    for (const field of SECRET_FIELDS) {
+    for (const field of fields) {
         const value = incoming[field];
         if (value === null) {
             result[field] = '';
@@ -202,6 +211,16 @@ function redactKey(key) {
         hasPrivateKey: Boolean(privateKey),
         hasPassphrase: Boolean(passphrase),
     };
+}
+
+/**
+ * A proxy as the renderer may see it: normalised, and with the password replaced
+ * by whether there is one. Normalised on the way out as well as in, so a record
+ * written before a field existed still arrives complete at the editor.
+ */
+function redactProxy(proxy) {
+    const { password, ...rest } = proxy;
+    return { ...normalizeProxy(rest), hasPassword: Boolean(password) };
 }
 
 /** `user@address:port`, the form the activity log names a server by. */
@@ -304,7 +323,7 @@ function peelOnce(value) {
 function repairNestedSecrets(store) {
     let repaired = 0;
 
-    for (const record of [...store.hosts, ...store.keys]) {
+    for (const record of [...store.hosts, ...store.keys, ...store.proxies]) {
         for (const field of SECRET_FIELDS) {
             const value = record[field];
             if (!isCiphertext(value)) continue;
@@ -353,6 +372,7 @@ function loadFromDisk() {
             // Added after v2 shipped. A store written before then simply has
             // none, which needs no migration: the collection starts empty.
             snippets: parsed.snippets || [],
+            proxies: parsed.proxies || [],
         };
 
         const repaired = repairNestedSecrets(cache);
@@ -366,7 +386,12 @@ function loadFromDisk() {
         console.error('Failed to load store, falling back to backup:', error.message);
         try {
             if (fs.existsSync(backupPath())) {
-                cache = JSON.parse(fs.readFileSync(backupPath(), 'utf8'));
+                // Merged over an empty store rather than used as it stands: a
+                // backup written by an older build is missing whichever
+                // collections were added since, and half this file spreads them
+                // without checking. One collection short is a crash on load,
+                // which is the worst possible moment for one.
+                cache = { ...emptyStore(), ...JSON.parse(fs.readFileSync(backupPath(), 'utf8')) };
                 return cache;
             }
         } catch (backupError) {
@@ -482,6 +507,18 @@ function saveHost(host) {
         record.jumpHostId = String(record.jumpHostId ?? '').trim();
         if (record.jumpHostId === id) record.jumpHostId = '';
     }
+
+    // The proxy this host is dialled through, held as a reference to a saved
+    // proxy for the same reason a jump host is: the credential belongs to the
+    // proxy, not to every host that happens to be reached through it.
+    //
+    // A serial host cannot use one. There is no socket to proxy, and leaving a
+    // stale reference on the record would show a route in the editor that
+    // nothing would ever take.
+    if (record.proxyId !== undefined) {
+        record.proxyId = String(record.proxyId ?? '').trim();
+    }
+    if (record.protocol === 'serial') record.proxyId = '';
 
     // Written into the shell on every connect, so it is stored in the exact
     // form it will be sent: CRLF normalised, trailing blank lines dropped. The
@@ -606,8 +643,8 @@ function duplicateHost(hostId) {
  *
  * Only `tags` is read from the payload. Nothing else on the incoming ids can
  * reach a record, so this cannot carry a rename or a credential the way a full
- * save could — the same rule `arrangeItems` follows, and for the same reason:
- * it accepts a list straight from the renderer.
+ * save could. It is the same rule `arrangeItems` follows, and for the same
+ * reason: it accepts a list straight from the renderer.
  *
  * A host whose tags the edit would not change is left untouched, so re-applying
  * a tag that is already there is not an edit and does not say it was one.
@@ -689,14 +726,38 @@ function resolveCredentials(hostId) {
         // Not a credential, but it is connect-time host config resolved by id
         // in exactly the same way, and the shell layer already reads this object.
         initCommand: host.initCommand || '',
+        // Where the socket is opened, as opposed to what is spoken over it. In
+        // dial order, and every entry carries its own decrypted password.
+        proxyId: '',
+        proxyChain: [],
         password: '',
         privateKey: '',
         passphrase: '',
     };
 
+    /*
+     * The proxy this connection is dialled through.
+     *
+     * Resolved here for the same reasons the credentials are: by id, in the main
+     * process, and never taken from the renderer. It is resolved before the
+     * protocol check below because it applies to every transport that opens a
+     * socket, not only SSH; a serial line has none to open, so it is not asked.
+     *
+     * A dangling reference is a failure rather than a quiet direct connection.
+     * A proxy is usually the only route to the host, and where it is not, it was
+     * chosen to keep the connection off the local network: falling back to
+     * dialling straight out would be the one thing the setting exists to stop.
+     */
+    if (protocol !== 'serial' && host.proxyId) {
+        const { chain, error } = resolveProxyChain(host.proxyId);
+        if (error) return { ...credentials, error };
+        credentials.proxyId = host.proxyId;
+        credentials.proxyChain = chain;
+    }
+
     // Only SSH authenticates from here. Telnet and serial have no client-side
-    // authentication at all — a device asks for a login over the connection
-    // itself, if it asks — so their records carry whatever auth settings they
+    // authentication at all (a device asks for a login over the connection
+    // itself, if it asks), so their records carry whatever auth settings they
     // had before the protocol was switched, and none of it is read.
     //
     // This is a guard, not a tidy-up. Without it a host switched to telnet
@@ -708,7 +769,7 @@ function resolveCredentials(hostId) {
         const key = store.keys.find(k => k.id === host.keychainKeyId);
         if (!key) return { ...credentials, error: 'Selected SSH key not found in keychain' };
 
-        // A Windows Hello key has no private half to hand over — the TPM signs,
+        // A Windows Hello key has no private half to hand over: the TPM signs,
         // and only after the person in front of the machine has proved who they
         // are. So the connection is given the credential's name and the public
         // key, and does the asking when it gets there.
@@ -869,8 +930,28 @@ function resolveDesktop(hostId) {
 
     const desktop = desktopFor(host);
 
+    /*
+     * A desktop dialled `direct` opens its own socket, so it goes through the
+     * host's proxy exactly as a shell session would. Under `tunnel` it is a
+     * channel on an SSH connection that has already been made, and that
+     * connection is where the proxy was applied, so the chain is left empty
+     * rather than proxying something that is already inside a tunnel.
+     *
+     * A broken reference is reported the way resolveCredentials reports one: as
+     * an error, not as a desktop that quietly reaches out on its own.
+     */
+    let proxyChain = [];
+    let proxyError = '';
+    if (desktop.transport === 'direct' && host.proxyId) {
+        const resolved = resolveProxyChain(host.proxyId);
+        proxyChain = resolved.chain;
+        proxyError = resolved.error;
+    }
+
     return {
         ...desktop,
+        proxyChain,
+        proxyError,
         password: decryptSecret(desktop.protocol === 'rdp' ? host.rdpPassword : host.vncPassword),
     };
 }
@@ -879,8 +960,8 @@ function resolveDesktop(hostId) {
  * A host's desktop block, with the address filled in.
  *
  * A direct desktop that names no address means the host itself. Requiring it to
- * be typed twice would be asking for the same answer to the same question —
- * and for an RDP-only host, where the desktop *is* the connection, it would be
+ * be typed twice would be asking for the same answer to the same question, and
+ * for an RDP-only host, where the desktop *is* the connection, it would be
  * asking for it in the one place the user has no reason to look.
  *
  * Only for `direct`: under a tunnel, a blank address means the server's own
@@ -898,6 +979,212 @@ function desktopFor(host) {
 function getHostDesktop(hostId) {
     const host = load().hosts.find(h => h.id === hostId);
     return desktopFor(host);
+}
+
+/* ------------------------------------------------------------------ *
+ * Proxies
+ *
+ * A collection of its own rather than an address on each host, for the same
+ * reason the keychain is not a private key per host: one proxy is usually the
+ * route for everything, its credential belongs to it, and changing the port it
+ * listens on should not be twenty edits.
+ *
+ * A host points at one by id. Nothing here reads a host, and the runtime never
+ * reads this collection: it is handed a resolved chain by resolveCredentials.
+ * ------------------------------------------------------------------ */
+
+function getProxies() {
+    return load().proxies.map(redactProxy);
+}
+
+function saveProxy(proxy) {
+    const store = load();
+    const id = proxy.id || `proxy-${Date.now()}`;
+    const index = store.proxies.findIndex(entry => entry.id === id);
+    const existing = index >= 0 ? store.proxies[index] : {};
+
+    // Never trust the redaction flag coming back from the renderer.
+    const { hasPassword, ...incoming } = proxy;
+
+    // Normalised before the secret is merged, so the record written is the same
+    // shape the client will be handed whatever the editor sent.
+    const record = mergeSecrets(
+        normalizeProxy({ ...existing, ...incoming, id }),
+        incoming,
+        existing,
+        PROXY_SECRET_FIELDS,
+    );
+
+    // A proxy cannot be reached through itself. Longer cycles are caught when
+    // the chain is resolved, where the whole of it is visible; this one is
+    // refused here because it is the one the editor can offer.
+    if (record.viaProxyId === id) record.viaProxyId = '';
+
+    if (index >= 0) store.proxies[index] = record;
+    else store.proxies.push(record);
+
+    persist();
+
+    const changes = activity.diff(existing, record);
+    if (index < 0 || changes.length > 0) {
+        activity.record({
+            category: 'data',
+            action: index < 0 ? 'proxy.create' : 'proxy.update',
+            target: record.name || describeProxy(record),
+            subject: describeProxy(record),
+            changes: index < 0 ? [] : changes,
+        });
+    }
+
+    return redactProxy(record);
+}
+
+/**
+ * Remove a proxy, and stop anything pointing at what is no longer there.
+ *
+ * Hosts left holding a dangling reference would refuse to connect rather than
+ * connect directly (see resolveCredentials), which is the safe failure but a
+ * confusing one. So the references are cleared here and the change is named in
+ * the log: those hosts now dial straight out, which is a change to how they
+ * reach the network that nobody asked for explicitly.
+ */
+function deleteProxy(proxyId) {
+    const store = load();
+    const removed = store.proxies.find(entry => entry.id === proxyId);
+    if (!removed) return false;
+
+    store.proxies = store.proxies.filter(entry => entry.id !== proxyId);
+
+    const chained = store.proxies.filter(entry => entry.viaProxyId === proxyId);
+    for (const entry of chained) entry.viaProxyId = '';
+
+    const orphaned = store.hosts.filter(host => host.proxyId === proxyId);
+    for (const host of orphaned) host.proxyId = '';
+
+    persist();
+
+    activity.record({
+        category: 'data',
+        action: 'proxy.delete',
+        target: removed.name || describeProxy(removed),
+        subject: describeProxy(removed),
+        detail: [
+            orphaned.length ? `${orphaned.length} host(s) now connect directly` : '',
+            chained.length ? `${chained.length} proxy(s) are no longer chained through it` : '',
+        ].filter(Boolean).join(' · '),
+    });
+
+    return true;
+}
+
+/**
+ * Copy a proxy, password and all.
+ *
+ * Done here rather than by saving a copy from the renderer for the reason
+ * duplicateHost is: the renderer has never seen the password, so a round trip
+ * through it would produce a proxy that looks right and cannot authenticate.
+ */
+function duplicateProxy(proxyId) {
+    const store = load();
+    const source = store.proxies.find(entry => entry.id === proxyId);
+    if (!source) return null;
+
+    const record = {
+        ...source,
+        id: `proxy-${Date.now()}`,
+        name: `${source.name || 'Proxy'} copy`,
+    };
+
+    store.proxies.push(record);
+    persist();
+
+    activity.record({
+        category: 'data',
+        action: 'proxy.create',
+        target: record.name,
+        subject: describeProxy(record),
+        detail: `Duplicated from ${source.name || describeProxy(source)}`,
+    });
+
+    return redactProxy(record);
+}
+
+/**
+ * Resolve every proxy a connection is relayed through, in the order they are
+ * dialled: the first entry is reached from this machine, the last is the one
+ * asked to reach the host.
+ *
+ * The links point the other way on the records, because `viaProxyId` says which
+ * proxy *this* one is reached through, so the walk collects them innermost first
+ * and reverses at the end. Same shape as resolveChain, for the same reason.
+ *
+ * Main process only, under the same rule as resolveCredentials: every entry
+ * carries a decrypted password and must never cross IPC.
+ */
+function resolveProxyChain(proxyId) {
+    const store = load();
+    const fail = (error) => ({ chain: [], error });
+
+    const chain = [];
+    const seen = new Set();
+    let currentId = String(proxyId || '').trim();
+
+    while (currentId) {
+        if (seen.has(currentId)) {
+            return fail('A proxy in this route is reached through itself');
+        }
+        if (chain.length >= MAX_PROXY_HOPS) {
+            return fail(`This connection is relayed through more than ${MAX_PROXY_HOPS} proxies`);
+        }
+
+        const record = store.proxies.find(entry => entry.id === currentId);
+        if (!record) {
+            return fail('A proxy this connection goes through no longer exists');
+        }
+
+        seen.add(currentId);
+
+        const proxy = normalizeProxy(record);
+        chain.push({ ...proxy, password: decryptSecret(record.password) });
+        currentId = proxy.viaProxyId;
+    }
+
+    if (chain.length === 0) return fail('No proxy chosen');
+
+    chain.reverse();
+    return { chain, error: '' };
+}
+
+/**
+ * The chain the Proxies page's check button should exercise.
+ *
+ * Two shapes, because the check has to work on a proxy that has not been saved:
+ * an editor that can only test what is already stored is one that cannot help
+ * you get the settings right in the first place.
+ *
+ *   { proxyId }   a saved record, resolved with everything it chains through
+ *   { proxy }     a draft from the editor, appended to whatever its `viaProxyId`
+ *                 resolves to. A blank password means "the one already stored",
+ *                 which is the same rule a save follows, so testing an edit
+ *                 without retyping the password works.
+ */
+function resolveTestChain({ proxyId, proxy } = {}) {
+    if (proxyId) return resolveProxyChain(proxyId);
+    if (!proxy) return { chain: [], error: 'Nothing to check' };
+
+    const draft = normalizeProxy(proxy);
+
+    let chain = [];
+    if (draft.viaProxyId) {
+        const resolved = resolveProxyChain(draft.viaProxyId);
+        if (resolved.error) return resolved;
+        chain = resolved.chain;
+    }
+
+    const stored = load().proxies.find(entry => entry.id === draft.id);
+    const password = proxy.password || (stored ? decryptSecret(stored.password) : '');
+
+    return { chain: [...chain, { ...draft, password }], error: '' };
 }
 
 /* ------------------------------------------------------------------ *
@@ -1212,6 +1499,14 @@ function exportAll() {
         folders: store.folders.map(folder => ({ ...folder })),
         keys: store.keys.map(withSecrets),
         snippets: normalizeSnippets(store.snippets),
+        // A host that connects through a proxy is not restorable without the
+        // proxy, so the collection travels with the rest of the setup. Written
+        // out field by field rather than through `withSecrets`, because
+        // normalising drops the stored ciphertext that call would read.
+        proxies: store.proxies.map(record => ({
+            ...normalizeProxy(record),
+            password: record.password ? decryptSecret(record.password) : '',
+        })),
     };
 }
 
@@ -1266,10 +1561,10 @@ function importAll(payload, { overwrite = false } = {}) {
 
     const store = load();
 
-    const prepareSecrets = (raw) => {
+    const prepareSecrets = (raw, fields = SECRET_FIELDS) => {
         const { hasPassword, hasPrivateKey, hasPassphrase, hasVncPassword, ...rest } = raw || {};
         const record = { ...rest };
-        for (const field of SECRET_FIELDS) {
+        for (const field of fields) {
             record[field] = raw?.[field] ? encryptSecret(raw[field]) : '';
         }
         return record;
@@ -1302,6 +1597,16 @@ function importAll(payload, { overwrite = false } = {}) {
             overwrite,
             prepare: normalizeSnippet,
         }),
+        // Normalised on the way in like the tunnel and desktop blocks are, and
+        // for the same reason: a backup is a file a person can edit, and these
+        // records decide where a socket is opened.
+        proxies: mergeCollection(store.proxies, payload?.proxies, {
+            overwrite,
+            prepare: (raw) => {
+                const record = prepareSecrets(raw, PROXY_SECRET_FIELDS);
+                return { ...normalizeProxy(record), password: record.password };
+            },
+        }),
     };
 
     persist();
@@ -1327,6 +1632,7 @@ function previewImport(payload) {
         folders: count(payload?.folders, store.folders),
         keys: count(payload?.keys, store.keys),
         snippets: count(payload?.snippets, store.snippets),
+        proxies: count(payload?.proxies, store.proxies),
     };
 }
 
@@ -1350,6 +1656,12 @@ module.exports = {
     getHostTunnels,
     resolveDesktop,
     getHostDesktop,
+    getProxies,
+    saveProxy,
+    deleteProxy,
+    duplicateProxy,
+    resolveProxyChain,
+    resolveTestChain,
     getFolders,
     saveFolder,
     deleteFolder,

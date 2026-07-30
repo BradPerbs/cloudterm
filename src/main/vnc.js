@@ -4,6 +4,7 @@ const store = require('./store');
 const vncAuth = require('./vnc-auth');
 const { dial } = require('./desktop-dial');
 const { validateDesktop, describeDesktop } = require('./desktop-config');
+const { proxyHops } = require('./proxy-config');
 
 /**
  * Remote desktop (RFB/VNC) for a pane.
@@ -103,6 +104,9 @@ function snapshot(session) {
         transport: session.config.transport,
         address: describeDesktop(session.config),
         desktopName: session.desktopName,
+        // What this desktop is reached through, for the pane header's route mark.
+        // Names and addresses only; the credentials stay on this side.
+        route: session.route,
         bytesUp: session.bytesUp,
         bytesDown: session.bytesDown,
         openedAt: session.openedAt,
@@ -588,11 +592,17 @@ async function open(paneId, hostId) {
     const invalid = validateDesktop(config);
     if (invalid) return { success: false, message: invalid };
 
+    // A proxy the host names and that is no longer there. Reported rather than
+    // dialled around: see the note in store.resolveCredentials.
+    if (config.proxyError) return { success: false, message: config.proxyError };
+
     const session = {
         paneId,
         hostId,
         // The password is deliberately not kept on the session: it is used
-        // during the handshake below and then has no further purpose here.
+        // during the handshake below and then has no further purpose here. Nor
+        // is the proxy chain, for the same reason: the dial happens inside this
+        // call, so nothing after it has any use for the credential.
         config: {
             transport: config.transport,
             host: config.host,
@@ -607,6 +617,21 @@ async function open(paneId, hostId) {
         message: '',
         lastError: '',
         desktopName: '',
+        /*
+         * The path to this desktop. Only a directly dialled one has a path of its
+         * own: under `tunnel` it is a channel on the pane's SSH session, whose own
+         * path the header is already showing.
+         */
+        route: config.transport === 'direct'
+            ? [
+                ...proxyHops(config.proxyChain),
+                {
+                    kind: 'host',
+                    label: store.describeHost(hostId).name,
+                    detail: `${config.host}:${config.port}`,
+                },
+            ]
+            : [],
         token: crypto.randomBytes(16).toString('hex'),
         stream: null,
         reader: null,
@@ -638,6 +663,12 @@ async function open(paneId, hostId) {
 
     session.stream = stream;
     session.reader = new Reader(stream);
+
+    // A stream that came through a proxy arrives paused, holding whatever the
+    // server sent before the proxy's reply had finished being read. The reader
+    // above is attached, so it is safe to let it flow. A no-op on an SSH channel
+    // or a direct dial, neither of which was paused.
+    stream.resume();
 
     try {
         await withTimeout(

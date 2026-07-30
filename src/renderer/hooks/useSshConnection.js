@@ -37,6 +37,17 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
     const [retryIn, setRetryIn] = useState(0);
 
     /**
+     * The hops this session was actually dialled through, outward first, as main
+     * reported them at connect time. Empty for a connection that went straight
+     * there, which is most of them.
+     *
+     * Held here rather than derived from the host record, because the record can
+     * be edited while the session is up: what is on screen has to describe the
+     * connection that exists, not the one the settings now describe.
+     */
+    const [route, setRoute] = useState([]);
+
+    /**
      * The phase, readable synchronously. React state lands a render later, and
      * the drop handler below has to make a decision the instant an event
      * arrives. One render of lag is enough to mistake a dial that is already
@@ -129,6 +140,10 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
             attemptRef.current = 0;
             setAttempt(0);
             setPhase('connected');
+            // A reconnect re-reads the host, so the path is taken from every
+            // dial rather than only the first: a proxy added since is the
+            // reason the session came back at all.
+            setRoute(Array.isArray(result.route) ? result.route : []);
             if (reconnect) callbacks.current.write(ANSI.good('Reconnected'));
             callbacks.current.onResult?.(result, { reconnect });
             return result;
@@ -142,6 +157,9 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
         }
 
         setPhase('failed');
+        // Nothing is connected through anything any more. A path left on screen
+        // over a dead session would be describing a connection that is gone.
+        setRoute([]);
         callbacks.current.write(ANSI.error(result.message || 'Connection failed'));
         callbacks.current.onResult?.(result, { reconnect });
         return result;
@@ -171,6 +189,7 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
     const disconnect = useCallback(() => {
         clearTimers();
         setPhase('closed');
+        setRoute([]);
         callbacks.current.write(ANSI.dim('Disconnected'));
         window.api.ssh.disconnect(tabId);
     }, [tabId, clearTimers, setPhase]);
@@ -206,6 +225,7 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
         status,
         attempt,
         retryIn,
+        route,
         maxAttempts: MAX_ATTEMPTS,
         connect,
         handleDropped,

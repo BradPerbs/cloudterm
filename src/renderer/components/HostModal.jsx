@@ -9,8 +9,11 @@ import Button, { IconButton } from './ui/Button';
 import Checkbox from './ui/Checkbox';
 import Disclosure from './ui/Disclosure';
 import TagInput from './ui/TagInput';
+import StoredSecretHint from './ui/StoredSecretHint';
 import Field, { FIELD_CLASS, MONO_FIELD_CLASS } from './ui/Field';
 import { HOST_KINDS, DEFAULT_PORTS, DEFAULT_SERIAL, hostKind } from '../lib/protocols';
+import { nameProxy, proxyRoute } from '../lib/proxies';
+import { useProxies } from '../hooks/useProxies';
 
 const AUTH_METHODS = [
     { id: 'password', label: 'Password', hint: 'Send a stored password' },
@@ -51,24 +54,6 @@ function jumpCandidates(hosts, hostId) {
         hostKind(candidate) === 'ssh' && !passesThrough(candidate.id));
 }
 
-function StoredSecretHint({ label, cleared, onClear }) {
-    if (cleared) {
-        return <p className="text-[11px] text-red-500">Stored secret will be removed on save.</p>;
-    }
-    return (
-        <p className="text-[11px] text-gray-500 dark:text-neutral-500">
-            {label}{' '}
-            <button
-                type="button"
-                onClick={onClear}
-                className="text-red-500 hover:underline font-medium"
-            >
-                Remove it
-            </button>
-        </p>
-    );
-}
-
 /**
  * Mounted only while open: the sheet owns the enter and exit animations and
  * calls `onClose` once it has finished leaving, so the form state can simply be
@@ -95,6 +80,9 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         // The saved host this one is reached through, by id. Blank is a direct
         // connection, which is almost every host.
         jumpHostId: host?.jumpHostId || '',
+        // The saved proxy the socket is opened through, by id. Blank dials
+        // straight out, which is almost every host.
+        proxyId: host?.proxyId || '',
         initCommand: host?.initCommand || '',
         tunnels: host?.tunnels || [],
         // The editor keeps the VNC password inside this block for the sake of
@@ -111,6 +99,11 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     const [clearDesktopPassword, setClearDesktopPassword] = useState(false);
     const formRef = useRef(null);
 
+    // Read straight from the hook rather than threaded down as a prop: the list
+    // is global, cached, and the Proxies page keeps every mounted copy current,
+    // so a proxy added a moment ago is already on offer here.
+    const { proxies } = useProxies();
+
     const handleChange = useCallback((field, value) => {
         setFormData(previous => ({ ...previous, [field]: value }));
     }, []);
@@ -121,14 +114,14 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
      * Three of the four answers are the stored `protocol`. The fourth,
      * `desktop`, is not a protocol at all: it is a host with no shell, which the
      * record has always expressed as `desktop.only`. Resolving between the two
-     * happens here so that nothing below — and nothing in main — has to know
+     * happens here so that nothing below, and nothing in main, has to know
      * the picker exists.
      */
     const kind = hostKind(formData);
     const isSerial = kind === 'serial';
     const isDesktop = kind === 'desktop';
-    // A shell of some sort. The things that need one — run-on-connect, the
-    // session port — are offered for the other three and not for a desktop.
+    // A shell of some sort. The things that need one (run-on-connect, the
+    // session port) are offered for the other three and not for a desktop.
     const hasShell = !isDesktop;
     // Files, forwards and a tunnelled desktop are SSH channels, and telnet and
     // serial reach devices that have none.
@@ -174,6 +167,19 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     }, [hosts, formData.jumpHostId]);
 
     /**
+     * The proxy route this host's socket is opened through, in dial order.
+     *
+     * Same shape as the jump chain above and for the same reason: choosing one
+     * proxy can add more than one hop, because a proxy may itself be reached
+     * through another, and that is the part assembled out of records this form is
+     * not showing.
+     */
+    const proxyChain = useMemo(
+        () => proxyRoute(proxies, formData.proxyId).map(nameProxy),
+        [proxies, formData.proxyId],
+    );
+
+    /**
      * What each folded section says about itself while it is closed.
      *
      * A blank string means nothing is configured there, which is what leaves a
@@ -186,6 +192,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         const tunnelCount = formData.tunnels?.length || 0;
         const desktop = formData.desktop || {};
         const jump = hosts.find(candidate => candidate.id === formData.jumpHostId);
+        const via = proxies.find(candidate => candidate.id === formData.proxyId);
         const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
         return {
@@ -194,12 +201,13 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                 tagCount ? plural(tagCount, 'tag') : '',
             ].filter(Boolean).join(', '),
             jump: jump ? (jump.name || jump.host || '') : '',
+            proxy: via ? nameProxy(via) : '',
             initCommand: (formData.initCommand || '').split('\n')[0].trim(),
             tunnels: tunnelCount ? plural(tunnelCount, 'forward') : '',
             desktop: desktop.enabled ? (desktop.protocol === 'rdp' ? 'RDP' : 'VNC') : '',
             advanced: formData.legacyAlgorithms ? 'Legacy algorithms allowed' : '',
         };
-    }, [formData, hosts]);
+    }, [formData, hosts, proxies]);
 
     const handleKind = useCallback((next) => {
         setFormData(previous => {
@@ -236,8 +244,8 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                 protocol: next,
                 port: wasDefault ? (DEFAULT_PORTS[next] || previous.port) : previous.port,
                 // The host has a shell again. Whatever desktop was configured is
-                // kept — an SSH host with a desktop view is an ordinary thing to
-                // be — but it is no longer the only reason to open the host.
+                // kept, since an SSH host with a desktop view is an ordinary thing
+                // to be, but it is no longer the only reason to open the host.
                 desktop: { ...desktop, only: false },
             };
         });
@@ -264,7 +272,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         const desktopSecret = desktopPassword || (clearDesktopPassword ? null : '');
 
         // Every list, tab and log line calls a host by its name, so the record
-        // always carries one — but it does not have to be typed. Left blank it
+        // always carries one, but it does not have to be typed. Left blank it
         // becomes the address, which is what anyone would have written anyway
         // for a box they only ever refer to by its IP. Resolved here, once, so
         // nothing downstream has to know the field was optional.
@@ -352,7 +360,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                 </div>
 
                 {/* Telnet puts a password on the wire in the clear. Said once,
-                    here, where it is being chosen — not as a warning on every
+                    here, where it is being chosen, not as a warning on every
                     connection, which is how a warning stops being read. */}
                 {kind === 'telnet' && (
                     <p className="flex items-start gap-2 text-[11px] text-amber-600 dark:text-amber-500 rounded-lg border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/5 px-3 py-2">
@@ -385,7 +393,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                             />
                         </Field>
                         {/* The session's port, so a host with no session has no
-                            use for it — the desktop carries its own, below. */}
+                            use for it: the desktop carries its own, below. */}
                         {hasShell && (
                         <Field label="Port">
                             <input
@@ -676,6 +684,78 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                             {jumpChain.length > 1 && (
                                 <p className="text-[11px] text-gray-500 dark:text-neutral-500 font-mono">
                                     {['this machine', ...jumpChain, formData.name || formData.host || 'this host'].join(' → ')}
+                                </p>
+                            )}
+                        </Field>
+                    </Disclosure>
+                    )}
+
+                    {/* Its own section rather than a second field under "Connect
+                        through", because it is a different kind of answer. A jump
+                        host is a machine this connection passes through and comes
+                        out of; a proxy decides how the *socket* is opened, and so
+                        applies to everything that runs on top of it: a shell,
+                        telnet, SFTP, a port forward, an RDP or VNC pane dialled
+                        directly.
+
+                        Offered for every kind of host but serial, which has no
+                        socket for a proxy to open. */}
+                    {!isSerial && (
+                    <Disclosure
+                        title="Proxies"
+                        summary={summaries.proxy}
+                        defaultOpen={Boolean(formData.proxyId)}
+                    >
+                        <Field
+                            hint={formData.proxyId
+                                ? 'The socket is opened through the proxy, which is asked to reach the address above. Everything the session carries travels inside it: files, port forwards and a directly dialled desktop alike.'
+                                : 'For a network only reachable through a SOCKS or HTTP proxy. Saved proxies are managed on the Proxies page.'}
+                        >
+                            {proxies.length === 0 ? (
+                                <div className="px-3 py-2.5 rounded-xl border border-gray-300 dark:border-surface-control bg-gray-50 dark:bg-surface-base text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2">
+                                    <AlertSquareIcon className="w-4 h-4 shrink-0" size={16} />
+                                    No proxies saved. Add one on the Proxies page first.
+                                </div>
+                            ) : (
+                                <select
+                                    value={formData.proxyId}
+                                    onChange={(e) => handleChange('proxyId', e.target.value)}
+                                    className={FIELD_CLASS}
+                                >
+                                    <option value="">Dial straight out</option>
+                                    {proxies.map(candidate => (
+                                        <option key={candidate.id} value={candidate.id}>
+                                            {nameProxy(candidate)}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {/* Same rule as the jump chain: only say it when the
+                                picker did not. Two entries means the chosen proxy
+                                is itself reached through another. */}
+                            {proxyChain.length > 1 && (
+                                <p className="text-[11px] text-gray-500 dark:text-neutral-500 font-mono">
+                                    {['this machine', ...proxyChain, formData.host || 'this host'].join(' → ')}
+                                </p>
+                            )}
+
+                            {/* The one combination worth spelling out, because
+                                neither section can say it on its own and guessing
+                                wrong means looking for a proxy problem in the
+                                wrong record.
+
+                                Each hop is dialled with its own settings, the way
+                                `ssh` treats a ProxyJump host as a host in its own
+                                right. Relayed, the only socket leaving this
+                                machine goes to the first hop, so it is that
+                                host's proxy that opens it. */}
+                            {formData.proxyId && formData.jumpHostId && (
+                                <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                                    Reached through {jumpChain[0] || 'a jump host'}, the only connection
+                                    out of this machine is the one to {jumpChain[0] || 'that host'}, so its
+                                    own proxy setting is what opens it. The proxy chosen here is used when
+                                    this host is dialled without the relay.
                                 </p>
                             )}
                         </Field>

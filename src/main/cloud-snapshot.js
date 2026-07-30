@@ -10,8 +10,8 @@ const activity = require('./activity');
 
 /**
  * The setup snapshot: this machine's saved hosts, folders, keys, snippets,
- * known hosts and terminal settings, encrypted and kept on the account so
- * signing in elsewhere reproduces it.
+ * proxies, known hosts and terminal settings, encrypted and kept on the account
+ * so signing in elsewhere reproduces it.
  *
  * What is deliberately left out: anything the CloudBlast sync already owns.
  * Those hosts and folders are rebuilt from the servers API on every device, so
@@ -119,6 +119,7 @@ function describe(payload) {
         folders: payload.folders.length,
         keys: payload.keys.length,
         snippets: payload.snippets.length,
+        proxies: payload.proxies.length,
         known_hosts: Object.keys(payload.knownHosts || {}).length,
         has_settings: Boolean(payload.settings),
         app_version: app.getVersion(),
@@ -136,6 +137,9 @@ function collect() {
         folders: everything.folders.filter(folder => !isManaged(folder) && folder.id !== 'cloudblast'),
         keys: everything.keys,
         snippets: everything.snippets,
+        // Not filtered by `isManaged`: proxies are this machine's own, so there
+        // is no server-owned counterpart for one to collide with.
+        proxies: everything.proxies,
         knownHosts: knownHosts.exportAll(),
         settings: rendererSettings || null,
     };
@@ -156,6 +160,7 @@ function apply(payload) {
         folders: Array.isArray(payload?.folders) ? payload.folders.filter(f => !isManaged(f)) : [],
         keys: payload?.keys,
         snippets: payload?.snippets,
+        proxies: payload?.proxies,
     }, { overwrite: false });
 
     if (payload?.knownHosts) knownHosts.importAll(payload.knownHosts, { overwrite: false });
@@ -264,7 +269,8 @@ async function pullLocked({ force = false } = {}) {
         persist();
 
         const added = (summary?.hosts?.added || 0) + (summary?.keys?.added || 0)
-            + (summary?.snippets?.added || 0) + (summary?.folders?.added || 0);
+            + (summary?.snippets?.added || 0) + (summary?.folders?.added || 0)
+            + (summary?.proxies?.added || 0);
 
         if (added > 0) {
             activity.record({

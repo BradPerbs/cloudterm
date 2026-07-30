@@ -3,6 +3,8 @@ const { Client } = require('ssh2');
 const store = require('./store');
 const knownHosts = require('./known-hosts');
 const agent = require('./agent');
+const proxy = require('./proxy');
+const { describeProxyChain, proxyHops } = require('./proxy-config');
 const certificate = require('./certificate');
 const hello = require('./hello');
 const activity = require('./activity');
@@ -174,7 +176,7 @@ function buildConfig(credentials, hostVerifier) {
     } else if (credentials.authMethod === 'key') {
         // A Windows Hello key cannot be handed over at all: the private half is
         // in the TPM and signing puts a prompt on screen. Same shape as the
-        // certificate case below — a one-identity agent — for the same reason.
+        // certificate case below (a one-identity agent) for the same reason.
         if (credentials.hello) {
             config.agent = hello.agentFor(credentials.hello.credential, credentials.hello.publicKey);
         } else if (credentials.certificate) {
@@ -308,10 +310,12 @@ function openRelay(client, next) {
  * Dial one hop and resolve once it has authenticated.
  *
  * `sock` is what SSH runs over. Left out, ssh2 opens its own TCP socket to the
- * address in `credentials`; passed in, it is a channel on the hop before this
- * one, opened by `openRelay`. Nothing else differs: host key verification, the
- * auth methods and the interactive prompts are identical either way, because to
- * this function a relayed hop is just a server on the other end of a stream.
+ * address in `credentials`, unless the hop has a proxy, in which case this opens
+ * the socket through it and hands that over instead; passed in, it is a channel
+ * on the hop before this one, opened by `openRelay`. Nothing else differs: host
+ * key verification, the auth methods and the interactive prompts are identical
+ * either way, because to this function a relayed hop is just a server on the
+ * other end of a stream.
  *
  * Resolves `{ success, client, message }` and never rejects. The client comes
  * back still carrying this function's own error and close listeners. They do
@@ -335,7 +339,30 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
         credentials.resolvedAgentPath = found.path;
     }
 
-    return new Promise((resolve) => {
+    /*
+     * A proxy only applies where a real socket is opened, which is the first hop
+     * of a chain. Every hop after it is already inside a channel on the hop
+     * below, and that channel was opened by a server on the far side of the
+     * proxy: there is nothing local left to route.
+     *
+     * Done before the handshake rather than inside it so a proxy that refuses is
+     * reported as what it is, instead of as a server that would not answer.
+     */
+    let proxied = null;
+    if (!sock && credentials.proxyChain?.length > 0) {
+        try {
+            proxied = await proxy.openSocket({
+                host: credentials.host,
+                port: credentials.port,
+                chain: credentials.proxyChain,
+            });
+            sock = proxied;
+        } catch (error) {
+            return { success: false, message: error.message };
+        }
+    }
+
+    const dialled = await new Promise((resolve) => {
         const client = new Client();
 
         let settled = false;
@@ -486,6 +513,37 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
             settle({ success: false, message: error.message });
         }
     });
+
+    // ssh2 owns the socket from the moment it accepts one, and closes it with
+    // the client. A dial that never got that far leaves a proxied socket with
+    // nothing holding it, so it is closed here.
+    if (!dialled.success) proxied?.destroy();
+
+    return dialled;
+}
+
+/**
+ * The path a session actually took, outward first, for the pane header to show.
+ *
+ * Structure only, no wording: the renderer phrases it, the same way it phrases
+ * the activity log. It is built from the resolved chain rather than from the host
+ * record, so it describes the connection that was made rather than the one the
+ * settings currently describe: a proxy or a bastion edited mid-session does not
+ * rewrite the path of the session already running on it.
+ *
+ * The proxy belongs to the hop that opened the socket, which is the first of the
+ * chain however long it is. Every hop after it is dialled through a channel on
+ * the one below, so there is nothing local left for a proxy to route.
+ */
+function describeRoute(chain) {
+    return [
+        ...proxyHops(chain[0].proxyChain),
+        ...chain.map(hop => ({
+            kind: hop.isTarget ? 'host' : 'jump',
+            label: hop.label.name,
+            detail: hop.label.address,
+        })),
+    ];
 }
 
 /**
@@ -533,6 +591,11 @@ function connect({ tabId, hostId, cols, rows }, { window, requestTrust, requestK
                         `via ${target.authMethod}`,
                         hops.length
                             ? `relayed through ${hops.map(hop => hop.label.name).join(' → ')}`
+                            : '',
+                        // The proxy belongs to the hop that opened the socket,
+                        // which is the first of the chain however long it is.
+                        chain[0].proxyChain?.length
+                            ? `proxied by ${describeProxyChain(chain[0].proxyChain)}`
                             : '',
                     ].filter(Boolean).join(' · ')
                     : '',
@@ -742,7 +805,9 @@ function connect({ tabId, hostId, cols, rows }, { window, requestTrust, requestK
                 }
             }
 
-            settle({ success: true, message: 'Connected' });
+            // The path travels with the result rather than being asked for
+            // separately: this is the one moment the whole of it is known.
+            settle({ success: true, message: 'Connected', route: describeRoute(chain) });
         });
     });
 }

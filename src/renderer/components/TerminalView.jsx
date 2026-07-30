@@ -12,7 +12,7 @@ import { useTransfers } from '../hooks/useTransfers';
 import { useTunnels } from '../hooks/useTunnels';
 import { useSshConnection } from '../hooks/useSshConnection';
 import { toastOptions } from '../lib/toast';
-import { OsIcon } from '../lib/os-icons';
+import { OsIcon, hostOs } from '../lib/os-icons';
 import { protocolLabel } from '../lib/protocols';
 import SegmentedControl from './ui/SegmentedControl';
 import MenuButton from './ui/MenuButton';
@@ -23,6 +23,7 @@ import TunnelsView from './tunnels/TunnelsView';
 import VncView from './VncView';
 import RdpView from './RdpView';
 import SearchBar from './terminal/SearchBar';
+import PaneRoute, { DesktopPaneRoute } from './terminal/PaneRoute';
 import SnippetPalette from './snippets/SnippetPalette';
 
 // Pane ids that already opened a connection. Guards against React StrictMode's
@@ -30,9 +31,9 @@ import SnippetPalette from './snippets/SnippetPalette';
 const connectedPanes = new Set();
 
 // A pane can be a quarter of the window, so the header sheds what it cannot
-// fit, least important first: the view labels and the status line, then the
-// address. What is left is always the pane's name, which is the one thing that
-// says which session you are looking at.
+// fit, least important first: the view labels, then the status line. What is
+// left is the pane's name and the route mark, which between them say which
+// session you are looking at and where it goes.
 const COMPACT_WIDTH = 760;
 const NARROW_WIDTH = 560;
 
@@ -201,7 +202,7 @@ function TerminalView({
     const [searchOpen, setSearchOpen] = useState(false);
     const [snippetsOpen, setSnippetsOpen] = useState(false);
     /**
-     * A host that is only a desktop — a Windows box with RDP and no SSH server.
+     * A host that is only a desktop: a Windows box with RDP and no SSH server.
      *
      * Everything else in a pane hangs off an SSH session, so this is read before
      * the state that depends on it: such a pane opens straight into the desktop,
@@ -211,6 +212,18 @@ function TerminalView({
 
     // 'ssh' | 'sftp' | 'tunnels' | 'desktop'
     const [viewMode, setViewMode] = useState(desktopOnly ? 'desktop' : 'ssh');
+
+    /**
+     * A view the pane was asked to open on, still waiting on what carries it.
+     *
+     * "Connect via SFTP" from the Hosts page cannot simply start on the file
+     * browser: files are a channel on the SSH session, so there is nothing to
+     * browse until that is up. The pane opens on the shell, which is also where
+     * a failure to connect is legible, and moves itself across the moment the
+     * session is ready. Cleared once honoured, and by any manual switch: after
+     * you have chosen a view yourself, nothing should move it for you.
+     */
+    const pendingView = useRef(['sftp', 'desktop'].includes(pane?.view) ? pane.view : null);
 
     // The element the desktop puts its own controls in. State rather than a ref
     // because the child portals into it, and a ref would still be null on the
@@ -816,6 +829,28 @@ function TerminalView({
     const isRdp = desktop?.protocol === 'rdp';
     const canReconnect = ['waiting', 'failed', 'closed'].includes(connection.status);
 
+    /**
+     * Move to the view a "Connect via…" asked for, once it can be shown.
+     *
+     * Each one waits on the thing that carries it: files ride the SSH session,
+     * and so does a tunnelled desktop, while a direct desktop dials for itself
+     * and is ready at once. A request the host cannot satisfy simply never
+     * comes due, which leaves the pane on its shell rather than on a view with
+     * nothing behind it.
+     */
+    useEffect(() => {
+        const next = pendingView.current;
+        if (!next) return;
+
+        const ready = next === 'desktop' ? desktopReady : (sshHost && isLive);
+        if (!ready) return;
+
+        pendingView.current = null;
+        if (next === 'sftp') setSftpOpened(true);
+        if (next === 'desktop') setDesktopOpened(true);
+        setViewMode(next);
+    }, [desktopReady, sshHost, isLive]);
+
     // Splitting from the host you are already on is the common case, so it is
     // what the plain entries do; the "with…" pair opens the new pane on a
     // chooser instead.
@@ -1029,7 +1064,7 @@ function TerminalView({
          * things done to a terminal, and there is no terminal in front of you
          * in the desktop, files or forwards views. They used to grey out there,
          * which reads as "this could work and doesn't" rather than "this is not
-         * part of what you are looking at" — and on a desktop-only host, which
+         * part of what you are looking at", and on a desktop-only host, which
          * has no terminal at all, it was most of the row permanently dead.
          *
          * Splitting, zooming and closing survive: they act on the pane, and the
@@ -1098,7 +1133,7 @@ function TerminalView({
             }`}>
                 <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
                     {/* The SSH session's state, which a desktop-only pane does
-                        not have — it would sit on "connecting" forever, and the
+                        not have: it would sit on "connecting" forever, and the
                         desktop reports its own status in the bar just below. */}
                     {!desktopOnly && (
                         <Tooltip label={statusUi.label}>
@@ -1108,25 +1143,32 @@ function TerminalView({
                             />
                         </Tooltip>
                     )}
-                    <OsIcon os={pane.host?.os} distro={pane.host?.distro} className="w-4 h-4 shrink-0" />
+                    <OsIcon os={hostOs(pane.host)} distro={pane.host?.distro} className="w-4 h-4 shrink-0" />
 
                     {/* Shrinking is shared out in proportion to these factors,
-                        so the address and the status give up their room many
-                        times faster than the name does. The name is what says
-                        which session this pane is, so it is the last to go and
-                        it still truncates properly when its turn comes. */}
+                        so the status gives up its room many times faster than the
+                        name does. The name is what says which session this pane
+                        is, so it is the last to go and it still truncates
+                        properly when its turn comes. */}
                     <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
                         {pane.title}
                     </span>
-                    {!narrow && (
-                        <span
-                            className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate"
-                            style={{ flexShrink: 20 }}
-                        >
-                            {pane.host?.username}@{pane.host?.host}
-                            {pane.host?.port && pane.host.port !== 22 ? `:${pane.host.port}` : ''}
-                        </span>
-                    )}
+
+                    {/* Where `user@host` used to be written out.
+
+                        It was the same string on every pane of every session, and
+                        it was only ever half the answer: it said where the
+                        session ends up and nothing about what it goes through to
+                        get there, which on a relayed or proxied connection is the
+                        part worth knowing. The whole path is on the mark instead,
+                        including the address, and the header gets the width back.
+
+                        A desktop-only pane has no session to describe, so it
+                        reads the path off the desktop instead. Same mark, same
+                        place; only the source differs. */}
+                    {desktopOnly
+                        ? <DesktopPaneRoute paneId={pane.id} isRdp={isRdp} />
+                        : <PaneRoute route={connection.route} />}
 
                     {/* Anything other than a healthy session gets said out loud:
                         the status dot alone is too easy to miss. Narrow enough
@@ -1177,6 +1219,9 @@ function TerminalView({
                             size={narrow ? 'sm' : 'md'}
                             value={viewMode}
                             onChange={(next) => {
+                                // Whatever a "Connect via…" was still waiting to
+                                // switch to, this outranks it.
+                                pendingView.current = null;
                                 setViewMode(next);
                                 if (next === 'sftp') setSftpOpened(true);
                                 if (next === 'desktop') setDesktopOpened(true);
@@ -1185,7 +1230,7 @@ function TerminalView({
                                 // The shell, files and forwards are all views on
                                 // an SSH session. A desktop-only host has none,
                                 // so they are dropped rather than shown greyed
-                                // out forever — the pane is a desktop, and the
+                                // out forever: the pane is a desktop, and the
                                 // switcher should say so.
                                 ...(desktopOnly ? [] : [
                                 // Every segment names itself, at every width.
@@ -1328,7 +1373,7 @@ function TerminalView({
                 <ConnectingSplash
                     title={pane.title}
                     subtitle={`${pane.host?.username}@${pane.host?.host}:${pane.host?.port || 22}`}
-                    os={pane.host?.os}
+                    os={hostOs(pane.host)}
                     distro={pane.host?.distro}
                     className="connecting-overlay top-11 z-20"
                     style={{ backgroundColor: themeConfig.background, color: themeConfig.foreground }}

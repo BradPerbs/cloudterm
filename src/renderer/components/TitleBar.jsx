@@ -14,7 +14,7 @@ import {
     Unlink01Icon,
 } from 'hugeicons-react';
 import { TITLE_BAR_HEIGHT } from '../lib/layout';
-import { OsIcon } from '../lib/os-icons';
+import { OsIcon, hostOs } from '../lib/os-icons';
 import ContextMenu from './ui/ContextMenu';
 import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
@@ -285,7 +285,7 @@ function SessionTab({
                         </svg>
                     ) : (
                         <OsIcon
-                            os={tab.host?.os}
+                            os={hostOs(tab.host)}
                             distro={tab.host?.distro}
                             className={`w-4 h-4 ${tab.connected ? '' : 'opacity-50 animate-pulse'}`}
                         />
