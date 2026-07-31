@@ -69,6 +69,7 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
 
 ## 目录
 
+- [下载](#download)
 - [什么是 CloudTerm](#what-is-cloudterm)
 - [功能](#features)
 - [界面截图](#screenshots)
@@ -90,6 +91,22 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
 
 <a name="features"></a>
 ## 功能
+
+### AI 助手
+
+<p align="center">
+  <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
+  <br/>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
+</p>
+
+- **使用本机已有的 Claude Code、Codex 或 OpenCode**，沿用你自己的账号和配置
+- **读取当前会话并操作远程服务器**，执行更改前会先征求你的同意
+- **每个对话可单独选择模型和推理强度**，并在运行时显示用量
 
 ### 终端
 
@@ -213,12 +230,31 @@ Debian 和 Fedora 的机器，不用去读主机名。
 <a name="getting-started"></a>
 ## 快速开始
 
+<a name="download"></a>
+### 下载
+
+下载适用于你平台的最新版本：
+
+| 操作系统 | 下载 |
+| --- | --- |
+| macOS | [Apple 芯片（M1 及更新机型）](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-arm64.dmg) · [Intel](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.dmg) |
+| Windows | [安装版，x64（推荐）](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [便携版，x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
+| Linux | [AppImage，x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
+
+也可以浏览 [GitHub 上的全部版本](https://github.com/BradPerbs/cloudterm/releases)。
+
+### 从源码构建
+
 ```bash
 git clone https://github.com/BradPerbs/cloudterm.git
 cd cloudterm
 npm install
 npm run dev
 ```
+
+要通过 OpenCode 使用 AI 助手，请安装 `opencode` CLI，并运行
+`opencode auth login` 配置至少一个模型提供商。CloudTerm 只使用 OpenCode
+现有的提供商和凭据，不会复制或保存它们。
 
 构建便携版可执行文件，输出到 `dist/`：
 
@@ -259,7 +295,7 @@ npm run build
 ## 技术栈
 
 Electron · React · xterm.js · ssh2 · IronRDP（WebAssembly）· noVNC · Tailwind ·
-Vite
+Vite · Claude Agent SDK · Codex SDK · OpenCode SDK
 
 `src/main/` 是 Electron 主进程，每个功能一个模块。
 `src/renderer/` 是 React 界面：`components/` 按功能划分，`hooks/` 管状态，
