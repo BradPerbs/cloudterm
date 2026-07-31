@@ -230,7 +230,7 @@ de leer nombres.
 Cada servidor en carpetas, con etiquetas, búsqueda y el protocolo en la tarjeta.
 Inicia sesión en CloudBlast y tus servidores aparecen aquí solos.
 
-<img src="vaults%20and%20hosts%20page.png" alt="Hosts y llavero" width="100%">
+<img src="hostscloudterm.png" alt="Hosts y llavero" width="100%">
 
 ### Paneles divididos y SFTP
 

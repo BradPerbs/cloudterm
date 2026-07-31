@@ -222,7 +222,7 @@ hostnames.
 Every server in folders, with tags, search and the protocol on the card. Sign in
 to CloudBlast and your servers appear here on their own.
 
-<img src="vaults%20and%20hosts%20page.png" alt="Hosts and keychain" width="100%">
+<img src="hostscloudterm.png" alt="Hosts and keychain" width="100%">
 
 ### Split panes and SFTP
 

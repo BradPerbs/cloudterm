@@ -185,7 +185,7 @@ Debian 和 Fedora 的机器，不用去读主机名。
 所有服务器按文件夹整理，带标签、搜索，卡片上直接标明协议。登录 CloudBlast 之后，
 你的服务器会自动出现在这里。
 
-<img src="vaults%20and%20hosts%20page.png" alt="主机与密钥库" width="100%">
+<img src="hostscloudterm.png" alt="主机与密钥库" width="100%">
 
 ### 分屏与 SFTP
 
