@@ -28,6 +28,7 @@
 const { MessageChannelMain } = require('electron');
 const { StringDecoder } = require('string_decoder');
 const sessionLog = require('./session-log');
+const transcript = require('./transcript');
 
 /**
  * Wire up a session's data path.
@@ -50,6 +51,16 @@ function createPipe({ tabId, window, label = {}, protocol = '', onInput, onResiz
     // Started before a single byte can arrive, so a transcript never begins
     // half way through the far end's banner.
     sessionLog.start(tabId, {
+        hostName: label.hostName || '',
+        address: label.address || '',
+        hostId: label.hostId || '',
+        protocol,
+    });
+
+    // The bounded in-memory tail the assistant reads. Unlike the transcript
+    // above it is not a setting: it is never written down and dies with the
+    // session, so there is nothing to opt into.
+    transcript.open(tabId, {
         hostName: label.hostName || '',
         address: label.address || '',
         hostId: label.hostId || '',
@@ -96,6 +107,7 @@ function createPipe({ tabId, window, label = {}, protocol = '', onInput, onResiz
 
         buffer += text;
         sessionLog.write(tabId, text);
+        transcript.record(tabId, text);
 
         if (!scheduled) {
             scheduled = true;
@@ -113,6 +125,7 @@ function createPipe({ tabId, window, label = {}, protocol = '', onInput, onResiz
         if (tail) {
             buffer += tail;
             sessionLog.write(tabId, tail);
+            transcript.record(tabId, tail);
         }
         flush();
         try {
@@ -125,6 +138,7 @@ function createPipe({ tabId, window, label = {}, protocol = '', onInput, onResiz
     const close = () => {
         if (closed) return;
         closed = true;
+        transcript.close(tabId);
         try {
             port1.close();
         } catch {
