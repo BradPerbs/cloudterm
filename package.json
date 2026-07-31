@@ -93,6 +93,27 @@
             "icon": "build/icon.png",
             "artifactName": "CloudTerm-${arch}.${ext}"
         },
+        "dmg": {
+            "background": null,
+            "icon": null,
+            "window": {
+                "width": 500,
+                "height": 340
+            },
+            "contents": [
+                {
+                    "x": 130,
+                    "y": 170,
+                    "type": "file"
+                },
+                {
+                    "x": 370,
+                    "y": 170,
+                    "type": "link",
+                    "path": "/Applications"
+                }
+            ]
+        },
         "linux": {
             "target": "AppImage",
             "category": "Development",
