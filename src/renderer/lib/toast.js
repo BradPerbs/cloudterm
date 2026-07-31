@@ -24,4 +24,32 @@ export function toastStyle() {
     };
 }
 
-export const toastOptions = (extra = {}) => ({ style: toastStyle(), ...extra });
+/**
+ * How long a toast stays up, in milliseconds.
+ *
+ * DEFAULT is what a call gets when it does not ask for anything: long enough to
+ * read "Key saved" and no longer. MAX is the ceiling every explicit duration is
+ * clamped to, because call sites had drifted up to eight seconds, which parks a
+ * bubble over the bottom-right corner of the app well after the thing it
+ * reports is finished with. Tune the two numbers here rather than at the sixty
+ * or so call sites.
+ */
+export const DEFAULT_TOAST_MS = 1000;
+export const MAX_TOAST_MS = 1500;
+
+/**
+ * How long a dismissed toast stays mounted while it fades out. The library's
+ * own default is a second, which holds the corner (and the position of any
+ * toast stacked above it) long after the bubble has finished animating away.
+ * The exit animation runs for 0.4s, so this is the whole of it and no more.
+ */
+export const TOAST_EXIT_MS = 400;
+
+export const toastOptions = (extra = {}) => {
+    const { duration = DEFAULT_TOAST_MS, ...rest } = extra;
+    return {
+        style: toastStyle(),
+        ...rest,
+        duration: typeof duration === 'number' ? Math.min(duration, MAX_TOAST_MS) : duration,
+    };
+};

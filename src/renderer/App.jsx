@@ -313,7 +313,7 @@ function App() {
             if (!encryptionAvailable) {
                 toast.error(
                     'OS keystore unavailable: stored credentials are not encrypted on this machine.',
-                    { style: getToastStyle(), duration: 8000 }
+                    { style: getToastStyle() }
                 );
             }
         }).catch(() => {});

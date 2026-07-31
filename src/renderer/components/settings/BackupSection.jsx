@@ -341,7 +341,7 @@ function RestoreCard({ onRestored }) {
                 toast(
                     `${result.knownHosts.duplicateTypes} host${result.knownHosts.duplicateTypes === 1 ? '' : 's'} `
                     + 'now trust more than one key of the same type. Check Security → Known hosts.',
-                    { ...toastOptions(), duration: 8000 }
+                    toastOptions()
                 );
             }
 

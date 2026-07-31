@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LockScreen from './components/LockScreen';
 import ScreenshotView from './components/ScreenshotView';
 import { applyAppColors } from './lib/app-colors';
+import { DEFAULT_TOAST_MS, MAX_TOAST_MS, TOAST_EXIT_MS } from './lib/toast';
 
 // Self-hosted fonts, no CDN, so the app works offline and the CSP can stay closed.
 import '@fontsource/inter/300.css';
@@ -85,7 +86,17 @@ function Root() {
     return (
         <>
             <App />
-            <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} />
+            {/* Errors get the ceiling, everything else the short default. Call
+                sites that pass their own duration go through toastOptions,
+                which clamps to the same ceiling. */}
+            <Toaster
+                position="bottom-right"
+                toastOptions={{
+                    duration: DEFAULT_TOAST_MS,
+                    removeDelay: TOAST_EXIT_MS,
+                    error: { duration: MAX_TOAST_MS },
+                }}
+            />
         </>
     );
 }
