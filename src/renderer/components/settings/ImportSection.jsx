@@ -18,13 +18,13 @@ const STATUS_BADGES = {
     conflict: { label: 'differs from stored key', tone: 'text-amber-600 dark:text-amber-500' },
 };
 
-function StatusBadge({ status }) {
+export function StatusBadge({ status }) {
     const badge = STATUS_BADGES[status];
     if (!badge) return null;
     return <span className={`shrink-0 text-[11px] ${badge.tone}`}>{badge.label}</span>;
 }
 
-function GroupHeader({ icon, title, count, selected, onToggleAll, children }) {
+export function GroupHeader({ icon, title, count, selected, onToggleAll, children }) {
     return (
         <div className="flex items-center gap-3 px-3 h-10 border-b border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base/60">
             <Checkbox

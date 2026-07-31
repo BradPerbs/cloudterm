@@ -4,16 +4,23 @@ const os = require('os');
 const store = require('./store');
 const knownHosts = require('./known-hosts');
 const sshConfig = require('./ssh-config');
-const keygen = require('./keygen');
+const common = require('./import-common');
+const puttyImport = require('./putty-import');
+const mobaxtermImport = require('./mobaxterm-import');
 
 /**
- * Bring an existing OpenSSH setup into the app: `~/.ssh/config` becomes hosts
- * (with their port forwards), and `~/.ssh/known_hosts` becomes trusted keys.
+ * Bring an existing setup into the app.
  *
- * Scanning and applying both read from disk. The renderer only ever sends back
- * *which* entries to take, never the entries themselves, so no host key blob
- * or private key round-trips through it, and a compromised renderer cannot
- * talk the main process into trusting a key that is not in the file.
+ * This file owns the OpenSSH side (`~/.ssh/config` becomes hosts with their
+ * port forwards, `~/.ssh/known_hosts` becomes trusted keys) and dispatches
+ * the other sources: PuTTY and KiTTY (putty-import.js) and MobaXterm
+ * (mobaxterm-import.js). One `source` field on scan and apply picks which.
+ *
+ * Scanning and applying both read from disk (or the registry). The renderer
+ * only ever sends back *which* entries to take, never the entries themselves,
+ * so no host key blob or private key round-trips through it, and a
+ * compromised renderer cannot talk the main process into trusting a key that
+ * is not in the file.
  */
 
 const sshDir = () => path.join(os.homedir(), '.ssh');
@@ -30,124 +37,6 @@ function defaultPaths() {
         hasConfig: fs.existsSync(configPath),
         hasKnownHosts: fs.existsSync(knownHostsPath),
     };
-}
-
-/* ------------------------------------------------------------------ *
- * Private key inspection
- * ------------------------------------------------------------------ */
-
-/** Read one SSH wire string (uint32 length, then bytes). */
-function readSshString(buffer, offset) {
-    if (offset + 4 > buffer.length) return null;
-    const length = buffer.readUInt32BE(offset);
-    if (length > buffer.length || offset + 4 + length > buffer.length) return null;
-    return { value: buffer.subarray(offset + 4, offset + 4 + length), next: offset + 4 + length };
-}
-
-const OPENSSH_MAGIC = 'openssh-key-v1\0';
-
-/**
- * Pull the cipher and public half out of a modern OpenSSH private key.
- *
- *   magic | ciphername | kdfname | kdfoptions | uint32 keycount | publickey
- *
- * The public key is a plain blob even when the private half is encrypted,
- * which is what lets an encrypted key still be identified and fingerprinted.
- */
-function inspectOpenSshKey(text) {
-    const body = text.match(
-        /-----BEGIN OPENSSH PRIVATE KEY-----([\s\S]*?)-----END OPENSSH PRIVATE KEY-----/
-    );
-    if (!body) return null;
-
-    const blob = Buffer.from(body[1].replace(/\s+/g, ''), 'base64');
-    if (blob.subarray(0, OPENSSH_MAGIC.length).toString('binary') !== OPENSSH_MAGIC) return null;
-
-    const cipher = readSshString(blob, OPENSSH_MAGIC.length);
-    if (!cipher) return null;
-    const kdf = readSshString(blob, cipher.next);
-    if (!kdf) return null;
-    const kdfOptions = readSshString(blob, kdf.next);
-    if (!kdfOptions) return null;
-
-    // uint32 key count, then the first public key blob.
-    const publicKey = readSshString(blob, kdfOptions.next + 4);
-    if (!publicKey) return null;
-
-    const algorithm = readSshString(publicKey.value, 0);
-
-    return {
-        encrypted: cipher.value.toString('ascii') !== 'none',
-        algorithm: algorithm ? algorithm.value.toString('ascii') : '',
-        publicBlob: publicKey.value,
-    };
-}
-
-const ALGORITHM_LABELS = [
-    [/ed25519/i, 'ED25519'],
-    [/ecdsa/i, 'ECDSA'],
-    [/rsa|dss/i, 'RSA'],
-];
-
-function labelForAlgorithm(name) {
-    for (const [pattern, label] of ALGORITHM_LABELS) {
-        if (pattern.test(name || '')) return label;
-    }
-    return 'ED25519';
-}
-
-/**
- * Work out whether an IdentityFile can be imported, and what it is.
- *   ready       usable as-is
- *   encrypted   valid, but needs a passphrase we cannot ask for here
- *   unreadable  missing, a directory, or not a private key at all
- */
-function inspectIdentityFile(filePath) {
-    let text;
-    try {
-        const stats = fs.statSync(filePath);
-        if (!stats.isFile()) return { state: 'unreadable', reason: 'Not a file' };
-        text = fs.readFileSync(filePath, 'utf8');
-    } catch (error) {
-        return { state: 'unreadable', reason: error.code === 'ENOENT' ? 'File not found' : error.message };
-    }
-
-    if (!/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(text)) {
-        // Pointing IdentityFile at the public half is a common slip.
-        return {
-            state: 'unreadable',
-            reason: /ssh-(rsa|ed25519)|ecdsa-/.test(text)
-                ? 'This is a public key, not a private one'
-                : 'Not a private key',
-        };
-    }
-
-    const openssh = inspectOpenSshKey(text);
-    if (openssh) {
-        return {
-            state: openssh.encrypted ? 'encrypted' : 'ready',
-            text,
-            type: labelForAlgorithm(openssh.algorithm),
-            fingerprint: openssh.publicBlob.length ? knownHosts.fingerprint(openssh.publicBlob) : '',
-        };
-    }
-
-    // Classic PEM. `Proc-Type: 4,ENCRYPTED` is the only marker it carries.
-    const encrypted = /Proc-Type:\s*4,\s*ENCRYPTED/i.test(text);
-    const type = /BEGIN RSA/.test(text) ? 'RSA' : /BEGIN EC/.test(text) ? 'ECDSA' : 'ED25519';
-
-    return { state: encrypted ? 'encrypted' : 'ready', text, type, fingerprint: '' };
-}
-
-/** Prefer the fingerprint from the `.pub` file, which is what `ssh-keygen -l` shows. */
-function readPublicKey(privateKeyPath) {
-    try {
-        const text = fs.readFileSync(`${privateKeyPath}.pub`, 'utf8').trim();
-        if (!text) return null;
-        return { text, fingerprint: keygen.fingerprintFromPublicKey(text) };
-    } catch {
-        return null;
-    }
 }
 
 /* ------------------------------------------------------------------ *
@@ -263,7 +152,7 @@ function scanConfig(configPath) {
         // reported so a stale IdentityFile is visible rather than silent.
         let identity = null;
         for (const file of host.identityFiles) {
-            const inspected = inspectIdentityFile(file);
+            const inspected = common.inspectIdentityFile(file);
             if (!identity || (identity.state !== 'ready' && inspected.state === 'ready')) {
                 identity = { ...inspected, path: file };
             }
@@ -271,6 +160,11 @@ function scanConfig(configPath) {
 
         if (identity?.state === 'encrypted') {
             warnings.push('Its key is passphrase-protected. Add the passphrase in Keychain after importing');
+        } else if (identity?.state === 'ppk') {
+            warnings.push(
+                `${path.basename(identity.path)} is a PuTTY key. Export it as an OpenSSH key `
+                + 'with PuTTYgen, then attach it in Keychain'
+            );
         } else if (identity?.state === 'unreadable') {
             warnings.push(`IdentityFile ${path.basename(identity.path)}: ${identity.reason}`);
         }
@@ -356,7 +250,7 @@ function scanKnownHosts(knownHostsPath) {
     return { path: parsed.path, entries, stats: parsed.stats, error: '' };
 }
 
-function scan({ configPath, knownHostsPath } = {}) {
+function scanOpenSsh({ configPath, knownHostsPath } = {}) {
     const paths = defaultPaths();
     return {
         paths,
@@ -366,49 +260,29 @@ function scan({ configPath, knownHostsPath } = {}) {
 }
 
 /* ------------------------------------------------------------------ *
- * Applying
+ * Source dispatch
  * ------------------------------------------------------------------ */
 
-/**
- * Put an identity file in the keychain, reusing an entry with the same name
- * rather than stacking a duplicate every time a shared key is imported.
- *
- * `created` is true only for the call that actually wrote the key. Several
- * hosts commonly share one IdentityFile, and each of them reaching the same
- * entry is a reuse, not another import.
- */
-function importIdentity(identityPath, cache) {
-    if (cache.has(identityPath)) {
-        const cached = cache.get(identityPath);
-        return cached ? { id: cached.id, created: false } : null;
-    }
-
-    const inspected = inspectIdentityFile(identityPath);
-    if (inspected.state !== 'ready' && inspected.state !== 'encrypted') {
-        cache.set(identityPath, null);
-        return null;
-    }
-
-    const name = path.basename(identityPath);
-    const existing = store.getKeys().find(key => key.name === name);
-    if (existing) {
-        cache.set(identityPath, { id: existing.id });
-        return { id: existing.id, created: false };
-    }
-
-    const publicKey = readPublicKey(identityPath);
-    const saved = store.saveKey({
-        name,
-        type: inspected.type,
-        comment: `Imported from ${identityPath}`,
-        privateKey: inspected.text,
-        publicKey: publicKey?.text || '',
-        fingerprint: publicKey?.fingerprint || inspected.fingerprint || '',
-    });
-
-    cache.set(identityPath, { id: saved.id });
-    return { id: saved.id, created: true };
+/** Which sources have anything to offer, for the Backup page to show. */
+function detect() {
+    return {
+        openssh: defaultPaths(),
+        putty: puttyImport.detect('putty'),
+        kitty: puttyImport.detect('kitty'),
+        mobaxterm: mobaxtermImport.detect(),
+    };
 }
+
+function scan(options = {}) {
+    const source = options.source || 'openssh';
+    if (source === 'putty' || source === 'kitty') return puttyImport.scan(source);
+    if (source === 'mobaxterm') return mobaxtermImport.scan(options);
+    return scanOpenSsh(options);
+}
+
+/* ------------------------------------------------------------------ *
+ * Applying
+ * ------------------------------------------------------------------ */
 
 /**
  * Import the selected hosts and host keys.
@@ -416,7 +290,7 @@ function importIdentity(identityPath, cache) {
  * Both files are re-read here rather than trusting anything the renderer sends
  * back; `aliases` and `fingerprints` are only used to filter what was found.
  */
-function apply({
+function applyOpenSsh({
     configPath,
     knownHostsPath,
     aliases = [],
@@ -456,7 +330,7 @@ function apply({
             let keychainKeyId = '';
 
             if (importIdentityFiles && candidate.identityPath) {
-                const key = importIdentity(candidate.identityPath, cache);
+                const key = common.importIdentity(candidate.identityPath, cache);
                 if (key) {
                     authMethod = 'keychain';
                     keychainKeyId = key.id;
@@ -467,6 +341,10 @@ function apply({
 
             try {
                 const saved = store.saveHost({
+                    // Not left to the store's `host-${Date.now()}` fallback: a
+                    // batch import can write two records in one millisecond,
+                    // and the second would silently update the first.
+                    id: common.freshId('host'),
                     name: candidate.name,
                     host: candidate.host,
                     port: candidate.port,
@@ -543,11 +421,19 @@ function apply({
     return { success: true, ...report };
 }
 
+function apply(options = {}) {
+    const source = options.source || 'openssh';
+    if (source === 'putty' || source === 'kitty') return puttyImport.apply(source, options);
+    if (source === 'mobaxterm') return mobaxtermImport.apply(options);
+    return applyOpenSsh(options);
+}
+
 module.exports = {
     defaultPaths,
+    detect,
     scan,
     apply,
     // Exported so the pieces can be exercised without touching the store.
     parseKnownHosts,
-    inspectIdentityFile,
+    inspectIdentityFile: common.inspectIdentityFile,
 };
