@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://github.com/BradPerbs/cloudterm/releases/latest"><img alt="Download" src="https://img.shields.io/badge/Descargar-Última%20versión-success?style=for-the-badge&logo=github"></a>
   &nbsp;
-  <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Plataforma-Windows%20%7C%20macOS-blue?style=for-the-badge&logo=electron"></a>
+  <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Plataforma-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=for-the-badge&logo=electron"></a>
   &nbsp;
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/Licencia-fair--code-green?style=for-the-badge"></a>
   &nbsp;
