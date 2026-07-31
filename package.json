@@ -22,7 +22,7 @@
     },
     "build": {
         "appId": "com.cloudblast.ssh",
-        "productName": "CloudBlast SSH",
+        "productName": "CloudTerm",
         "directories": {
             "output": "dist"
         },
@@ -74,15 +74,15 @@
             ]
         },
         "portable": {
-            "artifactName": "CloudBlast-SSH-${version}-${arch}.exe"
+            "artifactName": "CloudTerm-${arch}.exe"
         },
         "nsis": {
-            "artifactName": "CloudBlast-SSH-Setup-${version}-${arch}.${ext}",
+            "artifactName": "CloudTerm-Setup-${arch}.${ext}",
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
             "createDesktopShortcut": true,
             "createStartMenuShortcut": true,
-            "shortcutName": "CloudBlast SSH",
+            "shortcutName": "CloudTerm",
             "deleteAppDataOnUninstall": false,
             "perMachine": false
         },
@@ -91,13 +91,13 @@
             "category": "public.app-category.developer-tools",
             "darkModeSupport": true,
             "icon": "build/icon.png",
-            "artifactName": "CloudBlast-SSH-${version}-${arch}.${ext}"
+            "artifactName": "CloudTerm-${arch}.${ext}"
         },
         "linux": {
             "target": "AppImage",
             "category": "Development",
             "synopsis": "Modern SSH client",
-            "artifactName": "CloudBlast-SSH-${version}-${arch}.${ext}",
+            "artifactName": "CloudTerm-${arch}.${ext}",
             "icon": "build/icon.png",
             "desktop": {
                 "entry": {

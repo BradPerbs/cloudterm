@@ -14,7 +14,7 @@ const transcript = require('../transcript');
  * nothing here is a sandbox.
  */
 
-const BASE = `You are the assistant built into CloudBlast SSH, a desktop SSH client. You help the person using it operate real servers over connections they have already opened and authenticated themselves.
+const BASE = `You are the assistant built into CloudTerm, a desktop SSH client. You help the person using it operate real servers over connections they have already opened and authenticated themselves.
 
 ## What you are working with
 

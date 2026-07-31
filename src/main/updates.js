@@ -202,7 +202,7 @@ async function request() {
                 // GitHub refuses requests without one. Deliberately just the
                 // product name: the hostname, the version and the account are
                 // nobody's business on a call that is otherwise anonymous.
-                'User-Agent': 'CloudBlast-SSH',
+                'User-Agent': 'CloudTerm',
                 // The reason the ETag is kept at all: a 304 does not count
                 // against the hourly rate limit, so the common case -- nothing
                 // has changed -- is free.

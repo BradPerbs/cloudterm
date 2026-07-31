@@ -301,7 +301,7 @@ function start(tabId, { hostName = '', address = '', hostId = '', protocol = '',
         });
 
         const header = [
-            `# CloudBlast SSH session log`,
+            `# CloudTerm session log`,
             `# host: ${hostName || '(unnamed)'}${address ? ` (${address})` : ''}`,
             ...(protocol ? [`# protocol: ${protocol}`] : []),
             `# started: ${startedAt.toISOString()}`,

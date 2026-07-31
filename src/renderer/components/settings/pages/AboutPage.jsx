@@ -61,7 +61,7 @@ export default function AboutPage() {
         <SettingsPage title="About">
             <div className="bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-white rounded-xl p-8 flex items-center justify-between">
                 <div>
-                    <h4 className="text-2xl font-bold mb-1">CloudBlast SSH</h4>
+                    <h4 className="text-2xl font-bold mb-1">CloudTerm</h4>
                     {/* Read from the packaged app rather than written here, so
                         a release cannot ship claiming to be the version before
                         it. Held back until it is known, since a wrong version

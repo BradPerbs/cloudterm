@@ -377,7 +377,7 @@ async function listModels() {
             jsonrpc: '2.0',
             id: 1,
             method: 'initialize',
-            params: { clientInfo: { name: 'cloudblast', title: 'CloudBlast SSH', version: '1.0.0' } },
+            params: { clientInfo: { name: 'cloudblast', title: 'CloudTerm', version: '1.0.0' } },
         });
     });
 }
