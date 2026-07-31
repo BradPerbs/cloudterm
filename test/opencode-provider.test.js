@@ -3,6 +3,64 @@ const assert = require('assert');
 const provider = require('../src/main/ai/providers/opencode');
 
 async function run() {
+    const windowsCandidates = provider.openCodeCandidates({
+        platform: 'win32',
+        home: 'C:\\Users\\Mario',
+        env: {
+            Path: 'C:\\Tools;D:\\Bin',
+            APPDATA: 'C:\\Users\\Mario\\AppData\\Roaming',
+            LOCALAPPDATA: 'C:\\Users\\Mario\\AppData\\Local',
+            ChocolateyInstall: 'C:\\ProgramData\\chocolatey',
+            SCOOP: 'D:\\Scoop',
+        },
+    });
+    assert(windowsCandidates.includes('C:\\Tools\\opencode.exe'));
+    assert(windowsCandidates.includes('C:\\Users\\Mario\\AppData\\Roaming\\npm\\opencode.cmd'));
+    assert(windowsCandidates.includes('D:\\Scoop\\shims\\opencode.exe'));
+    assert(windowsCandidates.includes('C:\\ProgramData\\chocolatey\\bin\\opencode.exe'));
+
+    const npmShim = 'C:\\Users\\Mario\\AppData\\Roaming\\npm\\opencode.cmd';
+    assert.strictEqual(provider.findOpenCode({
+        platform: 'win32',
+        home: 'C:\\Users\\Mario',
+        env: { APPDATA: 'C:\\Users\\Mario\\AppData\\Roaming' },
+        accessSync(candidate) {
+            if (candidate !== npmShim) throw new Error('missing');
+        },
+    }), npmShim);
+
+    let killed = false;
+    let taskkill = null;
+    provider._test.closeProcess({
+        pid: 42,
+        exitCode: null,
+        signalCode: null,
+        kill() { killed = true; },
+    }, {
+        platform: 'win32',
+        spawnSyncFn(command, args, options) {
+            taskkill = { command, args, options };
+            return { status: 0 };
+        },
+    });
+    assert.deepStrictEqual(taskkill, {
+        command: 'taskkill',
+        args: ['/pid', '42', '/T', '/F'],
+        options: { windowsHide: true },
+    });
+    assert.strictEqual(killed, false);
+
+    provider._test.closeProcess({
+        pid: 43,
+        exitCode: null,
+        signalCode: null,
+        kill() { killed = true; },
+    }, {
+        platform: 'win32',
+        spawnSyncFn: () => ({ status: 1 }),
+    });
+    assert.strictEqual(killed, true);
+
     assert.deepStrictEqual(provider.parseModel('anthropic/claude-sonnet-4'), {
         providerID: 'anthropic',
         modelID: 'claude-sonnet-4',

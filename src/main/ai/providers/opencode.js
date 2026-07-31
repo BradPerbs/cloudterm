@@ -2,7 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
-const { spawn } = require('child_process');
+const { spawnSync } = require('child_process');
+const spawn = require('cross-spawn');
 const { app } = require('electron');
 
 const catalog = require('../tools');
@@ -35,23 +36,67 @@ function loadSdk() {
     return sdkPromise;
 }
 
+function envValue(env, ...names) {
+    for (const name of names) {
+        if (env?.[name]) return env[name];
+    }
+    return '';
+}
+
+/** Every native location supported by OpenCode's Windows installers. */
+function openCodeCandidates({
+    platform = process.platform,
+    env = process.env,
+    home = os.homedir(),
+} = {}) {
+    const windows = platform === 'win32';
+    const paths = windows ? path.win32 : path;
+    const names = windows ? ['opencode.exe', 'opencode.cmd', 'opencode.bat'] : ['opencode'];
+    const pathEntries = String(envValue(env, 'PATH', 'Path', 'path'))
+        .split(windows ? ';' : path.delimiter)
+        .filter(Boolean);
+    const roots = [...pathEntries];
+
+    if (windows) {
+        const appData = envValue(env, 'APPDATA', 'AppData');
+        const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData');
+        const chocolatey = envValue(env, 'ChocolateyInstall', 'CHOCOLATEYINSTALL');
+        const scoop = envValue(env, 'SCOOP', 'Scoop') || paths.join(home, 'scoop');
+
+        roots.push(
+            paths.join(home, '.opencode', 'bin'),
+            paths.join(scoop, 'shims'),
+            appData && paths.join(appData, 'npm'),
+            localAppData && paths.join(localAppData, 'opencode', 'bin'),
+            localAppData && paths.join(localAppData, 'Programs', 'opencode', 'bin'),
+            chocolatey && paths.join(chocolatey, 'bin')
+        );
+    } else {
+        roots.push(
+            paths.join(home, '.opencode', 'bin'),
+            paths.join(home, '.local', 'bin'),
+            '/opt/homebrew/bin',
+            '/usr/local/bin',
+            '/usr/bin'
+        );
+    }
+
+    return [...new Set(roots.filter(Boolean).flatMap(root => names.map(name => paths.join(root, name))))];
+}
+
 /** Find the CLI even when a packaged Electron app has a minimal PATH. */
-function findOpenCode() {
-    const binary = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
-    const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
-    const candidates = [
-        ...pathEntries.map(entry => path.join(entry, binary)),
-        path.join(os.homedir(), '.opencode', 'bin', binary),
-        path.join(os.homedir(), '.local', 'bin', binary),
-        path.join(os.homedir(), 'AppData', 'Local', 'opencode', 'bin', binary),
-        '/opt/homebrew/bin/opencode',
-        '/usr/local/bin/opencode',
-        '/usr/bin/opencode',
-    ];
+function findOpenCode(options = {}) {
+    const platform = options.platform || process.platform;
+    const accessSync = options.accessSync || fs.accessSync;
+    const candidates = openCodeCandidates({
+        platform,
+        env: options.env || process.env,
+        home: options.home || os.homedir(),
+    });
 
     for (const candidate of candidates) {
         try {
-            fs.accessSync(candidate, fs.constants.X_OK);
+            accessSync(candidate, platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
             return candidate;
         } catch {
             // Keep looking.
@@ -140,7 +185,7 @@ async function launchServer(binary, config, directory) {
             settled = true;
             clearTimeout(timer);
             if (error) {
-                try { child?.kill(); } catch { /* already gone */ }
+                closeProcess(child);
                 reject(error);
             } else {
                 resolve(value);
@@ -190,8 +235,21 @@ function dataOf(response) {
         : response;
 }
 
-function closeProcess(child) {
-    if (!child || child.killed) return;
+function closeProcess(child, {
+    platform = process.platform,
+    spawnSyncFn = spawnSync,
+} = {}) {
+    if (!child || child.exitCode != null || child.signalCode != null) return;
+
+    // A .cmd npm shim owns the actual OpenCode process beneath cmd.exe.
+    // Killing only the shim leaves the server listening after CloudBlast
+    // closes, so Windows gets the same whole-tree shutdown OpenCode's SDK uses.
+    if (platform === 'win32' && child.pid) {
+        const result = spawnSyncFn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+            windowsHide: true,
+        });
+        if (!result.error && result.status === 0) return;
+    }
     try { child.kill(); } catch { /* already gone */ }
 }
 
@@ -533,6 +591,7 @@ module.exports = {
     start,
     listModels,
     findOpenCode,
+    openCodeCandidates,
     parseModel,
     permissions,
     serverConfig,

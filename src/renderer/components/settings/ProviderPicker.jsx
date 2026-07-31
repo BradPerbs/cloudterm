@@ -1,4 +1,6 @@
 import { ChatGptIcon, Tick02Icon } from 'hugeicons-react';
+import openCodeLogoDark from '../../assets/icons/opencode-logo-dark-square.png';
+import openCodeLogoLight from '../../assets/icons/opencode-logo-light-square.png';
 
 /**
  * Which agent runs behind the assistant.
@@ -38,22 +40,24 @@ function ClaudeCodeMark({ size = 22 }) {
 
 function OpenCodeMark({ size = 22 }) {
     return (
-        <svg
-            role="img"
-            aria-hidden="true"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="m5 8 4 4-4 4" />
-            <path d="M11 17h8" />
-            <rect x="2.5" y="4" width="19" height="16" rx="3" />
-        </svg>
+        <>
+            <img
+                src={openCodeLogoLight}
+                alt=""
+                aria-hidden="true"
+                width={size}
+                height={size}
+                className="block dark:hidden"
+            />
+            <img
+                src={openCodeLogoDark}
+                alt=""
+                aria-hidden="true"
+                width={size}
+                height={size}
+                className="hidden dark:block"
+            />
+        </>
     );
 }
 

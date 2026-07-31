@@ -76,6 +76,17 @@ jobs:
 
       - run: npm ci
 
+      # npm exposes global CLIs as `.cmd` shims on Windows. This starts the
+      # actual OpenCode server through that shim, connects through its SDK,
+      # and tears down the full process tree without sending a model prompt.
+      - name: Smoke test native OpenCode integration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./node_modules/@opencode-ai/sdk/package.json').version"
+          npm install --global "opencode-ai@$version"
+          node scripts/smoke-opencode-provider.js
+
       # Compiles against the C# compiler and WinRT metadata that ship inside
       # Windows. The script no-ops elsewhere, but there is no reason to call it.
       - name: Build the Windows Hello helper
