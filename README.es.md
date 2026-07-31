@@ -77,6 +77,7 @@ para leerlo y modificarlo.
 - [Capturas](#screenshots)
 - [Primeros pasos](#getting-started)
 - [Comunidad](#community)
+- [Colaboradores](#contributors)
 - [Tecnología](#tech-stack)
 - [Licencia](#license)
 
@@ -292,6 +293,15 @@ viene después?
 </p>
 
 Las issues y los pull requests son bienvenidos aquí en GitHub.
+
+<a name="contributors"></a>
+## Colaboradores
+
+Gracias a todas las personas que han aportado su trabajo a CloudTerm.
+
+<a href="https://github.com/BradPerbs/cloudterm/graphs/contributors">
+  <img alt="Colaboradores" src="https://contrib.rocks/image?repo=BradPerbs/cloudterm" />
+</a>
 
 <a name="tech-stack"></a>
 ## Tecnología

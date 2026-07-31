@@ -77,6 +77,7 @@ CloudTerm собирает все способы подключения к се�
 - [Скриншоты](#screenshots)
 - [Начало работы](#getting-started)
 - [Сообщество](#community)
+- [Участники](#contributors)
 - [Технологии](#tech-stack)
 - [Лицензия](#license)
 
@@ -288,6 +289,15 @@ npm run build
 </p>
 
 Issues и pull requests на GitHub тоже приветствуются.
+
+<a name="contributors"></a>
+## Участники
+
+Спасибо всем, кто вложил свой труд в CloudTerm.
+
+<a href="https://github.com/BradPerbs/cloudterm/graphs/contributors">
+  <img alt="Участники" src="https://contrib.rocks/image?repo=BradPerbs/cloudterm" />
+</a>
 
 <a name="tech-stack"></a>
 ## Технологии

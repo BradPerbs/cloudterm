@@ -74,6 +74,7 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
 - [界面截图](#screenshots)
 - [快速开始](#getting-started)
 - [社区](#community)
+- [贡献者](#contributors)
 - [技术栈](#tech-stack)
 - [许可证](#license)
 
@@ -244,6 +245,15 @@ npm run build
 </p>
 
 也欢迎在 GitHub 上提交 issue 和 pull request。
+
+<a name="contributors"></a>
+## 贡献者
+
+感谢每一位为 CloudTerm 付出努力的人。
+
+<a href="https://github.com/BradPerbs/cloudterm/graphs/contributors">
+  <img alt="贡献者" src="https://contrib.rocks/image?repo=BradPerbs/cloudterm" />
+</a>
 
 <a name="tech-stack"></a>
 ## 技术栈
