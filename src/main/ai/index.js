@@ -21,6 +21,7 @@ const activity = require('../activity');
 const PROVIDERS = {
     'claude-code': require('./providers/claude-code'),
     codex: require('./providers/codex'),
+    opencode: require('./providers/opencode'),
 };
 
 /** Kept per conversation, so a long session cannot grow without bound. */

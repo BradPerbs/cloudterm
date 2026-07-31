@@ -64,7 +64,12 @@ const APPROVAL_NOTES = {
  * nothing to report and the page says as much. Guessing here is how someone on
  * a subscription ends up reading that they are being charged per token.
  */
-function describeAccount(account, hasApiKey, agent) {
+function describeAccount(account, hasApiKey, provider) {
+    const agent = PROVIDER_NAMES[provider] || 'the agent';
+    if (provider === 'opencode') {
+        return 'OpenCode uses the providers and credentials already configured in its CLI. '
+            + 'Manage them with "opencode auth login"; keys stored in CloudBlast are not passed to OpenCode.';
+    }
     if (account?.subscriptionType) {
         return `Signed in through ${agent} on this machine, on a ${account.subscriptionType} plan. `
             + 'Usage comes out of that plan, so no key is needed here.';
@@ -319,32 +324,41 @@ export default function AssistantSection() {
                     description={describeAccount(
                         account,
                         settings.hasApiKey,
-                        PROVIDER_NAMES[settings.provider] || 'the agent'
+                        settings.provider
                     )}
                 >
-                    <div className="space-y-3">
-                        <div className="flex gap-3">
-                            <input
-                                type="password"
-                                aria-label="API key"
-                                autoComplete="off"
-                                spellCheck={false}
-                                placeholder={settings.hasApiKey ? 'A key is stored' : 'sk-ant-...'}
-                                className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
-                                value={keyValue}
-                                onChange={(event) => { setKeyValue(event.target.value); setKeyState(''); }}
-                            />
-                            <Button size="md" variant="secondary" onClick={saveKey}>Save</Button>
+                    {settings.provider === 'opencode' ? (
+                        <code className="inline-flex px-3 py-2 rounded-xl text-xs font-jetbrains
+                            bg-gray-50 dark:bg-neutral-800 text-gray-700 dark:text-gray-300">
+                            opencode auth login
+                        </code>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="password"
+                                    aria-label="API key"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={settings.hasApiKey
+                                        ? 'A key is stored'
+                                        : settings.provider === 'codex' ? 'sk-proj-...' : 'sk-ant-...'}
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={keyValue}
+                                    onChange={(event) => { setKeyValue(event.target.value); setKeyState(''); }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveKey}>Save</Button>
+                            </div>
+                            {keyState && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{keyState}</p>
+                            )}
+                            {!settings.encryptionAvailable && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                    This system has no secure store available, so a key cannot be saved here.
+                                </p>
+                            )}
                         </div>
-                        {keyState && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{keyState}</p>
-                        )}
-                        {!settings.encryptionAvailable && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">
-                                This system has no secure store available, so a key cannot be saved here.
-                            </p>
-                        )}
-                    </div>
+                    )}
                 </SettingRow>
             </SettingCard>
 

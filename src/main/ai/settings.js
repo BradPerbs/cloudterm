@@ -10,15 +10,14 @@ const fs = require('fs');
  * snippet, and the store's shape is the thing that syncs between machines.
  * A model choice belongs to the machine the model runs on.
  *
- * The one secret here is an API key, which only the providers that are not
- * Claude Code will ever need. Claude Code is driven through the copy already
- * installed on this machine and signed in to the user's own account, so the
- * common case stores no credential at all.
+ * The one secret here is an optional API key for providers that accept one
+ * directly. OpenCode keeps credentials in its own provider store; Claude Code
+ * and Codex can use either this key or their existing machine login.
  */
 
 const CONFIG_VERSION = 1;
 
-const PROVIDERS = new Set(['claude-code', 'codex']);
+const PROVIDERS = new Set(['claude-code', 'codex', 'opencode']);
 
 /**
  * Every level any agent here offers, low to high. The union, not one agent's
@@ -59,9 +58,9 @@ const COMMAND_MODES = new Set(['terminal', 'background']);
 const DEFAULTS = {
     enabled: true,
     provider: 'claude-code',
-    // Empty means whatever the installed Claude Code is already set to use.
+    // Empty means whatever the installed agent is already set to use.
     // Inheriting is the right default for a feature whose selling point is
-    // that it is the user's own Claude Code: a model pinned here would
+    // that it is the user's own agent: a model pinned here would
     // silently override the choice they made there.
     model: '',
     effort: 'high',

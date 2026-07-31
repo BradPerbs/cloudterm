@@ -3,11 +3,11 @@ import { ChatGptIcon, Tick02Icon } from 'hugeicons-react';
 /**
  * Which agent runs behind the assistant.
  *
- * Two cards rather than a dropdown, because this is the one setting on the
+ * Cards rather than a dropdown, because this is the one setting on the
  * page that changes what the whole feature is: everything below it (the model
  * list, the effort scale, what a tool call even looks like) belongs to
  * whichever of these is chosen. A row of a select box does not read like that
- * kind of decision, and the two are recognised by their marks long before
+ * kind of decision, and they are recognised by their marks long before
  * anyone reads the names.
  *
  * Which cards can be picked is not written here. `available` is the list of
@@ -36,6 +36,27 @@ function ClaudeCodeMark({ size = 22 }) {
     );
 }
 
+function OpenCodeMark({ size = 22 }) {
+    return (
+        <svg
+            role="img"
+            aria-hidden="true"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="m5 8 4 4-4 4" />
+            <path d="M11 17h8" />
+            <rect x="2.5" y="4" width="19" height="16" rx="3" />
+        </svg>
+    );
+}
+
 const PROVIDERS = [
     {
         value: 'claude-code',
@@ -48,6 +69,12 @@ const PROVIDERS = [
         name: 'Codex',
         hint: 'Uses the Codex CLI installed on this machine.',
         mark: ({ size = 22 }) => <ChatGptIcon size={size} strokeWidth={1.5} />,
+    },
+    {
+        value: 'opencode',
+        name: 'OpenCode',
+        hint: 'Uses the OpenCode CLI and providers configured on this machine.',
+        mark: OpenCodeMark,
     },
 ];
 
