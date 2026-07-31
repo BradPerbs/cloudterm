@@ -368,6 +368,555 @@ input[type="color"]::-webkit-color-swatch {
     }
 }
 
+/* The assistant mark, alive ---------------------------------------------------
+   The poses for assistant/AgentMark.jsx, which decides when each one plays.
+
+   Two pills is not much of a face, so everything here is timing rather than
+   drawing. Three rules run through all of it:
+
+   Nothing is symmetric in time. A blink shuts in about 90ms and opens over
+   twice that, anger snaps on and lets go slowly, a glance darts and then
+   settles. Each pose carries its own curves per segment rather than one
+   ease-in-out over the whole thing, which is the difference between a face and
+   a slider being dragged.
+
+   Soft things squash. Every eye widens a little as it flattens and narrows as
+   it stretches, so the pills read as something with give in it.
+
+   Both eyes always move. Even in a wink the other one squints; even when
+   peering, the far eye shrinks slightly, which is all the perspective a flat
+   face needs to look like it turned.
+
+   ## Why closing an eye animates its geometry and not scaleY
+
+   An eye is a 46 x 90 rect with a 23 radius, which is to say a capsule: the
+   corner radius is exactly half the width, so its ends are true semicircles
+   and there is no straight run along the top at all.
+
+   `scaleY` squashes that radius along with everything else. At a tenth of its
+   height the caps are 23 wide and 2 tall, the curve goes almost straight, and
+   what should be a pill closing reads as a bar with the roundness pressed out
+   of it. So height, `y` and `rx` are animated instead, `y` tracking height to
+   hold the centre at 165 and `rx` staying at half the shorter side. The shape
+   is a genuine stadium in every frame: tall capsule, to circle at 46, to a
+   short capsule with ends still perfectly round.
+
+   Transforms are left to do what they are good at, which is moving, tilting and
+   the sideways half of a squash. Every keyframe writes the same three transform
+   functions in the same order, so the browser interpolates them one at a time
+   rather than falling back to matrices, and `fill-box` puts each eye's origin
+   at its own middle instead of the corner of the drawing. */
+.agent-float {
+    animation: agent-float 6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.agent-eye {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* Gaze. The transform is written by AgentMark.jsx on every animation frame the
+   pointer moves; the transition is what turns that into a follow with a little
+   weight behind it rather than a rigid lock. */
+.agent-eyes.is-tracking {
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* Adrift, and never quite level. The tilt is under a degree: enough to keep the
+   silhouette from sitting flat, not enough to notice as rotation. */
+@keyframes agent-float {
+
+    0%,
+    100% {
+        transform: translateY(2%) rotate(-0.7deg);
+    }
+
+    50% {
+        transform: translateY(-4%) rotate(0.7deg);
+    }
+}
+
+/* Blink --------------------------------------------------------------------
+   Down through the circle at 46 and on to a short capsule, then back. The
+   halfway frames are there to hold `rx` at 23 until the shape is round, so the
+   ends never go elliptical on the way past. */
+.agent-eyes.is-blink .agent-eye {
+    animation: agent-blink 0.3s both;
+}
+
+@keyframes agent-blink {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.4, 0, 0.9, 0.55);
+    }
+
+    17% {
+        y: 142px;
+        height: 46px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1.03, 1);
+    }
+
+    30% {
+        y: 149px;
+        height: 32px;
+        rx: 16px;
+        transform: translate(0, 0) rotate(0deg) scale(1.06, 1);
+        animation-timing-function: cubic-bezier(0.15, 0.55, 0.35, 1);
+    }
+
+    46% {
+        y: 149px;
+        height: 32px;
+        rx: 16px;
+        transform: translate(0, 0) rotate(0deg) scale(1.06, 1);
+    }
+
+    72% {
+        y: 142px;
+        height: 46px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1.03, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+/* Wink -------------------------------------------------------------------- */
+.agent-eyes.is-wink .agent-eye-left {
+    animation: agent-wink-hold 0.56s both;
+}
+
+.agent-eyes.is-wink .agent-eye-right {
+    animation: agent-wink-shut 0.56s both;
+}
+
+@keyframes agent-wink-shut {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.4, 0, 0.9, 0.55);
+    }
+
+    9% {
+        y: 142px;
+        height: 46px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1.03, 1);
+    }
+
+    16% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 0) rotate(0deg) scale(1.07, 1);
+        animation-timing-function: cubic-bezier(0.15, 0.55, 0.35, 1);
+    }
+
+    64% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 0) rotate(0deg) scale(1.07, 1);
+    }
+
+    86% {
+        y: 142px;
+        height: 46px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1.03, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+@keyframes agent-wink-hold {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.4, 0, 0.9, 0.55);
+    }
+
+    16%,
+    64% {
+        y: 128px;
+        height: 74px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1.02, 1);
+        animation-timing-function: cubic-bezier(0.15, 0.55, 0.35, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+/* Looking about ------------------------------------------------------------
+   Three glances, each a hundred milliseconds of travel and half a second of
+   holding still. Eyes move in jumps and then stop dead; anything that eases
+   smoothly from one side to the other is a camera, not an eye. */
+.agent-eyes.is-look .agent-eye {
+    animation: agent-look 2.6s both;
+}
+
+@keyframes agent-look {
+
+    0%,
+    8% {
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1);
+    }
+
+    12%,
+    32% {
+        transform: translate(-20px, 3px) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1);
+    }
+
+    36%,
+    56% {
+        transform: translate(22px, -4px) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1);
+    }
+
+    60%,
+    84% {
+        transform: translate(3px, -11px) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1);
+    }
+
+    88%,
+    100% {
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+/* Happy --------------------------------------------------------------------
+   Squashed and tilted into the two halves of a caret, with a small second beat
+   on the way in so it lands like a laugh rather than a pose being struck. */
+.agent-eyes.is-happy .agent-eye-left {
+    animation: agent-happy-left 1.6s both;
+}
+
+.agent-eyes.is-happy .agent-eye-right {
+    animation: agent-happy-right 1.6s both;
+}
+
+@keyframes agent-happy-left {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1);
+    }
+
+    16% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 7px) rotate(-13deg) scale(1.09, 1);
+    }
+
+    30% {
+        y: 144px;
+        height: 42px;
+        rx: 21px;
+        transform: translate(0, 4px) rotate(-10deg) scale(1.05, 1);
+    }
+
+    44%,
+    80% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 7px) rotate(-13deg) scale(1.09, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+@keyframes agent-happy-right {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1);
+    }
+
+    16% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 7px) rotate(13deg) scale(1.09, 1);
+    }
+
+    30% {
+        y: 144px;
+        height: 42px;
+        rx: 21px;
+        transform: translate(0, 4px) rotate(10deg) scale(1.05, 1);
+    }
+
+    44%,
+    80% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(0, 7px) rotate(13deg) scale(1.09, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+/* Angry --------------------------------------------------------------------
+   Inner edges down, narrowed, and snapped into place on a curve that overshoots
+   before it settles. Three frames of tremor in the middle of the hold, because
+   a glare that is perfectly still is a shape and a glare that shakes slightly
+   is a mood. Released far more slowly than it arrived. */
+.agent-eyes.is-angry .agent-eye-left {
+    animation: agent-angry-left 2s both;
+}
+
+.agent-eyes.is-angry .agent-eye-right {
+    animation: agent-angry-right 2s both;
+}
+
+@keyframes agent-angry-left {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.3, 1.5, 0.6, 1);
+    }
+
+    11%,
+    38% {
+        y: 138px;
+        height: 54px;
+        rx: 23px;
+        transform: translate(7px, 5px) rotate(24deg) scale(1.04, 1);
+    }
+
+    45% {
+        y: 136px;
+        height: 58px;
+        rx: 23px;
+        transform: translate(6px, 6px) rotate(22deg) scale(1.04, 1);
+    }
+
+    52% {
+        y: 140px;
+        height: 50px;
+        rx: 23px;
+        transform: translate(8px, 4px) rotate(26deg) scale(1.05, 1);
+    }
+
+    59%,
+    82% {
+        y: 138px;
+        height: 54px;
+        rx: 23px;
+        transform: translate(7px, 5px) rotate(24deg) scale(1.04, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+@keyframes agent-angry-right {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.3, 1.5, 0.6, 1);
+    }
+
+    11%,
+    38% {
+        y: 138px;
+        height: 54px;
+        rx: 23px;
+        transform: translate(-7px, 5px) rotate(-24deg) scale(1.04, 1);
+    }
+
+    45% {
+        y: 136px;
+        height: 58px;
+        rx: 23px;
+        transform: translate(-6px, 6px) rotate(-22deg) scale(1.04, 1);
+    }
+
+    52% {
+        y: 140px;
+        height: 50px;
+        rx: 23px;
+        transform: translate(-8px, 4px) rotate(-26deg) scale(1.05, 1);
+    }
+
+    59%,
+    82% {
+        y: 138px;
+        height: 54px;
+        rx: 23px;
+        transform: translate(-7px, 5px) rotate(-24deg) scale(1.04, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+/* Curious ------------------------------------------------------------------
+   Both eyes go the same way, but the near one grows and the far one shrinks, so
+   a flat face reads as having turned rather than slid. It blinks once while
+   held, which is the beat that makes it look like it is thinking about what it
+   is looking at. */
+.agent-eyes.is-curious .agent-eye-left {
+    animation: agent-curious-near 1.9s both;
+}
+
+.agent-eyes.is-curious .agent-eye-right {
+    animation: agent-curious-far 1.9s both;
+}
+
+@keyframes agent-curious-near {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.25, 1.15, 0.4, 1);
+    }
+
+    18%,
+    68% {
+        y: 114px;
+        height: 102px;
+        rx: 23px;
+        transform: translate(15px, -5px) rotate(-6deg) scale(1.08, 1);
+    }
+
+    77%,
+    83% {
+        y: 149px;
+        height: 32px;
+        rx: 16px;
+        transform: translate(15px, -5px) rotate(-6deg) scale(1.12, 1);
+    }
+
+    90% {
+        y: 114px;
+        height: 102px;
+        rx: 23px;
+        transform: translate(15px, -5px) rotate(-6deg) scale(1.08, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+@keyframes agent-curious-far {
+
+    0% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+        animation-timing-function: cubic-bezier(0.25, 1.15, 0.4, 1);
+    }
+
+    18%,
+    68% {
+        y: 123px;
+        height: 84px;
+        rx: 23px;
+        transform: translate(13px, -3px) rotate(-6deg) scale(0.9, 1);
+    }
+
+    77%,
+    83% {
+        y: 150px;
+        height: 30px;
+        rx: 15px;
+        transform: translate(13px, -3px) rotate(-6deg) scale(0.94, 1);
+    }
+
+    90% {
+        y: 123px;
+        height: 84px;
+        rx: 23px;
+        transform: translate(13px, -3px) rotate(-6deg) scale(0.9, 1);
+    }
+
+    100% {
+        y: 120px;
+        height: 90px;
+        rx: 23px;
+        transform: translate(0, 0) rotate(0deg) scale(1, 1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .agent-float,
+    .agent-eyes .agent-eye {
+        animation: none;
+    }
+}
+
 /* Dialog entrance */
 @keyframes dialog-in {
     from {

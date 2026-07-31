@@ -6,7 +6,7 @@
     "scripts": {
         "postinstall": "patch-package",
         "start": "electron .",
-        "test": "node test/snippets.test.js && node test/host-tags.test.js && node test/backup.test.js && node test/activity.test.js && node test/vnc.test.js && node test/rdp.test.js && node test/telnet.test.js && node test/serial.test.js && node test/session-log.test.js && node test/server-sync.test.js && node test/os-detect.test.js && node test/cloud-snapshot.test.js && node test/jump-host.test.js",
+        "test": "node test/snippets.test.js && node test/host-tags.test.js && node test/backup.test.js && node test/activity.test.js && node test/vnc.test.js && node test/rdp.test.js && node test/telnet.test.js && node test/serial.test.js && node test/session-log.test.js && node test/server-sync.test.js && node test/os-detect.test.js && node test/cloud-snapshot.test.js && node test/jump-host.test.js && node test/transcript.test.js && node test/assistant-approval.test.js && node test/assistant-terminal.test.js",
         "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
         "dev:vite": "vite",
         "dev:electron": "wait-on tcp:5173 && electron .",
@@ -28,7 +28,8 @@
             "resources/**/*"
         ],
         "asarUnpack": [
-            "**/node_modules/@serialport/bindings-cpp/**"
+            "**/node_modules/@serialport/bindings-cpp/**",
+            "**/node_modules/@anthropic-ai/claude-agent-sdk/**"
         ],
         "extraResources": [
             {
@@ -71,9 +72,12 @@
         "wait-on": "^7.2.0"
     },
     "dependencies": {
+        "@anthropic-ai/claude-agent-sdk": "^0.3.220",
         "@fontsource/inter": "^5.3.0",
         "@fontsource/jetbrains-mono": "^5.3.0",
+        "@modelcontextprotocol/sdk": "^1.30.0",
         "@novnc/novnc": "^1.7.0",
+        "@openai/codex-sdk": "^0.146.0",
         "@xterm/addon-fit": "^0.9.0",
         "@xterm/addon-search": "^0.15.0",
         "@xterm/addon-web-links": "^0.11.0",
@@ -86,6 +90,7 @@
         "react-hot-toast": "^2.6.0",
         "serialport": "^12.0.0",
         "ssh2": "^1.15.0",
-        "ws": "^8.21.1"
+        "ws": "^8.21.1",
+        "zod": "^4.0.0"
     }
 }

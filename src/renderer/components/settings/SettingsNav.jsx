@@ -8,6 +8,7 @@ import {
     Archive01Icon,
     InformationCircleIcon,
     UserCircleIcon,
+    AiMagicIcon,
 } from 'hugeicons-react';
 
 /**
@@ -19,6 +20,7 @@ export const SETTINGS_CATEGORIES = [
     { id: 'general', label: 'General', icon: SlidersHorizontalIcon },
     { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon },
     { id: 'terminal', label: 'Terminal', icon: CommandLineIcon },
+    { id: 'assistant', label: 'Assistant', icon: AiMagicIcon },
     { id: 'logging', label: 'Logging', icon: FileEditIcon },
     { id: 'security', label: 'Security', icon: ShieldKeyIcon },
     { id: 'account', label: 'Account', icon: UserCircleIcon },

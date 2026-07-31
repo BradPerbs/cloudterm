@@ -31,6 +31,16 @@ const VARIANTS = {
     // Sits beside a primary without competing with it.
     secondary: 'border border-gray-300 dark:border-surface-control text-gray-700 dark:text-gray-300 '
         + 'hover:bg-gray-50 dark:hover:bg-surface-control',
+    // `secondary`, retuned for a button that sits on a raised card rather than
+    // on a panel. Its border and its hover are both the control step of the
+    // dark ramp, which is fine over `surface-raised` and useless over anything
+    // already at that level: the border disappears into the card and the hover
+    // repaints it in its own colour. These are overlays instead, so they step
+    // away from whatever they are dropped on, and light mode gets a hover with
+    // enough in it to be seen against white.
+    outline: 'border border-gray-300 dark:border-white/[0.16] text-gray-700 dark:text-gray-200 '
+        + 'hover:bg-gray-100 hover:border-gray-400 '
+        + 'dark:hover:bg-white/[0.12] dark:hover:border-white/[0.28]',
     // Filled but quiet, for the icon buttons that flank a primary.
     subtle: 'bg-gray-100 dark:bg-surface-control text-gray-500 dark:text-gray-400 '
         + 'hover:bg-gray-200 dark:hover:bg-surface-hover hover:text-gray-900 dark:hover:text-white shadow-sm',
