@@ -74,20 +74,6 @@ jobs:
 
       - run: npm ci
 
-      # ssh2 lists cpu-features as an optional dependency and uses it only to
-      # prefer a hardware-accelerated cipher, behind a bare try/catch. It is
-      # built with nan, and nan does not compile against Electron 43's V8
-      # headers: External::New and GetAlignedPointerFromInternalField both grew
-      # a required tag argument. So @electron/rebuild fails on any runner that
-      # has a compiler to try it with.
-      #
-      # Windows never had it installed at all, npm having skipped it there,
-      # which is the only reason that build has ever worked. Removing it puts
-      # macOS and Linux in the same position rather than a worse one.
-      - name: Drop cpu-features, which cannot build against this Electron
-        shell: bash
-        run: rm -rf node_modules/cpu-features
-
       # Compiles against the C# compiler and WinRT metadata that ship inside
       # Windows. The script no-ops elsewhere, but there is no reason to call it.
       - name: Build the Windows Hello helper
@@ -106,14 +92,38 @@ jobs:
         shell: bash
         run: |
           set -e
+          target='${{ matrix.claude-target }}'
           version=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
-          # --force because npm refuses a package whose cpu and os do not match
-          # the machine, which is precisely what is wanted here.
-          npm install --no-save --force \
-            "@anthropic-ai/claude-agent-sdk-${{ matrix.claude-target }}@${version}"
-          for dir in node_modules/@anthropic-ai/claude-agent-sdk-*; do
-            [ "$(basename "$dir")" = "claude-agent-sdk-${{ matrix.claude-target }}" ] || rm -rf "$dir"
-          done
+
+          # npm pack only downloads. `npm install` was the obvious way to do
+          # this and the wrong one: it re-resolves the whole tree, which
+          # reinstates optional dependencies that later steps have removed.
+          tarball=$(npm pack "@anthropic-ai/claude-agent-sdk-${target}@${version}" 2>/dev/null | tail -1)
+
+          # Only once the download is in hand, so a failure here does not leave
+          # the build with no binary at all. The glob needs the trailing dash,
+          # which is what keeps it off the SDK package itself.
+          rm -rf node_modules/@anthropic-ai/claude-agent-sdk-*
+          mkdir -p "node_modules/@anthropic-ai/claude-agent-sdk-${target}"
+          tar -xzf "$tarball" -C "node_modules/@anthropic-ai/claude-agent-sdk-${target}" --strip-components=1
+          rm -f "$tarball"
+
+      # ssh2 lists cpu-features as an optional dependency and uses it only to
+      # prefer a hardware-accelerated cipher, behind a bare try/catch. It is
+      # built with nan, and nan does not compile against Electron 43's V8
+      # headers: External::New and GetAlignedPointerFromInternalField both grew
+      # a required tag argument. So @electron/rebuild fails on any runner that
+      # has a compiler to try it with.
+      #
+      # Windows never had it installed at all, npm having skipped it there,
+      # which is the only reason that build has ever worked. Removing it puts
+      # macOS and Linux in the same position rather than a worse one.
+      #
+      # Last thing before packaging, deliberately. Anything that runs npm can
+      # bring it back, so this wants to be after everything that might.
+      - name: Drop cpu-features, which cannot build against this Electron
+        shell: bash
+        run: rm -rf node_modules/cpu-features
 
       # If the wrong one is here the build still succeeds and the assistant is
       # dead on arrival, so it gets a line in the log rather than being a
