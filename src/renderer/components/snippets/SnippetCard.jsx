@@ -80,6 +80,8 @@ function SnippetCard({
 
     return (
         <div
+            // What useFlipOrder follows a card by when the grid rewraps.
+            data-card-id={snippet.id}
             className={`org-card group relative cursor-pointer
                 ${isList ? 'rounded-xl px-2.5 py-2' : 'rounded-2xl p-2.5'}`}
             role="button"

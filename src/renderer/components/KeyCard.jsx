@@ -93,6 +93,8 @@ function KeyCard({ entry, onEdit, onCopyPublicKey, onCopyFingerprint, onDelete }
 
     return (
         <div
+            // What useFlipOrder follows a card by when the grid rewraps.
+            data-card-id={key.id}
             className="org-card group relative cursor-pointer rounded-2xl p-2.5"
             role="button"
             tabIndex={0}

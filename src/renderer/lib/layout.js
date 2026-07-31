@@ -28,3 +28,21 @@ export const PANE_HEADER_HEIGHT = 44;
 // both hang from here, so they line up with each other and neither covers the
 // view switcher.
 export const PANE_OVERLAY_TOP = PANE_HEADER_HEIGHT + 8;
+
+/**
+ * The card grid the library panels use: hosts, keys, proxies, snippets.
+ *
+ * Columns are worked out from the width the grid actually has, not from the
+ * width of the window. Those are different numbers here, and increasingly so:
+ * the sidebar takes a fixed slice off the left and the assistant takes an
+ * adjustable one off the right, so `lg:grid-cols-3` cheerfully keeps three
+ * columns in a container that has since been squeezed to the width of two, and
+ * every card in it ends up eliding its own title.
+ *
+ * `auto-fill` with a floor of 15rem drops a column whenever the remaining ones
+ * would go under about 240px, which is roughly where a hostname and an address
+ * stop fitting on their lines. The `min()` is the standard guard: without it a
+ * container narrower than the floor gets one column that overflows it rather
+ * than one column that fits.
+ */
+export const CARD_GRID = 'grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(15rem,100%),1fr))]';

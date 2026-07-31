@@ -34,6 +34,7 @@ import { hostHasTags, tagCounts, toggleTag } from '../lib/tags';
 import { useCardDrag } from '../hooks/useCardDrag';
 import { useFlipOrder } from '../hooks/useFlipOrder';
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection';
+import { CARD_GRID } from '../lib/layout';
 import {
     ROOT_LABEL,
     SORT_MANUAL,
@@ -1116,9 +1117,7 @@ function HostsPanel({
                 ) : (
                     <div
                         ref={gridRef}
-                        className={view === 'list'
-                            ? 'flex flex-col gap-1.5'
-                            : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3'}
+                        className={view === 'list' ? 'flex flex-col gap-1.5' : CARD_GRID}
                     >
                         {displayFolders.map(folder => (
                             <FolderCard

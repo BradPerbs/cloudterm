@@ -14,6 +14,8 @@ import {
     isPackage,
 } from '../lib/snippets';
 import { toastOptions } from '../lib/toast';
+import { CARD_GRID } from '../lib/layout';
+import { useFlipOrder } from '../hooks/useFlipOrder';
 
 /**
  * The snippet library.
@@ -127,6 +129,13 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                 || snippet.tags?.some(entry => entry.includes(needle));
         });
     }, [resolved, query, kind, tag]);
+
+    // Cards slide between positions when a filter reorders the library, and
+    // when the grid rewraps because the column it was using no longer fits.
+    // Switching to the list is not a reorder, so that pass only re-measures.
+    const gridRef = useRef(null);
+    const orderKey = useMemo(() => visible.map(entry => entry.snippet.id).join(), [visible]);
+    useFlipOrder(gridRef, orderKey, { resetKey: view });
 
     /* ------------------------------------------------------------------ *
      * Actions
@@ -292,10 +301,7 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                 {visible.length === 0 ? (
                     <EmptyState empty={snippets.length === 0} searching={searching} query={query} />
                 ) : (
-                    <div className={view === 'list'
-                        ? 'flex flex-col gap-1.5'
-                        : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3'}
-                    >
+                    <div ref={gridRef} className={view === 'list' ? 'flex flex-col gap-1.5' : CARD_GRID}>
                         {visible.map(entry => (
                             <SnippetCard
                                 key={entry.snippet.id}

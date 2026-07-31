@@ -21,17 +21,43 @@ const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
  * and the list moves everything, and animating between two entirely different
  * layouts looks like a fault rather than a transition. When it changes the pass
  * only records positions.
+ *
+ * ## Reflow
+ *
+ * A grid that takes its column count from its own width rewraps when the
+ * assistant panel is dragged, and none of that goes through React: no state
+ * changes, so no layout effect runs, so the cards used to jump between layouts
+ * with nothing in between. A ResizeObserver covers that case.
+ *
+ * It animates on the column count changing, not on the width changing. Between
+ * two wraps the cards are only stretching, which is already continuous and
+ * needs no help; animating that would put a 220ms tail on every frame of a drag
+ * and turn a smooth resize into something rubbery. Every observation still
+ * records positions, so the frame before a wrap is the one a wrap animates
+ * from.
  */
+function countColumns(container) {
+    // "240px 240px 240px" while it is a grid, "none" while it is a list.
+    const columns = getComputedStyle(container).gridTemplateColumns;
+    return columns && columns !== 'none' ? columns.split(' ').length : 1;
+}
+
 export function useFlipOrder(containerRef, orderKey, { enabled = true, resetKey = '' } = {}) {
     const previous = useRef(new Map());
     const lastReset = useRef(resetKey);
+    const columns = useRef(0);
 
-    useLayoutEffect(() => {
+    // Held in a ref so the observer, which is set up once, always runs the
+    // current pass rather than the one from the render that created it.
+    const pass = useRef(null);
+    pass.current = (moving) => {
         const container = containerRef.current;
         if (!container) return;
 
-        const settling = lastReset.current !== resetKey;
-        lastReset.current = resetKey;
+        // A panel that is not on screen measures as nothing. Recording that
+        // would throw away the last real positions and animate every card in
+        // from the corner the next time it is shown.
+        if (!container.offsetWidth) return;
 
         const bounds = container.getBoundingClientRect();
         const next = new Map();
@@ -44,7 +70,7 @@ export function useFlipOrder(containerRef, orderKey, { enabled = true, resetKey 
             };
             next.set(card.dataset.cardId, position);
 
-            if (!enabled || settling) continue;
+            if (!moving) continue;
 
             const before = previous.current.get(card.dataset.cardId);
             if (!before) continue;
@@ -61,5 +87,37 @@ export function useFlipOrder(containerRef, orderKey, { enabled = true, resetKey 
         }
 
         previous.current = next;
+    };
+
+    useLayoutEffect(() => {
+        const settling = lastReset.current !== resetKey;
+        lastReset.current = resetKey;
+        pass.current(enabled && !settling);
     }, [containerRef, orderKey, enabled, resetKey]);
+
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (!container || typeof ResizeObserver === 'undefined') return undefined;
+
+        // Seeded before the first observation, which fires immediately and
+        // would otherwise read as the count having changed.
+        columns.current = countColumns(container);
+
+        const observer = new ResizeObserver(() => {
+            // Collapsing to nothing is a panel being put away, not a rewrap.
+            // The count it reports there is meaningless and would make the
+            // next real observation look like a change.
+            if (!container.offsetWidth) return;
+
+            const count = countColumns(container);
+            const wrapped = count !== columns.current;
+            columns.current = count;
+            // Transforms do not change what the observer measures, so animating
+            // from inside the callback cannot feed itself.
+            pass.current(enabled && wrapped);
+        });
+
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [containerRef, enabled]);
 }

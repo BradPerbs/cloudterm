@@ -10,6 +10,8 @@ import ProxyDialog from './proxies/ProxyDialog';
 import { useProxies } from '../hooks/useProxies';
 import { nameProxy, proxyLabel, proxyRoute } from '../lib/proxies';
 import { toastOptions } from '../lib/toast';
+import { CARD_GRID } from '../lib/layout';
+import { useFlipOrder } from '../hooks/useFlipOrder';
 
 /**
  * The saved proxies.
@@ -108,6 +110,12 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
             hosts.map(host => host.name).join(' '),
         ].filter(Boolean).join(' ').toLowerCase().includes(needle));
     }, [entries, query]);
+
+    // Cards slide between positions when the list is reordered by a search, and
+    // when the grid rewraps because the column it was using no longer fits.
+    const gridRef = useRef(null);
+    const orderKey = useMemo(() => visible.map(entry => entry.proxy.id).join(), [visible]);
+    useFlipOrder(gridRef, orderKey);
 
     /* ------------------------------------------------------------------ *
      * Actions
@@ -277,7 +285,7 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                                 + 'terminal sessions, SFTP, port forwards and remote desktops alike.'}
                     />
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                    <div ref={gridRef} className={CARD_GRID}>
                         {visible.map(entry => (
                             <ProxyCard
                                 key={entry.proxy.id}

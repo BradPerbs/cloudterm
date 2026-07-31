@@ -8,6 +8,8 @@ import Button, { IconButton } from './ui/Button';
 import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
 import SearchField from './ui/SearchField';
+import { CARD_GRID } from '../lib/layout';
+import { useFlipOrder } from '../hooks/useFlipOrder';
 
 /**
  * The keychain.
@@ -134,6 +136,12 @@ function KeychainPanel({
             hosts.map(host => host.name).join(' '),
         ].filter(Boolean).join(' ').toLowerCase().includes(needle));
     }, [entries, query]);
+
+    // Cards slide between positions when the list is reordered by a search, and
+    // when the grid rewraps because the column it was using no longer fits.
+    const gridRef = useRef(null);
+    const orderKey = useMemo(() => visible.map(entry => entry.key.id).join(), [visible]);
+    useFlipOrder(gridRef, orderKey);
 
     /* ------------------------------------------------------------------ *
      * Actions
@@ -332,7 +340,7 @@ function KeychainPanel({
                             : 'Generate or import one to get started.'}
                     />
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                    <div ref={gridRef} className={CARD_GRID}>
                         {visible.map(entry => (
                             <KeyCard
                                 key={entry.key.id}
