@@ -102,6 +102,14 @@ para leerlo y modificarlo.
 
 ### Agente de IA
 
+<p align="center">
+  <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
+  <br/>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b></sub>
+</p>
+
 - **Funciona con el Claude Code o el Codex que ya tienes** en tu máquina, con
   tu propia cuenta: nada que pegar, ninguna suscripción adicional
 - **Lee la sesión que estás mirando**, así que responde al error que tienes en
@@ -156,6 +164,52 @@ para leerlo y modificarlo.
   varios en orden
 - **Búsqueda instantánea** por nombre, dirección y etiqueta
 - **Importa** tu `~/.ssh/config` existente en un paso
+
+### Sistemas operativos
+
+El sistema se detecta al conectar, y la tarjeta del host y la pestaña toman su
+logo, así que distingues una máquina Debian de una Fedora de un vistazo en vez
+de leer nombres.
+
+<p align="center">
+  <img src="src/renderer/assets/icons/128_debian.png" alt="Debian" title="Debian" width="42">
+  <img src="src/renderer/assets/icons/128_ubuntu.png" alt="Ubuntu" title="Ubuntu" width="42">
+  <img src="src/renderer/assets/icons/128_kubuntu.png" alt="Kubuntu" title="Kubuntu" width="42">
+  <img src="src/renderer/assets/icons/128_lubuntu.png" alt="Lubuntu" title="Lubuntu" width="42">
+  <img src="src/renderer/assets/icons/128_xubuntu.png" alt="Xubuntu" title="Xubuntu" width="42">
+  <img src="src/renderer/assets/icons/128_mint.png" alt="Linux Mint" title="Linux Mint" width="42">
+  <img src="src/renderer/assets/icons/128_pop.png" alt="Pop!_OS" title="Pop!_OS" width="42">
+  <img src="src/renderer/assets/icons/128_elementary.png" alt="elementary OS" title="elementary OS" width="42">
+  <img src="src/renderer/assets/icons/128_zorin.png" alt="Zorin OS" title="Zorin OS" width="42">
+  <img src="src/renderer/assets/icons/128_mx.png" alt="MX Linux" title="MX Linux" width="42">
+  <img src="src/renderer/assets/icons/128_deepin.png" alt="deepin" title="deepin" width="42">
+  <img src="src/renderer/assets/icons/128_raspios.png" alt="Raspberry Pi OS" title="Raspberry Pi OS" width="42">
+  <img src="src/renderer/assets/icons/128_kali.png" alt="Kali Linux" title="Kali Linux" width="42">
+  <img src="src/renderer/assets/icons/128_parrot.png" alt="Parrot OS" title="Parrot OS" width="42">
+  <img src="src/renderer/assets/icons/128_tails.png" alt="Tails" title="Tails" width="42">
+  <br/>
+  <img src="src/renderer/assets/icons/128_fedora_newlogo.png" alt="Fedora" title="Fedora" width="42">
+  <img src="src/renderer/assets/icons/128_redhat.png" alt="Red Hat Enterprise Linux" title="Red Hat Enterprise Linux" width="42">
+  <img src="src/renderer/assets/icons/128_centos_blue.png" alt="CentOS" title="CentOS" width="42">
+  <img src="src/renderer/assets/icons/128_alma_darkblue.png" alt="AlmaLinux" title="AlmaLinux" width="42">
+  <img src="src/renderer/assets/icons/128_suse.png" alt="openSUSE and SLES" title="openSUSE and SLES" width="42">
+  <img src="src/renderer/assets/icons/128_arch.png" alt="Arch Linux" title="Arch Linux" width="42">
+  <img src="src/renderer/assets/icons/128_manjaro.png" alt="Manjaro" title="Manjaro" width="42">
+  <img src="src/renderer/assets/icons/128_endeavour.png" alt="EndeavourOS" title="EndeavourOS" width="42">
+  <img src="src/renderer/assets/icons/128_garuda_blue.png" alt="Garuda Linux" title="Garuda Linux" width="42">
+  <img src="src/renderer/assets/icons/128_arco.png" alt="ArcoLinux" title="ArcoLinux" width="42">
+  <img src="src/renderer/assets/icons/128_artix.png" alt="Artix Linux" title="Artix Linux" width="42">
+  <br/>
+  <img src="src/renderer/assets/icons/128_alpine.png" alt="Alpine Linux" title="Alpine Linux" width="42">
+  <img src="src/renderer/assets/icons/128_nixos.png" alt="NixOS" title="NixOS" width="42">
+  <img src="src/renderer/assets/icons/128_gentoo.png" alt="Gentoo" title="Gentoo" width="42">
+  <img src="src/renderer/assets/icons/128_void.png" alt="Void Linux" title="Void Linux" width="42">
+  <img src="src/renderer/assets/icons/128_solus.png" alt="Solus" title="Solus" width="42">
+  <img src="src/renderer/assets/icons/128_slackware.png" alt="Slackware" title="Slackware" width="42">
+  <img src="src/renderer/assets/icons/128_linux.png" alt="Linux" title="Any other Linux" width="42">
+  <img src="src/renderer/assets/icons/128_windows.png" alt="Windows" title="Windows" width="42">
+  <img src="docs/logos/macos.svg" alt="macOS" title="macOS" width="42">
+</p>
 
 ### Seguridad
 
