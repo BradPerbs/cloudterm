@@ -14,7 +14,11 @@
         "build:hello": "node scripts/build-hello-helper.js",
         "build:renderer": "vite build",
         "build:electron": "electron-builder --win portable",
-        "build": "npm run build:hello && npm run build:css && npm run build:renderer && npm run build:electron"
+        "build:electron:mac": "electron-builder --mac dmg",
+        "build:electron:linux": "electron-builder --linux AppImage",
+        "build": "npm run build:hello && npm run build:css && npm run build:renderer && npm run build:electron",
+        "build:mac": "npm run build:renderer && npm run build:electron:mac",
+        "build:linux": "npm run build:renderer && npm run build:electron:linux"
     },
     "build": {
         "appId": "com.cloudblast.ssh",
@@ -25,7 +29,9 @@
         "files": [
             "src/main/**/*",
             "dist/renderer/**/*",
-            "resources/**/*"
+            "resources/**/*",
+            "!resources/hello-helper.exe",
+            "!**/node_modules/@openai/codex-*/vendor/**"
         ],
         "asarUnpack": [
             "**/node_modules/@serialport/bindings-cpp/**",
@@ -36,20 +42,52 @@
                 "from": "resources/",
                 "to": "resources/",
                 "filter": [
-                    "**/*"
+                    "**/*",
+                    "!hello-helper.exe"
                 ]
             }
         ],
         "win": {
             "target": "portable",
-            "icon": "resources/icon.ico"
+            "icon": "build/icon.png",
+            "files": [
+                "src/main/**/*",
+                "dist/renderer/**/*",
+                "resources/**/*",
+                "!**/node_modules/@openai/codex-*/vendor/**"
+            ],
+            "extraResources": [
+                {
+                    "from": "resources/",
+                    "to": "resources/",
+                    "filter": [
+                        "**/*"
+                    ]
+                }
+            ]
         },
         "portable": {
-            "artifactName": "CloudBlast-SSH-${version}.exe"
+            "artifactName": "CloudBlast-SSH-${version}-${arch}.exe"
         },
         "mac": {
             "target": "dmg",
-            "category": "public.app-category.developer-tools"
+            "category": "public.app-category.developer-tools",
+            "darkModeSupport": true,
+            "icon": "build/icon.png",
+            "artifactName": "CloudBlast-SSH-${version}-${arch}.${ext}"
+        },
+        "linux": {
+            "target": "AppImage",
+            "category": "Development",
+            "synopsis": "Modern SSH client",
+            "artifactName": "CloudBlast-SSH-${version}-${arch}.${ext}",
+            "icon": "build/icon.png",
+            "desktop": {
+                "entry": {
+                    "Categories": "Development;Network;",
+                    "Keywords": "ssh;sftp;terminal;rdp;vnc;serial;"
+                }
+            }
         }
     },
     "keywords": [

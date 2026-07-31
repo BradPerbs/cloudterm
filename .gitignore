@@ -3,6 +3,11 @@ dist/
 resources/*.exe
 *.log
 
+# Built installers, kept out of git on purpose. They are 140MB and up, and
+# GitHub rejects any single file over 100MiB, so they belong on a Release
+# rather than in history. updates.js reads the releases API to find them.
+releases/
+
 # Local working notes and agent config, not part of the project
 CLAUDE.md
 .claude/
