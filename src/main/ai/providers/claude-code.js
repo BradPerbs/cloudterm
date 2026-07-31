@@ -1,4 +1,6 @@
 const { app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 const catalog = require('../tools');
 
 /**
@@ -37,6 +39,45 @@ const SERVER_NAME = 'remote';
  * otherwise have it offered in the menu and silently refused by the store.
  */
 const EFFORT_LEVELS = [...require('../settings').EFFORTS];
+
+/**
+ * Where the CLI is, for the one case the SDK cannot work out for itself.
+ *
+ * Left alone it resolves the binary with `require.resolve` from its own module
+ * URL, which is right everywhere except inside a packaged app. There the answer
+ * leads through `app.asar`, and that path can be read, because Electron patches
+ * `fs` to see inside the archive. It cannot be run. To the operating system the
+ * archive is one ordinary file, and there is no executable at that path to
+ * spawn, so the CLI never starts and the model list comes back empty.
+ *
+ * electron-builder already unpacks binaries it finds in `node_modules`, so the
+ * real one is sitting in `app.asar.unpacked` beside the archive. Only the path
+ * needs pointing at it.
+ *
+ * Returns '' when there is nothing to correct: from a checkout there is no
+ * archive and the SDK's own answer is already right, and if the unpacked copy
+ * is not where it should be, the SDK's error about a missing binary is more
+ * use than a path invented here that does not exist either.
+ */
+function claudeExecutable() {
+    const suffix = process.platform === 'win32' ? '.exe' : '';
+    const target = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude${suffix}`;
+
+    let resolved;
+    try {
+        resolved = require.resolve(target);
+    } catch {
+        // No platform package for this machine, or a musl build, which the SDK
+        // looks for under a name of its own. Its own search is the better one.
+        return '';
+    }
+
+    const archive = `app.asar${path.sep}`;
+    if (!resolved.includes(archive)) return '';
+
+    const unpacked = resolved.replace(archive, `app.asar.unpacked${path.sep}`);
+    return fs.existsSync(unpacked) ? unpacked : '';
+}
 
 /**
  * What the installed Claude Code says it can run, as the app needs it.
@@ -231,9 +272,12 @@ async function listModels({ settings = {} } = {}) {
     const env = { ...process.env };
     if (settings.apiKey) env.ANTHROPIC_API_KEY = settings.apiKey;
 
+    const executable = claudeExecutable();
+
     const stream = sdk.query({
         prompt: input,
         options: {
+            ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
             allowedTools: [],
             permissionMode: 'default',
             abortController,
@@ -358,6 +402,9 @@ async function start({
         cwd: app.getPath('userData'),
         settingSources: [],
     };
+
+    const executable = claudeExecutable();
+    if (executable) options.pathToClaudeCodeExecutable = executable;
 
     if (settings.model) options.model = settings.model;
     if (settings.effort) options.effort = settings.effort;
