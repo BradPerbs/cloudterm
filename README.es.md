@@ -72,6 +72,7 @@ para leerlo y modificarlo.
 
 ## Contenido
 
+- [Descargas](#download)
 - [Qué es CloudTerm](#what-is-cloudterm)
 - [Características](#features)
 - [Capturas](#screenshots)
@@ -107,11 +108,13 @@ para leerlo y modificarlo.
   <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
   <br/>
-  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b></sub>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
 </p>
 
-- **Funciona con el Claude Code o el Codex que ya tienes** en tu máquina, con
+- **Funciona con Claude Code, Codex u OpenCode que ya tienes** en tu máquina, con
   tu propia cuenta: nada que pegar, ninguna suscripción adicional
 - **Lee la sesión que estás mirando**, así que responde al error que tienes en
   pantalla sin que pegues nada
@@ -259,12 +262,31 @@ barra de título.
 <a name="getting-started"></a>
 ## Primeros pasos
 
+<a name="download"></a>
+### Descargas
+
+Descarga la última versión para tu plataforma:
+
+| SO | Descarga |
+| --- | --- |
+| macOS | [Apple silicon (M1 y posteriores)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-arm64.dmg) · [Intel](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.dmg) |
+| Windows | [Instalador, x64 (recomendado)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [Portable, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
+| Linux | [AppImage, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
+
+También puedes consultar [todas las versiones en GitHub](https://github.com/BradPerbs/cloudterm/releases).
+
+### Compilar desde el código fuente
+
 ```bash
 git clone https://github.com/BradPerbs/cloudterm.git
 cd cloudterm
 npm install
 npm run dev
 ```
+
+Para usar el agente de IA con OpenCode, instala la CLI `opencode` y configura
+al menos un proveedor de modelos con `opencode auth login`. CloudTerm utiliza
+los proveedores y credenciales existentes de OpenCode; no los copia ni almacena.
 
 Compila un ejecutable portable en `dist/`:
 
@@ -307,7 +329,7 @@ Gracias a todas las personas que han aportado su trabajo a CloudTerm.
 ## Tecnología
 
 Electron · React · xterm.js · ssh2 · IronRDP (WebAssembly) · noVNC · Tailwind ·
-Vite · Claude Agent SDK · Codex SDK
+Vite · Claude Agent SDK · Codex SDK · OpenCode SDK
 
 `src/main/` es el proceso principal de Electron, un módulo por función.
 `src/renderer/` es la interfaz React: `components/` por función, `hooks/` para el
