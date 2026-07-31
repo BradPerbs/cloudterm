@@ -35,12 +35,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Both Windows targets at once: an installer for people who want the
+          # app on their machine, and the portable exe for people who cannot
+          # install anything. 64-bit only. The 32-bit build could never run the
+          # assistant, whose CLI is x64, and nothing was gained by shipping the
+          # rest of the app without it.
           - name: windows-x64
             os: windows-latest
-            args: --win portable --x64
-          - name: windows-ia32
-            os: windows-latest
-            args: --win portable --ia32
+            args: --win --x64
           # Both macOS builds run on Apple silicon. macos-13 was the last Intel
           # runner and queues forever now that it is being retired, so the
           # Intel dmg is cross-built. Packaging never executes the app, it only

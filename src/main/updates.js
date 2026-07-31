@@ -150,7 +150,22 @@ function assetFor(assets) {
     const find = (test) => assets.find(asset => test(String(asset.name || '').toLowerCase()));
 
     if (process.platform === 'win32') {
-        return find(name => name.endsWith('.exe'));
+        // Two Windows artifacts now, an installer and a portable exe, and
+        // handing someone the other kind would be a surprise either way: an
+        // installed copy left behind by a portable download, or an installer
+        // offered to somebody running from a memory stick precisely because
+        // they cannot install anything.
+        //
+        // electron-builder sets PORTABLE_EXECUTABLE_DIR in a portable build and
+        // nowhere else, which is the one dependable way to tell them apart.
+        const portable = Boolean(process.env.PORTABLE_EXECUTABLE_DIR);
+        const isSetup = (name) => name.includes('setup');
+        const wanted = portable
+            ? (name) => name.endsWith('.exe') && !isSetup(name)
+            : (name) => name.endsWith('.exe') && isSetup(name);
+
+        // Either kind still beats the release page and a guess.
+        return find(wanted) || find(name => name.endsWith('.exe'));
     }
 
     if (process.platform === 'darwin') {

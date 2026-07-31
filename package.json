@@ -13,7 +13,7 @@
         "build:css": "npx tailwindcss -i ./src/renderer/input.css -o ./src/renderer/styles.css",
         "build:hello": "node scripts/build-hello-helper.js",
         "build:renderer": "vite build",
-        "build:electron": "electron-builder --win portable",
+        "build:electron": "electron-builder --win --x64",
         "build:electron:mac": "electron-builder --mac dmg",
         "build:electron:linux": "electron-builder --linux AppImage",
         "build": "npm run build:hello && npm run build:css && npm run build:renderer && npm run build:electron",
@@ -50,7 +50,10 @@
             }
         ],
         "win": {
-            "target": "portable",
+            "target": [
+                "nsis",
+                "portable"
+            ],
             "icon": "build/icon.png",
             "files": [
                 "src/main/**/*",
@@ -72,6 +75,16 @@
         },
         "portable": {
             "artifactName": "CloudBlast-SSH-${version}-${arch}.exe"
+        },
+        "nsis": {
+            "artifactName": "CloudBlast-SSH-Setup-${version}-${arch}.${ext}",
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "CloudBlast SSH",
+            "deleteAppDataOnUninstall": false,
+            "perMachine": false
         },
         "mac": {
             "target": "dmg",
