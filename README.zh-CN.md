@@ -10,7 +10,7 @@
 
 <p align="center">
   基于 Electron、React 和 xterm.js 打造的现代终端工作区。<br/>
-  分屏 · 标签页 · 文件传输 · 端口转发 · 远程桌面 · 命令片段
+  AI 助手 · 分屏 · 标签页 · 文件传输 · 端口转发 · 远程桌面 · 命令片段
 </p>
 
 <p align="center">

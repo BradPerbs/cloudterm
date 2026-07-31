@@ -10,7 +10,7 @@
 
 <p align="center">
   Un espacio de trabajo de terminal moderno, hecho con Electron, React y xterm.js.<br/>
-  Paneles divididos · Pestañas · Transferencia de archivos · Reenvío de puertos · Escritorios remotos · Fragmentos
+  Agente de IA · Paneles divididos · Pestañas · Transferencia de archivos · Reenvío de puertos · Escritorios remotos · Fragmentos
 </p>
 
 <p align="center">
@@ -93,9 +93,33 @@ para leerlo y modificarlo.
   la misma aplicación.
 - **Un sitio donde guardar servidores**: carpetas, etiquetas, un almacén de
   claves y fragmentos, todo cifrado y todo buscable.
+- **Un agente de IA** en un panel junto al terminal, que lee la sesión que
+  tienes delante y trabaja en el servidor a través de ella, preguntando antes
+  de cambiar nada.
 
 <a name="features"></a>
 ## Características
+
+### Agente de IA
+
+- **Funciona con el Claude Code o el Codex que ya tienes** en tu máquina, con
+  tu propia cuenta: nada que pegar, ninguna suscripción adicional
+- **Lee la sesión que estás mirando**, así que responde al error que tienes en
+  pantalla sin que pegues nada
+- **Trabaja en el terminal que ves**: los comandos se escriben en el panel y la
+  salida se queda en tu historial, o se ejecutan en un canal oculto si lo
+  prefieres
+- **Pregunta antes de cambiar nada**, con una lista de comandos que solo miran
+  y un modo más estricto o más suelto cuando lo quieras
+- **Apuntado donde tú digas**: la sesión que tienes delante, una que fijes, o
+  todos los hosts que tengas guardados
+- **Herramientas en vez de suposiciones**: conectar un host guardado, leer y
+  escribir archivos, responder a una pregunta que ya está esperando, leer el
+  historial
+- **Deja en paz tu propia máquina** salvo que le digas lo contrario, y se
+  detiene solo en vez de dar vueltas
+- **Modelo y nivel de razonamiento por conversación**, y mientras trabaja
+  muestra lo que cuesta o cuánto de tu plan llevas usado
 
 ### Terminal
 
@@ -201,6 +225,7 @@ npm run build
 | `Ctrl+Shift+K` | Paleta de fragmentos | `Alt+Shift+-` | Dividir abajo |
 | `Ctrl+Shift+B` | Entrada difundida | `Alt+Shift+Z` | Ampliar panel |
 | `Ctrl+Shift+C` / `V` | Copiar y pegar | `Ctrl+Shift+W` | Cerrar panel |
+| `Ctrl+Shift+A` | Agente de IA | `Alt+Flechas` | Moverse entre paneles |
 
 <a name="community"></a>
 ## Comunidad
@@ -218,7 +243,7 @@ Las issues y los pull requests son bienvenidos aquí en GitHub.
 ## Tecnología
 
 Electron · React · xterm.js · ssh2 · IronRDP (WebAssembly) · noVNC · Tailwind ·
-Vite
+Vite · Claude Agent SDK · Codex SDK
 
 `src/main/` es el proceso principal de Electron, un módulo por función.
 `src/renderer/` es la interfaz React: `components/` por función, `hooks/` para el

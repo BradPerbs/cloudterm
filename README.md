@@ -10,7 +10,7 @@
 
 <p align="center">
   A modern terminal workspace built with Electron, React and xterm.js.<br/>
-  Split panes · Tabs · File transfers · Port forwarding · Remote desktops · Snippets
+  AI agent · Split panes · Tabs · File transfers · Port forwarding · Remote desktops · Snippets
 </p>
 
 <p align="center">
@@ -91,9 +91,31 @@ everyone, and the whole source is here to read and change.
   in the same app.
 - **A place to keep servers**: folders, tags, a key vault and snippets, all
   encrypted and all searchable.
+- **An AI agent** in a panel beside the terminal, which reads the session you
+  are looking at and works on the server through it, asking before it changes
+  anything.
 
 <a name="features"></a>
 ## Features
+
+### AI agent
+
+- **Runs on the Claude Code or Codex already on your machine**, signed in to
+  your own account: nothing to paste, nothing extra to subscribe to
+- **Reads the session you are watching**, so the error on your screen is the
+  one it answers, without you pasting anything
+- **Works in the terminal you can see**: commands are typed into the pane and
+  the output stays in your scrollback, or run on a hidden channel if you prefer
+- **Asks before it changes anything**, with an allow list for the commands that
+  only look, and a stricter or looser mode when you want one
+- **Pointed where you like**: the session in front, one you pin, or every host
+  you have saved
+- **Tools instead of guesses**: connect a saved host, read and write files,
+  answer a prompt that is already waiting, read the scrollback
+- **Leaves your own machine alone** unless you say otherwise, and stops on its
+  own rather than looping
+- **Model and reasoning effort per conversation**, with what it is costing, or
+  how much of your plan it has used, shown as it works
 
 ### Terminal
 
@@ -194,6 +216,7 @@ npm run build
 | `Ctrl+Shift+K` | Snippet palette | `Alt+Shift+-` | Split down |
 | `Ctrl+Shift+B` | Broadcast input | `Alt+Shift+Z` | Zoom pane |
 | `Ctrl+Shift+C` / `V` | Copy and paste | `Ctrl+Shift+W` | Close pane |
+| `Ctrl+Shift+A` | AI agent | `Alt+Arrows` | Move between panes |
 
 <a name="community"></a>
 ## Community
@@ -210,7 +233,7 @@ Issues and pull requests are welcome here on GitHub.
 ## Tech stack
 
 Electron · React · xterm.js · ssh2 · IronRDP (WebAssembly) · noVNC · Tailwind ·
-Vite
+Vite · Claude Agent SDK · Codex SDK
 
 `src/main/` is the Electron main process, one module per feature.
 `src/renderer/` is the React UI: `components/` by feature, `hooks/` for state,
