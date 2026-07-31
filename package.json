@@ -30,6 +30,7 @@
             "src/main/**/*",
             "dist/renderer/**/*",
             "resources/**/*",
+            "!resources/README.md",
             "!resources/hello-helper.exe",
             "!**/node_modules/@openai/codex-*/vendor/**"
         ],
@@ -43,6 +44,7 @@
                 "to": "resources/",
                 "filter": [
                     "**/*",
+                    "!README.md",
                     "!hello-helper.exe"
                 ]
             }
@@ -54,6 +56,7 @@
                 "src/main/**/*",
                 "dist/renderer/**/*",
                 "resources/**/*",
+                "!resources/README.md",
                 "!**/node_modules/@openai/codex-*/vendor/**"
             ],
             "extraResources": [
@@ -61,7 +64,8 @@
                     "from": "resources/",
                     "to": "resources/",
                     "filter": [
-                        "**/*"
+                        "**/*",
+                        "!README.md"
                     ]
                 }
             ]

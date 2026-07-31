@@ -41,14 +41,19 @@ jobs:
           - name: windows-ia32
             os: windows-latest
             args: --win portable --ia32
-          # macos-13 is the last Intel runner; macos-14 and later are Apple
-          # silicon. Two runners rather than one building both architectures,
-          # because each has to install its own native dependencies.
+          # Both macOS builds run on Apple silicon. macos-13 was the last Intel
+          # runner and queues forever now that it is being retired, so the
+          # Intel dmg is cross-built. Packaging never executes the app, it only
+          # copies binaries, so the host architecture does not matter. What
+          # does matter is that npm is told which optional packages to fetch:
+          # left alone it would install the arm64 Claude binary and quietly
+          # bury it inside an Intel build.
           - name: macos-x64
-            os: macos-13
+            os: macos-latest
             args: --mac dmg --x64
+            npm-flags: --cpu=x64 --os=darwin
           - name: macos-arm64
-            os: macos-14
+            os: macos-latest
             args: --mac dmg --arm64
           - name: linux-x64
             os: ubuntu-latest
@@ -62,7 +67,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - run: npm ci ${{ matrix.npm-flags }}
+
+      # The whole reason this is a matrix. If the wrong one is here the build
+      # still succeeds and the assistant is dead on arrival, so it is worth a
+      # line in the log rather than a surprise in a shipped dmg.
+      - name: Show which Claude binary this build will carry
+        shell: bash
+        run: ls node_modules/@anthropic-ai/ | grep claude-agent-sdk- || echo 'NONE FOUND'
 
       # ssh2 lists cpu-features as an optional dependency and uses it only to
       # prefer a hardware-accelerated cipher, behind a bare try/catch. It is
