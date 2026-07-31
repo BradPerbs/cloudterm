@@ -70,6 +70,7 @@ everyone, and the whole source is here to read and change.
 
 ## Contents
 
+- [Download](#download)
 - [What is CloudTerm](#what-is-cloudterm)
 - [Features](#features)
 - [Screenshots](#screenshots)
@@ -105,11 +106,13 @@ everyone, and the whole source is here to read and change.
   <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
   <br/>
-  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b></sub>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
 </p>
 
-- **Runs on the Claude Code or Codex already on your machine**, signed in to
+- **Runs on the Claude Code, Codex, or OpenCode already on your machine**, signed in to
   your own account: nothing to paste, nothing extra to subscribe to
 - **Reads the session you are watching**, so the error on your screen is the
   one it answers, without you pasting anything
@@ -121,6 +124,10 @@ everyone, and the whole source is here to read and change.
   you have saved
 - **Tools instead of guesses**: connect a saved host, read and write files,
   answer a prompt that is already waiting, read the scrollback
+
+On Windows, install OpenCode natively with Chocolatey, Scoop, npm, or its
+release binary. A copy installed only inside WSL is not visible to the native
+CloudBlast desktop app.
 - **Leaves your own machine alone** unless you say otherwise, and stops on its
   own rather than looping
 - **Model and reasoning effort per conversation**, with what it is costing, or
@@ -250,12 +257,31 @@ Terminal themes, app colours, fonts and even the logo in the title bar.
 <a name="getting-started"></a>
 ## Getting started
 
+<a name="download"></a>
+### Download
+
+Download the latest release for your platform:
+
+| OS | Download |
+| --- | --- |
+| macOS | [Apple silicon (M1 and later)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-arm64.dmg) · [Intel](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.dmg) |
+| Windows | [Installer, x64 (recommended)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [Portable, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
+| Linux | [AppImage, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
+
+Or browse [all GitHub releases](https://github.com/BradPerbs/cloudterm/releases).
+
+### Build from source
+
 ```bash
 git clone https://github.com/BradPerbs/cloudterm.git
 cd cloudterm
 npm install
 npm run dev
 ```
+
+To use the AI agent with OpenCode, install the `opencode` CLI and configure at
+least one model provider with `opencode auth login`. CloudTerm uses OpenCode's
+existing providers and credentials; it does not copy or store them.
 
 Build a portable executable into `dist/`:
 
@@ -297,7 +323,7 @@ Thanks to everyone who has put work into CloudTerm.
 ## Tech stack
 
 Electron · React · xterm.js · ssh2 · IronRDP (WebAssembly) · noVNC · Tailwind ·
-Vite · Claude Agent SDK · Codex SDK
+Vite · Claude Agent SDK · Codex SDK · OpenCode SDK
 
 `src/main/` is the Electron main process, one module per feature.
 `src/renderer/` is the React UI: `components/` by feature, `hooks/` for state,
