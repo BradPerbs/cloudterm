@@ -1,12 +1,10 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Key01Icon, Alert02Icon, Tick02Icon, Loading03Icon, Refresh01Icon } from 'hugeicons-react';
 import Checkbox from './ui/Checkbox';
+import { IS_WINDOWS } from '../lib/platform';
 
 /** Fingerprints are long; the tail is the part people actually compare. */
 const shortFingerprint = (value) => (value?.length > 26 ? `${value.slice(0, 24)}…` : value || '');
-
-// The renderer is sandboxed, so there is no `process` here to ask.
-const isWindows = navigator.userAgent.includes('Windows');
 
 function StatusLine({ status }) {
     if (!status) {
@@ -159,7 +157,7 @@ function AgentAuthFields({ agentPath, agentForward, onChange }) {
 
                 {status && !status.available && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {isWindows
+                        {IS_WINDOWS
                             ? 'Start the OpenSSH Authentication Agent service, or run Pageant, then check again.'
                             : 'Start ssh-agent and add a key with ssh-add, then check again.'}
                     </p>
@@ -177,7 +175,7 @@ function AgentAuthFields({ agentPath, agentForward, onChange }) {
             {showPath ? (
                 <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        Agent socket or pipe
+                        {IS_WINDOWS ? 'Agent socket or pipe' : 'Agent socket'}
                     </label>
                     <input
                         type="text"
@@ -188,9 +186,19 @@ function AgentAuthFields({ agentPath, agentForward, onChange }) {
                         className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent outline-none transition-all placeholder:text-gray-400 font-mono text-xs"
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Blank uses <span className="font-mono">SSH_AUTH_SOCK</span>, then the
-                        platform default. Use <span className="font-mono">pageant</span> to target
-                        Pageant explicitly.
+                        {IS_WINDOWS ? (
+                            <>
+                                Blank tries <span className="font-mono">SSH_AUTH_SOCK</span>, the
+                                Windows OpenSSH agent and Pageant, and takes the first that answers.
+                                Use <span className="font-mono">pageant</span> to target Pageant
+                                explicitly.
+                            </>
+                        ) : (
+                            <>
+                                Blank uses <span className="font-mono">SSH_AUTH_SOCK</span>, which is
+                                where <span className="font-mono">ssh-agent</span> leaves its socket.
+                            </>
+                        )}
                     </p>
                 </div>
             ) : (

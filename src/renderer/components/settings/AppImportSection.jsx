@@ -12,6 +12,7 @@ import {
 import Checkbox from '../ui/Checkbox';
 import SettingCard from './ui/SettingCard';
 import { StatusBadge, GroupHeader } from './ImportSection';
+import { IS_WINDOWS } from '../../lib/platform';
 import { describeTunnel } from '../../lib/tunnels';
 import { toastOptions } from '../../lib/toast';
 import logoPutty from '../../assets/icons/128_putty.png';
@@ -20,8 +21,11 @@ import logoMobaxterm from '../../assets/icons/48_mobaxterm.png';
 
 /**
  * Bring saved sessions in from the other terminals people migrate from:
- * PuTTY and KiTTY (their registry sessions) and MobaXterm (its ini, or a
- * .mxtsessions export).
+ * PuTTY and KiTTY and MobaXterm (its ini, or a .mxtsessions export).
+ *
+ * PuTTY reads from the registry on Windows and from `~/.putty/sessions` on
+ * everything else. KiTTY and MobaXterm are Windows programs, so away from it
+ * they show as not found, and MobaXterm's file picker below is the way in.
  *
  * Same shape as the OpenSSH section above it: scan, tick what to take,
  * import. Everything already saved shows as "already added" and starts
@@ -260,7 +264,9 @@ export default function AppImportSection({ onImported }) {
                     title="A portable MobaXterm.ini, or a .mxtsessions export"
                 >
                     <FileImportIcon size={12} strokeWidth={2} />
-                    Portable install? Choose a MobaXterm file…
+                    {IS_WINDOWS
+                        ? 'Portable install? Choose a MobaXterm file…'
+                        : 'Choose a MobaXterm file…'}
                 </button>
             </div>
 

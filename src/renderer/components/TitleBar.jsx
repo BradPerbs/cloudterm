@@ -14,6 +14,7 @@ import {
     Unlink01Icon,
 } from 'hugeicons-react';
 import { TITLE_BAR_HEIGHT } from '../lib/layout';
+import { IS_MAC } from '../lib/platform';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import ContextMenu from './ui/ContextMenu';
 import NotificationsMenu from './NotificationsMenu';
@@ -794,7 +795,16 @@ function TitleBar({
             className="flex items-center justify-between select-none shrink-0 z-50 app-drag"
             style={{ height: TITLE_BAR_HEIGHT }}
         >
-            <div className="flex items-center flex-1 min-w-0 h-full overflow-hidden" style={{ gap: '12px' }}>
+            <div
+                className="flex items-center flex-1 min-w-0 h-full overflow-hidden"
+                style={{
+                    gap: '12px',
+                    // Room for the traffic lights, which macOS draws over this
+                    // row at the position main.js gives them. Wide enough to
+                    // clear the cluster and still leave the burger a margin.
+                    ...(IS_MAC ? { paddingLeft: 68 } : {}),
+                }}
+            >
                 {/* Burger Menu */}
                 <AppMenu />
 
@@ -904,35 +914,41 @@ function TitleBar({
                 )}
 
                 {/* The bell is the app's control, not the window's, so it keeps
-                    a little room of its own before the three that close it. */}
+                    a little room of its own before the window's own buttons. */}
                 <div className="flex items-center mr-1.5">
                     <NotificationsMenu />
                 </div>
 
-                <button
-                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                    onClick={handleMinimize}
-                >
-                    <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
-                        <rect y="5" width="12" height="1" fill="currentColor" />
-                    </svg>
-                </button>
-                <button
-                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                    onClick={handleMaximize}
-                >
-                    <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
-                        <rect width="10" height="10" x="1" y="1" rx="1" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                    </svg>
-                </button>
-                <button
-                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-red-500 hover:text-white transition-colors group"
-                    onClick={handleClose}
-                >
-                    <svg className="w-3 h-3 text-gray-500 dark:text-gray-400 group-hover:text-white" viewBox="0 0 12 12">
-                        <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.2" />
-                    </svg>
-                </button>
+                {/* macOS has its own three, over on the left. Drawing a second
+                    set here would be one pair too many. */}
+                {!IS_MAC && (
+                    <>
+                        <button
+                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                            onClick={handleMinimize}
+                        >
+                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
+                                <rect y="5" width="12" height="1" fill="currentColor" />
+                            </svg>
+                        </button>
+                        <button
+                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                            onClick={handleMaximize}
+                        >
+                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
+                                <rect width="10" height="10" x="1" y="1" rx="1" stroke="currentColor" strokeWidth="1.2" fill="none" />
+                            </svg>
+                        </button>
+                        <button
+                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-red-500 hover:text-white transition-colors group"
+                            onClick={handleClose}
+                        >
+                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400 group-hover:text-white" viewBox="0 0 12 12">
+                                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.2" />
+                            </svg>
+                        </button>
+                    </>
+                )}
             </div>
 
             {menu && menuItems.length > 0 && (

@@ -531,6 +531,11 @@ contextBridge.exposeInMainWorld('api', {
             ipcRenderer.invoke('ai-action-response', { requestId, ...result }),
     },
 
+    // Which OS this is, for the handful of places the interface has to differ:
+    // macOS draws its own window controls, and Pageant and the registry
+    // importers only exist on Windows. Read once at load; it cannot change.
+    platform: process.platform,
+
     window: {
         minimize: () => ipcRenderer.send('window-minimize'),
         maximize: () => ipcRenderer.send('window-maximize'),

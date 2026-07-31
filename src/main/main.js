@@ -58,7 +58,16 @@ function createWindow() {
         ...(state?.x !== undefined ? { x: state.x, y: state.y } : {}),
         minWidth: 900,
         minHeight: 600,
-        frame: false,
+        // Everywhere but macOS the window is frameless and the title bar draws
+        // its own three buttons. macOS keeps its traffic lights: a frameless
+        // window there loses them outright, and nothing this app could draw
+        // instead would behave the way the rest of the system does. So it gets
+        // an inset title bar, positioned to sit in the middle of the app's own
+        // 40px bar (12px gutter above it, 16px of button), and TitleBar.jsx
+        // leaves a gap on the left for them.
+        ...(process.platform === 'darwin'
+            ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 19, y: 24 } }
+            : { frame: false }),
         backgroundColor: '#0a0a0f',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),

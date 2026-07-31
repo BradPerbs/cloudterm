@@ -8,21 +8,32 @@ const { normalizeTunnel, splitHostPort } = require('./tunnel-config');
 const { normalizeSerial, describeSerial } = require('./protocol-config');
 
 /**
- * Bring PuTTY (or KiTTY) sessions in from the registry.
+ * Bring PuTTY (or KiTTY) sessions in.
  *
- * Both keep every saved session as a subkey of one well-known key, one value
- * per setting. Rather than walking that with `reg query` per session, the key
- * is exported once with `reg export`: a single invocation, and the .reg file
- * it writes is UTF-16LE with a declared format, so there is no console
+ * On Windows both keep every saved session as a subkey of one well-known key,
+ * one value per setting. Rather than walking that with `reg query` per session,
+ * the key is exported once with `reg export`: a single invocation, and the .reg
+ * file it writes is UTF-16LE with a declared format, so there is no console
  * codepage to guess at.
  *
+ * PuTTY's Unix port has no registry to use, so it writes one file per session
+ * under `~/.putty/sessions` instead. Different container, same setting names,
+ * so only the reading differs and everything downstream is shared. KiTTY is a
+ * Windows-only fork and has no equivalent.
+ *
  * The same scan/apply split as the OpenSSH importer, for the same reason: the
- * renderer only ever sends back *which* sessions to take, and the registry is
+ * renderer only ever sends back *which* sessions to take, and the sessions are
  * re-read on apply, so nothing on the renderer's word becomes a record.
  */
 
 const SOURCES = {
-    putty: { label: 'PuTTY', key: 'HKCU\\Software\\SimonTatham\\PuTTY\\Sessions' },
+    putty: {
+        label: 'PuTTY',
+        key: 'HKCU\\Software\\SimonTatham\\PuTTY\\Sessions',
+        // Read lazily: the home directory is not this module's business to
+        // resolve at load time.
+        dir: () => path.join(os.homedir(), '.putty', 'sessions'),
+    },
     kitty: { label: 'KiTTY', key: 'HKCU\\Software\\9bis.com\\KiTTY\\Sessions' },
 };
 
@@ -92,6 +103,52 @@ function parseRegistryExport(text, rootKey) {
         } else if (data.toLowerCase().startsWith('dword:')) {
             current.set(name, parseInt(data.slice(6), 16));
         }
+    }
+
+    return sessions;
+}
+
+/**
+ * The Unix port's session files, in the shape `parseRegistryExport` returns.
+ *
+ * One file per session, named with the same %XX munging the registry uses, and
+ * inside it a `Key=Value` line per setting. The value runs to the end of the
+ * line and is taken literally: there is no quoting to undo, which is why this
+ * is so much shorter than the .reg parser.
+ *
+ * A directory that is not there is not an error. It only means PuTTY has never
+ * run, or never saved anything, and the caller reports that as "not found".
+ */
+function readUnixSessions(dir) {
+    const sessions = new Map();
+
+    let entries;
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return sessions;
+    }
+
+    for (const entry of entries) {
+        if (!entry.isFile()) continue;
+
+        let text;
+        try {
+            text = fs.readFileSync(path.join(dir, entry.name), 'utf8');
+        } catch {
+            // One unreadable file should not cost the whole import.
+            continue;
+        }
+
+        const values = new Map();
+        for (const line of text.split(/\r?\n/)) {
+            const at = line.indexOf('=');
+            if (at > 0) values.set(line.slice(0, at), line.slice(at + 1));
+        }
+
+        // An empty file is not a session, and neither is whatever else has
+        // found its way into the directory.
+        if (values.size > 0) sessions.set(unmunge(entry.name), values);
     }
 
     return sessions;
@@ -289,7 +346,16 @@ function candidateFrom(name, values, existing) {
 
 function detect(source) {
     const root = SOURCES[source];
-    if (!root || process.platform !== 'win32') return { found: false, label: root?.label || source };
+    if (!root) return { found: false, label: source };
+
+    if (process.platform !== 'win32') {
+        // KiTTY has no Unix build, so there is nowhere to look.
+        if (!root.dir) return { found: false, label: root.label };
+
+        const dir = root.dir();
+        const sessions = readUnixSessions(dir).size;
+        return { found: sessions > 0, label: root.label, sessions, path: dir };
+    }
 
     try {
         const out = execFileSync('reg.exe', ['query', root.key], { windowsHide: true, stdio: 'pipe' })
@@ -308,19 +374,30 @@ function detect(source) {
 
 function scan(source) {
     const root = SOURCES[source];
-    const base = { source, label: root?.label || source, path: root?.key || '', hosts: [], warnings: [], stats: null };
-    if (!root || process.platform !== 'win32') {
-        return { ...base, error: 'Only available on Windows' };
+    if (!root) {
+        return { source, label: source, path: '', hosts: [], warnings: [], stats: null, error: `Unknown source: ${source}` };
     }
 
-    let text;
-    try {
-        text = exportKey(root.key);
-    } catch {
-        return { ...base, error: `No saved sessions found in the registry for ${root.label}` };
+    const windows = process.platform === 'win32';
+    const location = windows ? root.key : (root.dir ? root.dir() : '');
+    const base = { source, label: root.label, path: location, hosts: [], warnings: [], stats: null };
+
+    let sessions;
+    if (windows) {
+        try {
+            sessions = parseRegistryExport(exportKey(root.key), root.key);
+        } catch {
+            return { ...base, error: `No saved sessions found in the registry for ${root.label}` };
+        }
+    } else if (!location) {
+        return { ...base, error: `${root.label} only runs on Windows, so there are no sessions to read` };
+    } else {
+        sessions = readUnixSessions(location);
+        if (sessions.size === 0) {
+            return { ...base, error: `No saved sessions found in ${location}` };
+        }
     }
 
-    const sessions = parseRegistryExport(text, root.key);
     const existing = store.getHosts();
     const hosts = [];
     const skipped = new Map();
