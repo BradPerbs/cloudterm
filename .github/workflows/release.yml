@@ -44,14 +44,19 @@ jobs:
           # Both macOS builds run on Apple silicon. macos-13 was the last Intel
           # runner and queues forever now that it is being retired, so the
           # Intel dmg is cross-built. Packaging never executes the app, it only
-          # copies binaries, so the host architecture does not matter. What
-          # does matter is that npm is told which optional packages to fetch:
-          # left alone it would install the arm64 Claude binary and quietly
-          # bury it inside an Intel build.
+          # copies binaries, so the host architecture does not matter there.
+          #
+          # It matters a great deal to npm, though, and in two directions at
+          # once. The install has to be native or the renderer cannot build,
+          # because rollup loads a binary for the machine it is running on. The
+          # Claude CLI is the opposite: it has to match the machine the dmg is
+          # for. So the install stays native and claude-target names the one
+          # package swapped afterwards, once the build tools have done their
+          # work and only the shipped binary is still in question.
           - name: macos-x64
             os: macos-latest
             args: --mac dmg --x64
-            npm-flags: --cpu=x64 --os=darwin
+            claude-target: darwin-x64
           - name: macos-arm64
             os: macos-latest
             args: --mac dmg --arm64
@@ -67,14 +72,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci ${{ matrix.npm-flags }}
-
-      # The whole reason this is a matrix. If the wrong one is here the build
-      # still succeeds and the assistant is dead on arrival, so it is worth a
-      # line in the log rather than a surprise in a shipped dmg.
-      - name: Show which Claude binary this build will carry
-        shell: bash
-        run: ls node_modules/@anthropic-ai/ | grep claude-agent-sdk- || echo 'NONE FOUND'
+      - run: npm ci
 
       # ssh2 lists cpu-features as an optional dependency and uses it only to
       # prefer a hardware-accelerated cipher, behind a bare try/catch. It is
@@ -97,6 +95,32 @@ jobs:
         run: npm run build:hello
 
       - run: npm run build:renderer
+
+      # Only the cross-built Intel dmg gets here. Everything above needed the
+      # host's own binaries, so npm installed the host's Claude one too. The
+      # renderer is built by now and nothing else runs locally, so the shipped
+      # binary can be put right: bring in the target's and drop every other,
+      # leaving exactly one for electron-builder to package.
+      - name: Swap in the target's Claude binary
+        if: matrix.claude-target != ''
+        shell: bash
+        run: |
+          set -e
+          version=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
+          # --force because npm refuses a package whose cpu and os do not match
+          # the machine, which is precisely what is wanted here.
+          npm install --no-save --force \
+            "@anthropic-ai/claude-agent-sdk-${{ matrix.claude-target }}@${version}"
+          for dir in node_modules/@anthropic-ai/claude-agent-sdk-*; do
+            [ "$(basename "$dir")" = "claude-agent-sdk-${{ matrix.claude-target }}" ] || rm -rf "$dir"
+          done
+
+      # If the wrong one is here the build still succeeds and the assistant is
+      # dead on arrival, so it gets a line in the log rather than being a
+      # surprise inside a shipped dmg.
+      - name: Show which Claude binary this build will carry
+        shell: bash
+        run: ls node_modules/@anthropic-ai/ | grep claude-agent-sdk- || echo 'NONE FOUND'
 
       - name: Package
         run: npx electron-builder ${{ matrix.args }} --publish never
