@@ -10,7 +10,13 @@
  * dangerouslySetInnerHTML: the text here is model output that has quoted
  * arbitrary log lines and file contents from a server, and that is precisely
  * the input you do not hand to an HTML parser.
+ *
+ * The one thing here that is not self-contained is the copy button on a code
+ * block, which is the same control the tool rows and approval cards use. A
+ * second copy of it living in this file would be the worse trade.
  */
+
+import CopyButton from '../components/ui/CopyButton';
 
 const FENCE = /^```([\w+-]*)\s*$/;
 const HEADING = /^(#{1,4})\s+(.*)$/;
@@ -67,13 +73,25 @@ function inline(text, keyPrefix) {
 
 function CodeBlock({ code, language }) {
     return (
-        <div className="[&:not(:first-child)]:mt-2 rounded-lg overflow-hidden
+        <div className="group relative [&:not(:first-child)]:mt-2 rounded-lg overflow-hidden
             border border-gray-200 dark:border-surface-control">
             {language && (
                 <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-surface-base border-b border-gray-200 dark:border-surface-control">
                     {language}
                 </div>
             )}
+
+            {/* Most of what lands in one of these is a command somebody is
+                about to run, so it is worth a click rather than a careful
+                drag across three wrapped lines. Pinned to the block rather
+                than dropped in the language bar, because half of them arrive
+                with no language on the fence and would have nowhere to sit. */}
+            <CopyButton
+                text={code}
+                label="Copy code"
+                className={`absolute right-1 ${language ? 'top-1' : 'top-1.5'}`}
+            />
+
             {/* The block scrolls on its own rather than widening the panel: a
                 long command line must not push the whole conversation sideways. */}
             <pre className="px-3 py-2 overflow-x-auto bg-gray-50 dark:bg-surface-base">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert02Icon, Cancel01Icon, Edit02Icon, Tick02Icon } from 'hugeicons-react';
 import Button from '../ui/Button';
+import CopyButton from '../ui/CopyButton';
 import { describeCall } from './ToolCall';
 
 /**
@@ -155,15 +156,27 @@ export default function ApprovalRequest({ item, onRespond }) {
                     look like the thing the terminal is about to be handed, not
                     like another piece of the panel's furniture. */}
                 {summary.text && (
-                    <div
-                        className={`rounded-lg px-2.5 py-2 max-h-36 overflow-auto
-                            bg-gray-50 dark:bg-black/30 text-gray-900 dark:text-gray-100 ${
-                            summary.mono
-                                ? 'font-jetbrains text-[11px] leading-[1.6] whitespace-pre-wrap break-words'
-                                : 'text-xs leading-relaxed'
-                        }`}
-                    >
-                        {summary.text}
+                    // Copyable, because "not like that" is a common answer to
+                    // this card and the next thing you do is run a version of
+                    // it yourself. The button sits outside the scroller for
+                    // the reason it does on a tool row: inside, a long command
+                    // would carry it off the top.
+                    <div className="group relative">
+                        <div
+                            className={`rounded-lg px-2.5 py-2 max-h-36 overflow-auto
+                                bg-gray-50 dark:bg-black/30 text-gray-900 dark:text-gray-100 ${
+                                summary.mono
+                                    ? 'font-jetbrains text-[11px] leading-[1.6] whitespace-pre-wrap break-words'
+                                    : 'text-xs leading-relaxed'
+                            }`}
+                        >
+                            {summary.text}
+                        </div>
+                        <CopyButton
+                            text={summary.text}
+                            label={summary.mono ? 'Copy command' : 'Copy'}
+                            className="absolute right-1 top-1"
+                        />
                     </div>
                 )}
 

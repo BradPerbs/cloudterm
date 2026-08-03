@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowDown01Icon } from 'hugeicons-react';
+import CopyButton from '../ui/CopyButton';
 
 /**
  * One tool call, as a row in the transcript.
@@ -127,13 +128,20 @@ export default function ToolCall({ item }) {
             </button>
 
             {open && expandable && (
-                // Scrolls in both directions on its own: a wide log line must not
-                // stretch the panel, and a long one must not bury the reply under it.
-                <pre className="px-2.5 py-2 max-h-64 overflow-auto border-t border-black/[0.06] dark:border-white/[0.06]
-                    font-jetbrains text-[11px] leading-[1.6] whitespace-pre
-                    text-gray-600 dark:text-gray-400">
-                    {item.result}
-                </pre>
+                // The button is a sibling of the scroller rather than a child
+                // of it: inside, it would scroll away with the first screen of
+                // output, which is the one place it must not be.
+                <div className="group relative border-t border-black/[0.06] dark:border-white/[0.06]">
+                    {/* Scrolls in both directions on its own: a wide log line must
+                        not stretch the panel, and a long one must not bury the
+                        reply under it. */}
+                    <pre className="px-2.5 py-2 max-h-64 overflow-auto
+                        font-jetbrains text-[11px] leading-[1.6] whitespace-pre
+                        text-gray-600 dark:text-gray-400">
+                        {item.result}
+                    </pre>
+                    <CopyButton text={item.result} label="Copy output" className="absolute right-1 top-1" />
+                </div>
             )}
         </div>
     );
