@@ -216,8 +216,8 @@ function HostCard({
                             this host is (the name above it already said which)
                             while half a tag says nothing at all. */}
                         <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
-                            {/* `neutral-500` is #565982 in this palette, which on
-                                a #24253a card is barely 2:1, so the line was
+                            {/* `neutral-500` is #565f89 in this palette, which on
+                                a #24283b card is barely 2:1, so the line was
                                 there and unreadable. This is the tone the rest of
                                 the app uses for a secondary line. */}
                             <p

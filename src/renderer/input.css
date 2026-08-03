@@ -8,18 +8,18 @@
    block is the palette the app falls back to rather than the only one it has.
    Keep it in step with DEFAULT_APP_COLORS in lib/app-colors.js. */
 :root {
-    --app-base: 17 18 25;
-    /* #111219 */
+    --app-base: 22 22 30;
+    /* #16161e */
     --app-raised: 26 27 38;
     /* #1a1b26 */
-    --app-control: 36 37 58;
-    /* #24253a */
-    --app-hover: 46 48 73;
-    /* #2e3049 */
-    --app-active: 59 61 92;
-    /* #3b3d5c */
-    --app-muted: 86 89 130;
-    /* #565982 */
+    --app-control: 36 40 59;
+    /* #24283b */
+    --app-hover: 47 51 77;
+    /* #2f334d */
+    --app-active: 59 66 97;
+    /* #3b4261 */
+    --app-muted: 86 95 137;
+    /* #565f89 */
 }
 
 /* Custom Reset/Utilities */

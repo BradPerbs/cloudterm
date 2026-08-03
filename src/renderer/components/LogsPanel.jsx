@@ -80,7 +80,7 @@ const KIND_ICONS = {
  * Two text weights, and nothing below them.
  *
  * The `neutral` scale in this project is a *surface* ramp (neutral-600 is
- * #2e3049, a panel colour), so reaching for it as a text grey put 1.3:1 on the
+ * #2f334d, a panel colour), so reaching for it as a text grey put 1.3:1 on the
  * background it was sitting on. These are the two that clear their floor in
  * both themes, which takes an asymmetric pair: gray-400 reads at 6.7:1 on the
  * dark panel and 2.4:1 on the light one, and gray-600 does the reverse.

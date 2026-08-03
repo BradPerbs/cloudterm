@@ -121,7 +121,7 @@ function SnippetCard({
                             {snippet.name}
                         </h3>
                         {/* Same tone as HostCard's second line: `neutral-500`
-                            is #565982, which on a #24253a card is barely 2:1. */}
+                            is #565f89, which on a #24283b card is barely 2:1. */}
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
                             <span className={`font-mono ${broken ? 'text-red-500 dark:text-red-400' : ''}`}>
                                 {broken ? 'A step was deleted, so this will not run' : firstLine(body)}

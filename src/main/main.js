@@ -68,7 +68,9 @@ function createWindow() {
         ...(process.platform === 'darwin'
             ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 19, y: 24 } }
             : { frame: false }),
-        backgroundColor: '#0a0a0f',
+        // What the frame shows before the renderer has painted anything. The
+        // app's own window colour, so the first frame is not a different dark.
+        backgroundColor: '#16161e',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

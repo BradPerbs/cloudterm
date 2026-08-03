@@ -395,9 +395,9 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
                                             {keyType.label}
                                         </span>
                                         {/* `gray-400`, not `neutral-500`. The
-                                            second is #565982 in this palette,
-                                            which over a picked card's #24253a
-                                            is about 2:1 — the description was
+                                            second is #565f89 in this palette,
+                                            which over a picked card's #24283b
+                                            is about 2:1, so the description was
                                             there and unreadable. This is the
                                             tone the app's other option cards
                                             use for the line under a label. */}

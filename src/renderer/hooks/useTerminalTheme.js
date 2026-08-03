@@ -3,6 +3,11 @@ import { useState, useCallback } from 'react';
 /** The one theme whose colours the user picks instead of us. */
 export const CUSTOM_THEME_ID = 'custom';
 
+/** What a terminal is drawn in until someone picks something else. Tokyo Night,
+ *  the same palette the app's own chrome is tinted with (see lib/app-colors.js),
+ *  so a fresh install is one colour scheme rather than two. */
+export const DEFAULT_THEME_ID = 'tokyo-night';
+
 export const TERMINAL_THEMES = {
     'default': {
         background: '#1e1e1e',
@@ -516,7 +521,10 @@ export const TERMINAL_THEMES = {
  * picker grid and the custom editor's "start from" list cannot drift apart.
  */
 export const TERMINAL_THEME_PRESETS = [
-    { id: 'default', label: 'Default' },
+    { id: 'tokyo-night', label: 'Tokyo Night' },
+    // Stored as `default` since before it was one, and still the id in anyone's
+    // settings who picked it. The name is what it has always been made of.
+    { id: 'default', label: 'VS Code Dark' },
     { id: 'monokai', label: 'Monokai' },
     { id: 'monokai-pro', label: 'Monokai Pro' },
     { id: 'dracula', label: 'Dracula' },
@@ -528,7 +536,6 @@ export const TERMINAL_THEME_PRESETS = [
     { id: 'gruvbox-light', label: 'Gruvbox Light' },
     { id: 'everforest', label: 'Everforest' },
     { id: 'kanagawa', label: 'Kanagawa' },
-    { id: 'tokyo-night', label: 'Tokyo Night' },
     { id: 'moonlight', label: 'Moonlight' },
     { id: 'night-owl', label: 'Night Owl' },
     { id: 'palenight', label: 'Palenight' },
@@ -653,7 +660,7 @@ export function themeToCustomColors(themeId) {
 /** The theme object xterm is handed for whatever is currently selected. */
 export function resolveTerminalTheme(themeId, customColors) {
     if (themeId !== CUSTOM_THEME_ID) {
-        return TERMINAL_THEMES[themeId] || TERMINAL_THEMES['default'];
+        return TERMINAL_THEMES[themeId] || TERMINAL_THEMES[DEFAULT_THEME_ID];
     }
 
     const colors = sanitizeCustomTheme(customColors);
@@ -667,7 +674,7 @@ export function resolveTerminalTheme(themeId, customColors) {
 function readStoredTheme() {
     const saved = localStorage.getItem(THEME_STORAGE_KEY);
     if (saved === CUSTOM_THEME_ID || (saved && TERMINAL_THEMES[saved])) return saved;
-    return 'default';
+    return DEFAULT_THEME_ID;
 }
 
 function readStoredCustomTheme() {

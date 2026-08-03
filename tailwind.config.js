@@ -38,8 +38,8 @@ module.exports = {
                 // One elevation ramp for dark mode. Every surface sits on it,
                 // so saturation tracks lightness instead of drifting grey the
                 // way translucent white overlays do.
-                //   base #111219  raised #1a1b26  control #24253a
-                //   hover #2e3049 active #3b3d5c  muted text #565982
+                //   base #16161e  raised #1a1b26  control #24283b
+                //   hover #2f334d active #3b4261  muted text #565f89
                 //
                 // Stated as variables rather than hexes so the ramp can be
                 // retinted at runtime: the app's colour settings rewrite the six

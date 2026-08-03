@@ -33,14 +33,20 @@ const CSS_VARIABLES = {
     muted: '--app-muted',
 };
 
-/** The app's own colours, and what an untouched custom theme starts as. */
+/**
+ * The app's own colours, and what an untouched custom theme starts as.
+ *
+ * Tokyo Night, the same palette the terminal defaults to (see
+ * hooks/useTerminalTheme.js), so the shell and what runs inside it are one
+ * scheme out of the box. Keep in step with the `:root` block in input.css.
+ */
 export const DEFAULT_APP_COLORS = {
-    base: '#111219',
+    base: '#16161e',
     raised: '#1a1b26',
-    control: '#24253a',
-    hover: '#2e3049',
-    active: '#3b3d5c',
-    muted: '#565982',
+    control: '#24283b',
+    hover: '#2f334d',
+    active: '#3b4261',
+    muted: '#565f89',
 };
 
 /**
@@ -49,7 +55,12 @@ export const DEFAULT_APP_COLORS = {
  * to by hand.
  */
 export const APP_COLOR_PRESETS = [
-    { id: 'midnight', label: 'Midnight', colors: DEFAULT_APP_COLORS },
+    { id: 'tokyo-night', label: 'Tokyo Night', colors: DEFAULT_APP_COLORS },
+    {
+        id: 'midnight',
+        label: 'Midnight',
+        colors: { base: '#111219', raised: '#1a1b26', control: '#24253a', hover: '#2e3049', active: '#3b3d5c', muted: '#565982' },
+    },
     {
         id: 'graphite',
         label: 'Graphite',
@@ -64,11 +75,6 @@ export const APP_COLOR_PRESETS = [
         id: 'dracula',
         label: 'Dracula',
         colors: { base: '#1a1b23', raised: '#282a36', control: '#343746', hover: '#414458', active: '#565a72', muted: '#6272a4' },
-    },
-    {
-        id: 'tokyo-night',
-        label: 'Tokyo Night',
-        colors: { base: '#16161e', raised: '#1a1b26', control: '#24283b', hover: '#2f334d', active: '#3b4261', muted: '#565f89' },
     },
     {
         id: 'catppuccin',

@@ -58,7 +58,7 @@ function openViewer(id, parent) {
         minWidth: MIN_WIDTH,
         minHeight: MIN_HEIGHT,
         frame: false,
-        backgroundColor: '#0a0a0f',
+        backgroundColor: '#16161e',
         show: false,
         title: 'Screenshot',
         webPreferences: {
