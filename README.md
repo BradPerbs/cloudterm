@@ -102,18 +102,35 @@ everyone, and the whole source is here to read and change.
 
 ### AI agent
 
-<p align="center">
-  <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
-  <br/>
-  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
-</p>
+Pick the agent you already have. CloudTerm drives the CLI on your machine under
+your own account, so there is nothing to paste and nothing extra to subscribe
+to.
 
-- **Runs on the Claude Code, Codex, or OpenCode already on your machine**, signed in to
-  your own account: nothing to paste, nothing extra to subscribe to
+<table align="center">
+  <tr>
+    <td align="center" width="230"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="32"></td>
+    <td align="center" width="230"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="32"></td>
+    <td align="center" width="230"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="32"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Claude Code</b></td>
+    <td align="center"><b>Codex</b></td>
+    <td align="center"><b>OpenCode</b></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Anthropic models</sub></td>
+    <td align="center"><sub>OpenAI models</sub></td>
+    <td align="center"><sub>Any provider you have set up</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Sign in with <code>claude</code>, then <code>/login</code></sub></td>
+    <td align="center"><sub>Sign in with the Codex app or CLI</sub></td>
+    <td align="center"><sub>Sign in with <code>opencode auth login</code></sub></td>
+  </tr>
+</table>
+
+Whichever you choose, the agent:
+
 - **Reads the session you are watching**, so the error on your screen is the
   one it answers, without you pasting anything
 - **Works in the terminal you can see**: commands are typed into the pane and
@@ -124,14 +141,14 @@ everyone, and the whole source is here to read and change.
   you have saved
 - **Tools instead of guesses**: connect a saved host, read and write files,
   answer a prompt that is already waiting, read the scrollback
-
-On Windows, install OpenCode natively with Chocolatey, Scoop, npm, or its
-release binary. A copy installed only inside WSL is not visible to the native
-CloudBlast desktop app.
 - **Leaves your own machine alone** unless you say otherwise, and stops on its
   own rather than looping
 - **Model and reasoning effort per conversation**, with what it is costing, or
   how much of your plan it has used, shown as it works
+
+> On Windows, install OpenCode natively with Chocolatey, Scoop, npm, or its
+> release binary. A copy installed only inside WSL is not visible to the native
+> CloudTerm desktop app.
 
 ### Terminal
 
