@@ -14,4 +14,13 @@ export const IS_MAC = platform === 'darwin';
 export const IS_WINDOWS = platform === 'win32';
 export const IS_LINUX = platform === 'linux';
 
+/**
+ * What the "hold this and click" key is called here.
+ *
+ * Written once so a setting label, its description and any hint about it all
+ * name the same key, and so a Mac is never told to hold Ctrl for a chord it
+ * answers to Cmd for.
+ */
+export const MODIFIER_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
+
 export default platform;

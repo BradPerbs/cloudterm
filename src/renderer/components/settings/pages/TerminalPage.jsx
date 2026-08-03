@@ -17,8 +17,10 @@ import {
     CURSOR_STYLES,
     DEFAULT_TERMINAL_SETTINGS,
     LIMITS,
+    LINK_ACTIVATIONS,
     resolveFontFamily,
 } from '../../../hooks/useTerminalSettings';
+import { MODIFIER_KEY } from '../../../lib/platform';
 import { toastOptions } from '../../../lib/toast';
 
 const TERMINAL_THEME_OPTIONS = TERMINAL_THEME_PRESETS.map(option => ({
@@ -246,7 +248,7 @@ export default function TerminalPage({
                 />
             </SettingCard>
 
-            {/* ---------------- Cursor and buffer ---------------- */}
+            {/* ---------------- Cursor, buffer and links ---------------- */}
             <SettingCard>
                 <SettingRow
                     align="center"
@@ -295,10 +297,27 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
+                    title="Opening links"
+                    description={`A URL printed in the session is clickable and opens in your browser.
+                        Asking for ${MODIFIER_KEY} as well is what editors do: it stops a click meant for the
+                        text under a URL from throwing a browser at the screen mid-session.`}
+                    control={
+                        <SegmentedControl
+                            ariaLabel="Opening links"
+                            value={terminalSettings.linkActivation}
+                            onChange={(linkActivation) => set({ linkActivation })}
+                            segments={LINK_ACTIVATIONS.map(mode => ({ value: mode.id, label: mode.label }))}
+                        />
+                    }
+                />
+
+                <SettingRow
+                    className={DIVIDED}
+                    align="center"
                     title="Back to the defaults"
                     description={isDefault
                         ? 'Everything above is already at its default.'
-                        : 'Resets the font, spacing, cursor and scrollback. Leaves the colour scheme alone.'}
+                        : 'Resets the font, spacing, cursor, scrollback and link clicking. Leaves the colour scheme alone.'}
                     control={
                         <button
                             className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300

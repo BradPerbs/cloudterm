@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MODIFIER_KEY } from '../lib/platform';
 
 /**
  * How the terminal is typeset: the face, its size and weight, the space around
@@ -70,6 +71,7 @@ export const DEFAULT_TERMINAL_SETTINGS = {
     cursorStyle: 'bar',
     cursorBlink: true,
     scrollback: 10000,
+    linkActivation: 'click',
 };
 
 /**
@@ -97,6 +99,19 @@ export const CURSOR_STYLES = [
     { id: 'bar', label: 'Bar' },
     { id: 'block', label: 'Block' },
     { id: 'underline', label: 'Underline' },
+];
+
+/**
+ * What it takes to open a URL the remote printed.
+ *
+ * 'click' is a plain left click, which is the quickest way to follow a link and
+ * also the easiest way to open one you only meant to read. 'modifier' asks for
+ * Ctrl (Cmd on macOS) as well, the chord editors use, so a click that lands on a
+ * URL by accident stays a click.
+ */
+export const LINK_ACTIVATIONS = [
+    { id: 'click', label: 'Click' },
+    { id: 'modifier', label: `${MODIFIER_KEY} + click` },
 ];
 
 const clamp = (value, { min, max }, fallback) => {
@@ -138,6 +153,9 @@ export function sanitizeTerminalSettings(raw) {
         next.cursorStyle = source.cursorStyle;
     }
     if (typeof source.cursorBlink === 'boolean') next.cursorBlink = source.cursorBlink;
+    if (LINK_ACTIVATIONS.some(mode => mode.id === source.linkActivation)) {
+        next.linkActivation = source.linkActivation;
+    }
 
     return next;
 }

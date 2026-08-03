@@ -12,6 +12,7 @@ import { useTransfers } from '../hooks/useTransfers';
 import { useTunnels } from '../hooks/useTunnels';
 import { useSshConnection } from '../hooks/useSshConnection';
 import { toastOptions } from '../lib/toast';
+import { MODIFIER_KEY } from '../lib/platform';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { protocolLabel } from '../lib/protocols';
 import SegmentedControl from './ui/SegmentedControl';
@@ -269,6 +270,12 @@ function TerminalView({
     const inputRef = useRef(onInput);
     inputRef.current = onInput;
 
+    // Same reason: the link addon is loaded once, for the life of the pane, so
+    // it has to read the current setting rather than the one that was in force
+    // when the session opened.
+    const linkActivationRef = useRef(terminalSettings.linkActivation);
+    linkActivationRef.current = terminalSettings.linkActivation;
+
     const sendInput = useCallback((data) => {
         if (!pane?.id) return;
         if (inputRef.current) inputRef.current(pane.id, data);
@@ -476,11 +483,26 @@ function TerminalView({
             term.loadAddon(searchAddon);
 
             // A URL in the scrollback was printed by the remote, so opening it
-            // goes through main, which allowlists the scheme. Only a plain left
-            // click opens, and only when nothing is selected: dragging across a
-            // URL to copy it must not also launch a browser.
+            // goes through main, which allowlists the scheme. Only a left click
+            // opens, and only when nothing is selected: dragging across a URL to
+            // copy it must not also launch a browser.
+            //
+            // Whether that click has to carry Ctrl (Cmd on macOS) is a setting.
+            // A click with the modifier missing says so rather than doing
+            // nothing, which would read as a link that is simply broken; one
+            // toast id, so a second try replaces the hint instead of stacking
+            // another copy under it.
             term.loadAddon(new WebLinksAddon((event, uri) => {
                 if (event.button !== 0 || term.hasSelection()) return;
+
+                if (linkActivationRef.current === 'modifier' && !event.ctrlKey && !event.metaKey) {
+                    toast(
+                        `Hold ${MODIFIER_KEY} and click to open this link`,
+                        toastOptions({ id: 'terminal-link-modifier' })
+                    );
+                    return;
+                }
+
                 Promise.resolve(window.api.links?.open(uri))
                     .then((result) => {
                         if (result && !result.success) {
