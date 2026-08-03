@@ -1331,6 +1331,8 @@ function register(getWindow) {
 
     handle('updates-status', () => updates.status());
     handle('updates-check', () => updates.check({ manual: true }));
+    handle('updates-download', () => updates.download());
+    handle('updates-install', () => updates.install());
     handle('updates-open', () => updates.open());
     handle('updates-dismiss', () => updates.dismiss());
 

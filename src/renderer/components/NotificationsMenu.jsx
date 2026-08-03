@@ -21,6 +21,10 @@ import Tooltip from './ui/Tooltip';
 const PANEL_WIDTH = 288;
 const EDGE = 8;
 
+// Shared so the row keeps its shape whether or not it is pressable, and a
+// download in flight does not visibly reflow the panel when it finishes.
+const NOTICE = 'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left';
+
 /** Placeholder shape, so the panel below reads as the thing it will be. */
 // items: { id, title, body, time, unread }
 
@@ -64,13 +68,56 @@ export default function NotificationsMenu({ items = [], onMarkAllRead }) {
     const btnRef = useRef(null);
     const panelRef = useRef(null);
 
-    const { status, open: download } = useUpdate();
+    // `open` is the panel's own state above, so the browser handoff is renamed
+    // rather than shadowed.
+    const { status, open: openInBrowser, download, install } = useUpdate();
 
-    // `available` and not `newer`: a version the user has already been sent to
-    // download is still newer, and still not worth a dot in their title bar.
+    // `available` and not `newer`: in notify mode a version the user has
+    // already been sent to download is still newer, and still not worth a dot
+    // in their title bar. In install mode nothing clears it on the way past,
+    // because a downloaded build still has a restart to ask for and the dot is
+    // the only thing asking.
     const update = status?.available ? status.latest : null;
 
+    const ready = Boolean(status?.ready);
+    const downloading = Boolean(status?.downloading);
+
+    // Written once and used by the tooltip, the screen reader label and the row
+    // itself, so the three cannot drift into describing different states.
+    const summary = !update ? '' : ready
+        ? `Version ${status.readyVersion} is ready to install`
+        : downloading
+            ? `Downloading version ${update.version}`
+            : `Version ${update.version} is available`;
+
+    // What pressing the row does. A download in flight has nothing to offer,
+    // so it reports a percentage and is not a button at all.
+    const verb = ready ? 'Restart' : downloading ? `${status.progress ?? 0}%` : 'Download';
+    const act = ready
+        ? install
+        : downloading
+            ? null
+            // "Download" means two different things by mode, and both are
+            // honest: fetch it, or go and get it yourself.
+            : (status?.mode === 'install' ? download : openInBrowser);
+
     const unread = items.filter(item => item.unread).length;
+
+    // The row's insides, lifted out because the row is a button most of the
+    // time and a plain div while a download is running.
+    const notice = (
+        <>
+            <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-900 dark:text-white">
+                {summary}
+            </span>
+            {/* Never "Update" on its own. Each of the three says what the press
+                actually does: fetch it, go and get it, or close the app. */}
+            <span className="shrink-0 text-[10px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                {verb}
+            </span>
+        </>
+    );
 
     const close = useCallback(() => setOpen(false), []);
 
@@ -110,15 +157,15 @@ export default function NotificationsMenu({ items = [], onMarkAllRead }) {
     return (
         <div className="shrink-0 app-no-drag">
             <Tooltip
-                label={update ? `Version ${update.version} is available` : 'Notifications'}
+                label={summary || 'Notifications'}
                 enabled={!open}
             >
                 <button
                     ref={btnRef}
                     aria-haspopup="dialog"
                     aria-expanded={open}
-                    aria-label={update
-                        ? `Notifications, version ${update.version} is available`
+                    aria-label={summary
+                        ? `Notifications, ${summary.toLowerCase()}`
                         : (unread ? `Notifications (${unread} unread)` : 'Notifications')}
                     className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${
                         open
@@ -187,21 +234,18 @@ export default function NotificationsMenu({ items = [], onMarkAllRead }) {
                         row that is worth acting on rather than reading. */}
                     {update && (
                         <>
-                            <button
-                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800"
-                                onClick={() => { close(); download(); }}
-                            >
-                                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-900 dark:text-white">
-                                    Version {update.version} is available
-                                </span>
-                                {/* "Download" and not "Update": this opens the
-                                    browser at a file. Nothing installs itself,
-                                    and the label should not imply it does. */}
-                                <span className="shrink-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                    Download
-                                </span>
-                            </button>
+                            {act ? (
+                                <button
+                                    className={`${NOTICE} transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800`}
+                                    onClick={() => { close(); act(); }}
+                                >
+                                    {notice}
+                                </button>
+                            ) : (
+                                // A download in flight. Nothing to press, so
+                                // nothing that looks pressable.
+                                <div className={NOTICE}>{notice}</div>
+                            )}
                             {items.length > 0 && (
                                 <div className="-mx-1 my-1 border-t border-gray-100 dark:border-neutral-800" />
                             )}

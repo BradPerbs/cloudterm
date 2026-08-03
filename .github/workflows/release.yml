@@ -14,6 +14,14 @@
 # Running it by hand from the Actions tab builds the same artifacts and uploads
 # them for download without creating a release, which is the way to test a
 # change to this file.
+#
+# The release carries more than the installers. electron-builder writes a
+# `latest*.yml` beside each build describing what it just made, and the
+# `.blockmap` files next to them are what let an update download only the parts
+# that changed. Those are what the app reads to update itself, so a release
+# missing them is a release nobody can update to. `--publish never` below only
+# turns off uploading; the manifests are written either way, and a step in each
+# build job fails if one is not.
 
 name: Release
 
@@ -55,13 +63,18 @@ jobs:
           # for. So the install stays native and claude-target names the one
           # package swapped afterwards, once the build tools have done their
           # work and only the shipped binary is still in question.
+          #
+          # `--mac` and not `--mac dmg`, so the zip in the mac target list gets
+          # built too. Squirrel updates a mac app from a zip and will not touch
+          # a dmg, so the dmg is what a person downloads and the zip is what the
+          # app downloads.
           - name: macos-x64
             os: macos-latest
-            args: --mac dmg --x64
+            args: --mac --x64
             claude-target: darwin-x64
           - name: macos-arm64
             os: macos-latest
-            args: --mac dmg --arm64
+            args: --mac --arm64
           - name: linux-x64
             os: ubuntu-latest
             args: --linux AppImage --x64
@@ -152,6 +165,29 @@ jobs:
           # electron-builder hunts for one and fails the macOS build.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      # The app reads this file to find out a release exists, so a build that
+      # did not write one produces an installer nobody can update from, and
+      # nothing else about the build looks wrong. Printed as well as checked:
+      # the version and the file names in it are worth a glance in the log.
+      - name: Check the update manifest was written
+        shell: bash
+        run: |
+          set -e
+          case "${{ matrix.name }}" in
+            windows-*) manifest=latest.yml ;;
+            macos-*)   manifest=latest-mac.yml ;;
+            linux-*)   manifest=latest-linux.yml ;;
+          esac
+
+          if [ ! -f "dist/$manifest" ]; then
+            echo "dist/$manifest was not written. electron-builder produces it"
+            echo "from build.publish in package.json; check that it is still there."
+            ls -l dist
+            exit 1
+          fi
+
+          cat "dist/$manifest"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
@@ -159,6 +195,9 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.AppImage
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml
           if-no-files-found: error
           retention-days: 7
 
@@ -171,23 +210,48 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+      # For scripts/merge-update-manifests.js, and nothing else. No npm install:
+      # the script has no dependencies precisely so this step can stay this
+      # cheap.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Collect the builds
+        run: |
+          set -e
+
+          # Every runner writes into its own directory, so flatten first. The
+          # names carry their platform and architecture, so nothing collides.
+          find artifacts -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' \
+               -o -name '*.zip' -o -name '*.blockmap' \) \
+            -exec mv {} . \;
+
+          # One runner each, so these move like the binaries do.
+          find artifacts \( -name 'latest.yml' -o -name 'latest-linux.yml' \) -exec mv {} . \;
+
+          # macOS is the exception. Two runners each wrote a latest-mac.yml
+          # describing only its own architecture, and moving them both here
+          # would leave whichever landed second. Merged instead, because an
+          # Intel Mac reading an arm64-only manifest does not fail: it quietly
+          # downloads the arm64 build.
+          node scripts/merge-update-manifests.js latest-mac.yml \
+            $(find artifacts -name 'latest-mac.yml' | sort)
+
+          ls -lh *.exe *.dmg *.AppImage *.zip *.yml
 
       - name: Attach the builds to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Every runner writes into its own directory, so flatten first.
-          find artifacts -type f \
-            \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' \) \
-            -exec mv {} . \;
-
-          ls -lh *.exe *.dmg *.AppImage
-
+          # The manifests and blockmaps go up with the installers. The app looks
+          # for them by name on the release, so a release without them is one
+          # the previous version cannot update to.
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            *.exe *.dmg *.AppImage
+            *.exe *.dmg *.AppImage *.zip *.blockmap *.yml
