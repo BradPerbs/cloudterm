@@ -2,15 +2,15 @@ import { Clock01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 
 /**
- * The conversations this run of the app still has, and the way back into one.
+ * The conversations the app still has, and the way back into one.
  *
  * Starting a new chat parks the old one rather than ending it, so everything
  * listed here can be reopened and carried on: the provider is handed back the
  * session it was using and picks up where it stopped.
  *
- * The list is per run of the app. Nothing is written to disk, which is the
- * honest position for a transcript full of command output from production
- * boxes until there is a retention setting saying otherwise.
+ * The list outlives the app now, not just the window: the last twenty are
+ * written to the userData directory and read back at launch (see
+ * `main/ai/archive.js`). Removing a row here is what deletes one for good.
  */
 
 /** Ages in this list are minutes and hours, not dates. */

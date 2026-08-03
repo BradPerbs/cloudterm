@@ -412,11 +412,18 @@ function AssistantConversation({
                 />
             </header>
 
-            {/* Transcript. One spacing step, owned here, not by the items. */}
+            {/* Transcript. One spacing step, owned here, not by the items.
+
+                `assistant-prose` opts the whole column back into text
+                selection, which the shell turns off everywhere else, and
+                repaints the highlight in the app's own colours. See the note
+                on it in input.css. The controls inside opt back out
+                individually: dragging across a transcript should pick up the
+                reply, not the label on the button next to it. */}
             <div
                 ref={scrollRef}
                 onScroll={onScroll}
-                className={`flex-1 min-h-0 overflow-y-auto px-3 space-y-3
+                className={`assistant-prose flex-1 min-h-0 overflow-y-auto px-3 space-y-3
                     ${empty ? '' : 'py-3'}`}
             >
                 {assistant.failure && <Notice item={{ tone: 'error', text: assistant.failure }} />}
@@ -464,7 +471,7 @@ function AssistantConversation({
                                     key={prompt}
                                     type="button"
                                     className="w-full min-h-9 px-3 py-2 rounded-lg text-xs text-left
-                                        transition-colors
+                                        select-none transition-colors
                                         text-gray-600 dark:text-gray-400
                                         bg-gray-50 dark:bg-white/[0.035]
                                         hover:bg-gray-100 dark:hover:bg-white/[0.06]
@@ -478,7 +485,8 @@ function AssistantConversation({
                                     type="button"
                                     onClick={onOpenSettings}
                                     className="w-full h-12 px-3 rounded-xl flex items-center
-                                        justify-center gap-1.5 text-xs font-medium transition-colors
+                                        justify-center gap-1.5 text-xs font-medium
+                                        select-none transition-colors
                                         border border-dashed
                                         border-gray-300 dark:border-white/[0.14]
                                         text-gray-500 dark:text-gray-500
@@ -498,7 +506,7 @@ function AssistantConversation({
                     if (item.kind === 'user') {
                         return (
                             <div key={item.id} className="flex justify-end">
-                                <div className="max-w-[88%] px-3 py-2 rounded-2xl rounded-br-md
+                                <div className="assistant-bubble max-w-[88%] px-3 py-2 rounded-2xl rounded-br-md
                                     bg-gray-900 dark:bg-white text-white dark:text-black
                                     text-[13px] leading-relaxed whitespace-pre-wrap break-words">
                                     {item.text}

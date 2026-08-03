@@ -45,6 +45,54 @@ select,
     user-select: text;
 }
 
+/* The assistant's transcript is the one part of the chrome that is a document:
+   a reply is something you read, quote into a ticket and paste into a shell. So
+   it selects and copies like one, and the pointer over it says so.
+
+   The highlight is the app's own palette rather than the shell's yellow, which
+   is set on the root in App.jsx and would otherwise reach in here. `--app-active`
+   is the step the app already uses for a control being pressed, so it sits a
+   clear notch above the panel behind it and follows a custom theme without
+   anything here having to know about one. Light mode is not themeable (only the
+   dark ramp is; see lib/app-colors.js), so it gets a neutral wash.
+
+   `color: inherit` keeps each run of text its own colour, so a code span, a
+   heading and a table cell all stay legible under the same highlight. */
+.assistant-prose {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: auto;
+}
+
+/* `:root` is here to win, not to narrow: the shell's own selection utilities
+   are emitted after this file's rules, so an override that matched on the class
+   alone would tie on specificity and lose on order. */
+:root .assistant-prose::selection,
+:root .assistant-prose ::selection {
+    background-color: rgb(15 23 42 / 0.15);
+    color: inherit;
+}
+
+:root.dark .assistant-prose::selection,
+:root.dark .assistant-prose ::selection {
+    background-color: rgb(var(--app-active));
+    color: inherit;
+}
+
+/* The user's own messages are drawn inverted, white on black in light mode and
+   black on white in dark, so the highlight inverts with them. The panel's own
+   selection colour is picked to sit on the panel, and behind a bubble it is
+   either invisible or dark enough to bury the text on it. */
+:root .assistant-prose .assistant-bubble::selection,
+:root .assistant-prose .assistant-bubble ::selection {
+    background-color: rgb(255 255 255 / 0.3);
+}
+
+:root.dark .assistant-prose .assistant-bubble::selection,
+:root.dark .assistant-prose .assistant-bubble ::selection {
+    background-color: rgb(15 23 42 / 0.22);
+}
+
 /* Icons and logos should not tear off as drag ghosts. */
 img,
 svg {

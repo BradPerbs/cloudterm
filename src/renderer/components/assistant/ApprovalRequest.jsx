@@ -73,7 +73,7 @@ const SETTLED = {
  * are `Button`'s `outline` variant, as a full-width row. Keep them in step.
  */
 const CHOICE = `w-full h-9 px-2.5 flex items-center gap-2.5 rounded-lg text-left
-    text-xs font-medium transition-colors outline-none border
+    text-xs font-medium select-none transition-colors outline-none border
     text-gray-800 dark:text-gray-200
     border-gray-300 dark:border-white/[0.16]
     hover:bg-gray-100 hover:border-gray-400

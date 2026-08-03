@@ -17,6 +17,17 @@ const HEADING = /^(#{1,4})\s+(.*)$/;
 const BULLET = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/;
 
+/**
+ * The rule under a table's header: `|---|---|`, `| :-- | --: |`, and so on.
+ *
+ * This is the whole of what makes a table a table. A line with pipes in it is
+ * just a sentence with pipes in it, which is why the header row is never
+ * matched on its own: the rule underneath is the thing that says the line above
+ * it was a header, and the two are only believed together, with the same number
+ * of cells in each.
+ */
+const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
 /** Inline spans: code first, so nothing inside backticks is styled further. */
 function inline(text, keyPrefix) {
     const nodes = [];
@@ -68,6 +79,105 @@ function CodeBlock({ code, language }) {
             <pre className="px-3 py-2 overflow-x-auto bg-gray-50 dark:bg-surface-base">
                 <code className="font-jetbrains text-xs leading-relaxed whitespace-pre">{code}</code>
             </pre>
+        </div>
+    );
+}
+
+/**
+ * One row's cells.
+ *
+ * Split on pipes, with the border pair at each end dropped as delimiters rather
+ * than as empty cells: `| | b |` is a blank first column, not a single column
+ * called `b`. A pipe that is part of the text is written `\|` and is put back
+ * here, which is the only escape this needs to understand.
+ */
+function splitCells(line) {
+    let text = line.trim();
+    if (text.startsWith('|')) text = text.slice(1);
+    if (text.endsWith('|') && !text.endsWith('\\|')) text = text.slice(0, -1);
+
+    const cells = [];
+    let current = '';
+
+    for (let index = 0; index < text.length; index += 1) {
+        if (text[index] === '\\' && text[index + 1] === '|') {
+            current += '|';
+            index += 1;
+        } else if (text[index] === '|') {
+            cells.push(current);
+            current = '';
+        } else {
+            current += text[index];
+        }
+    }
+    cells.push(current);
+
+    return cells.map(cell => cell.trim());
+}
+
+/** Which way a column is set, from the colons on its rule cell. */
+function alignmentOf(cell) {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) return 'text-center';
+    if (right) return 'text-right';
+    return 'text-left';
+}
+
+/** A short row is padded and a long one is cut, so every row is one width. */
+function fitRow(cells, width) {
+    const row = cells.slice(0, width);
+    while (row.length < width) row.push('');
+    return row;
+}
+
+/**
+ * A table, sized for a side panel.
+ *
+ * The table takes the panel's width and its cells wrap, rather than running to
+ * their natural width and scrolling: what the assistant puts in a table here is
+ * usually sentences (a host and what is wrong with it), and a column of prose
+ * that has to be scrolled sideways one line at a time is worse than a narrow
+ * one that wraps. The wrapper still scrolls, for the table with six columns
+ * that cannot be squeezed into 340px however hard it wraps.
+ */
+function Table({ header, rows, align }) {
+    return (
+        <div className="[&:not(:first-child)]:mt-2 overflow-x-auto rounded-lg
+            border border-gray-200 dark:border-surface-control">
+            <table className="w-full border-collapse text-[12px] leading-snug">
+                <thead>
+                    <tr className="bg-gray-50 dark:bg-surface-base">
+                        {header.map((cell, column) => (
+                            <th
+                                key={`th${column}`}
+                                scope="col"
+                                className={`px-2.5 py-1.5 align-top break-words font-semibold
+                                    text-gray-900 dark:text-white ${align[column]}`}
+                            >
+                                {inline(cell, `th${column}`)}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row, index) => (
+                        <tr
+                            key={`tr${index}`}
+                            className="border-t border-gray-200 dark:border-surface-control"
+                        >
+                            {row.map((cell, column) => (
+                                <td
+                                    key={`td${index}-${column}`}
+                                    className={`px-2.5 py-1.5 align-top break-words ${align[column]}`}
+                                >
+                                    {inline(cell, `td${index}-${column}`)}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
@@ -130,6 +240,41 @@ export default function Markdown({ text = '' }) {
             closeParagraph();
             closeList();
             continue;
+        }
+
+        // A table, if the line under this one is a rule of the same width.
+        // Checked before the block kinds below, because a header row is
+        // otherwise indistinguishable from a paragraph with pipes in it.
+        if (line.includes('|') && index + 1 < lines.length && TABLE_RULE.test(lines[index + 1])) {
+            const header = splitCells(line);
+            const rule = splitCells(lines[index + 1]);
+
+            if (header.length > 1 && header.length === rule.length) {
+                closeParagraph();
+                closeList();
+
+                const rows = [];
+                index += 2;
+                // Runs to the blank line that ends the block, or to the first
+                // line with no pipe in it: the assistant writes a sentence
+                // straight under a table often enough that swallowing it as a
+                // one-cell row would be the more surprising reading.
+                while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
+                    rows.push(fitRow(splitCells(lines[index]), header.length));
+                    index += 1;
+                }
+                index -= 1;
+
+                blocks.push(
+                    <Table
+                        key={`t${key++}`}
+                        header={header}
+                        rows={rows}
+                        align={rule.map(alignmentOf)}
+                    />
+                );
+                continue;
+            }
         }
 
         const heading = line.match(HEADING);

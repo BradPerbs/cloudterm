@@ -82,11 +82,15 @@ export default function ToolCall({ item }) {
 
     return (
         <div className="rounded-lg bg-gray-50 dark:bg-white/[0.035] overflow-hidden">
+            {/* Not selectable, unlike the output it opens: this row is a
+                control, and dragging across a transcript should pick up what
+                the server said rather than the label on the toggle. */}
             <button
                 type="button"
                 onClick={() => setOpen(value => !value)}
                 disabled={!expandable}
-                className="w-full h-8 px-2.5 flex items-center gap-2 text-left transition-colors
+                className="w-full h-8 px-2.5 flex items-center gap-2 text-left select-none
+                    transition-colors
                     hover:bg-gray-100 dark:hover:bg-white/[0.06] disabled:hover:bg-transparent
                     disabled:cursor-default"
             >

@@ -1,6 +1,7 @@
 const settings = require('./settings');
 const prompt = require('./prompt');
 const catalog = require('./tools');
+const archive = require('./archive');
 const transcript = require('../transcript');
 const activity = require('../activity');
 
@@ -16,6 +17,11 @@ const activity = require('../activity');
  * also what makes a window reload survivable: the events are kept here, and a
  * panel that comes back asks for them and rebuilds itself. The conversation
  * itself never lived in the window.
+ *
+ * The same stream is what `archive.js` writes to disk, so it survives the app
+ * closing as well as the window. Only the cheap half is kept: a restored
+ * conversation has a transcript and the agent's own id for it, and starts its
+ * query again on the next message, exactly as a parked one does.
  */
 
 const PROVIDERS = {
@@ -93,7 +99,48 @@ function nextId(prefix) {
  * Conversations
  * ------------------------------------------------------------------ */
 
+/**
+ * Read the stored conversations back, once per run.
+ *
+ * Lazy rather than done at startup: this needs `app.getPath`, and every path
+ * into this module arrives from the renderer, which is long past ready. Every
+ * public function that touches the map calls it, so no caller has to remember.
+ */
+let hydrated = false;
+
+function hydrate() {
+    if (hydrated) return;
+    hydrated = true;
+
+    // Writing is safe again from here: this is the moment the map holds the
+    // conversations rather than nothing. A shutdown stopped it precisely
+    // because an empty map is not an empty history, and this is the other end
+    // of that. See `shutdown`.
+    archive.resume();
+
+    const provider = settings.get().provider;
+    for (const record of archive.read()) {
+        const conversation = archive.unpack(record, provider);
+        if (conversation && !conversations.has(conversation.id)) {
+            conversations.set(conversation.id, conversation);
+        }
+    }
+}
+
+/**
+ * What is written out: the most recent conversations that have something in
+ * them. A panel opens a conversation the moment it is mounted, so without the
+ * title check the history menu would fill up with blank entries nobody started.
+ */
+archive.setSource(() => [...conversations.values()]
+    .filter(conversation => conversation.title || conversation.events.length > 0)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, archive.MAX_CONVERSATIONS)
+    .map(archive.pack));
+
 function create({ scope = 'session', sessionId = '' } = {}) {
+    hydrate();
+
     const id = nextId('conv');
     conversations.set(id, {
         id,
@@ -105,6 +152,11 @@ function create({ scope = 'session', sessionId = '' } = {}) {
         busy: false,
         lastContext: '',
         providerSessionId: '',
+        // Which agent owns `providerSessionId`, set when a query actually
+        // starts. Kept because an id from one agent means nothing to another,
+        // and after a restart the selected agent may not be the one that
+        // held this conversation.
+        provider: '',
         needsRestart: false,
         costUsd: 0,
         // Taken from the first thing the user says, which is what the history
@@ -130,7 +182,13 @@ function trim() {
 
     const parked = [...conversations.values()]
         .filter(conversation => !conversation.session && !conversation.starting && !conversation.busy)
-        .sort((a, b) => a.updatedAt - b.updatedAt);
+        // Untitled first, then oldest. Nothing was ever said in an untitled
+        // one: the panel opens a conversation the moment it is mounted, and a
+        // scratch conversation nobody typed into should not be able to push a
+        // week of real history off the end of the list.
+        .sort((a, b) => (
+            Number(Boolean(a.title)) - Number(Boolean(b.title)) || a.updatedAt - b.updatedAt
+        ));
 
     for (const conversation of parked) {
         if (excess <= 0) break;
@@ -158,14 +216,21 @@ function emit(conversation, event) {
         conversation.events.splice(0, conversation.events.length - MAX_EVENTS);
     }
     notify('ai-event', { conversationId: conversation.id, event: stamped });
+
+    // A stream preview is not worth a write of its own: the finished block that
+    // replaces it is an event in its own right, and that one schedules one.
+    if (!archive.isTransient(stamped.type)) archive.save();
 }
 
 /** Point an existing conversation at a different session, or at all of them. */
 function setScope(conversationId, { scope, sessionId = '' }) {
+    hydrate();
+
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: false, message: 'That conversation is gone' };
     conversation.scope = scope === 'global' ? 'global' : 'session';
     conversation.boundSessionId = conversation.scope === 'session' ? sessionId : '';
+    archive.save();
     return { success: true, scope: conversation.scope, sessionId: conversation.boundSessionId };
 }
 
@@ -350,6 +415,20 @@ function ensureProvider(conversation) {
         commandMode: resolved().commandMode,
     });
 
+    // A session id belongs to the agent that issued it. Switching agents
+    // mid-conversation, or coming back to a stored one after the setting
+    // changed, leaves an id that the new agent would either refuse or, worse,
+    // resolve to something else entirely. So it is dropped, and the transcript
+    // is what carries on rather than the model's memory of it.
+    if (conversation.provider && conversation.provider !== current.provider) {
+        conversation.providerSessionId = '';
+    }
+
+    // Whose session id the conversation is about to be holding. Recorded before
+    // the start rather than after it, because a query that fails on the way up
+    // can still have announced a session first.
+    conversation.provider = current.provider;
+
     conversation.starting = provider.start({
         settings: current,
         // Read again on every tool call, so tightening the approval policy
@@ -467,6 +546,8 @@ function summarise(input) {
  * change keeps the cached prefix intact for the turns where nothing moved.
  */
 async function send(conversationId, text) {
+    hydrate();
+
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: false, message: 'That conversation is gone' };
 
@@ -537,6 +618,8 @@ async function interrupt(conversationId) {
  * already passes that id back as `resumeSessionId`.
  */
 async function park(conversationId) {
+    hydrate();
+
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
 
@@ -549,9 +632,15 @@ async function park(conversationId) {
 }
 
 async function close(conversationId) {
+    hydrate();
+
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
     conversations.delete(conversationId);
+    // Thrown away for good, so it goes from the file too. Suspended during a
+    // shutdown, which closes every conversation without meaning to forget any
+    // of them.
+    archive.save();
     try {
         // As in `restart`: a query still coming up has to be waited for, or it
         // outlives the conversation it belonged to.
@@ -565,6 +654,8 @@ async function close(conversationId) {
 
 /** Everything a panel needs to rebuild itself after a window reload. */
 function history(conversationId) {
+    hydrate();
+
     const conversation = conversations.get(conversationId);
     if (!conversation) return { found: false, events: [] };
     return {
@@ -579,13 +670,16 @@ function history(conversationId) {
 }
 
 /**
- * Every conversation this run of the app still holds, newest first.
+ * Every conversation the app still holds, newest first.
  *
- * Both the ones with a query running and the ones parked, because from the
- * panel's side that difference is invisible: picking either reads the same
- * event log back, and only sending into it starts anything.
+ * The ones with a query running, the ones parked, and the ones read back off
+ * disk from an earlier run, because from the panel's side those differences are
+ * invisible: picking any of them reads the same event log back, and only
+ * sending into it starts anything.
  */
 function list() {
+    hydrate();
+
     return [...conversations.values()]
         .map(conversation => ({
             conversationId: conversation.id,
@@ -670,8 +764,20 @@ function status() {
     };
 }
 
-/** Tear every conversation down, for a lock or a quit. */
+/**
+ * Tear every conversation down, for a lock or a quit.
+ *
+ * Written out first, and then no further writes at all: `close` empties the map
+ * the archive reads from, so a save landing any time after this point would
+ * faithfully record that there is nothing left. Writing stays off until
+ * `hydrate` fills the map again, which is deliberately not something this
+ * function does on its way out: `will-quit` flushes a moment later, and by then
+ * the only honest answer is the one already on disk.
+ */
 async function shutdown() {
+    archive.flush();
+    archive.suspend();
+
     const ids = [...conversations.keys()];
     await Promise.all(ids.map(id => close(id)));
     for (const entry of [...pendingApprovals.values()]) {
@@ -681,6 +787,12 @@ async function shutdown() {
         entry.resolve({ success: false, message: 'The app closed the conversation.' });
         pendingActions.delete(requestId);
     }
+
+    // Nothing is held in memory any more, so the next window reads the file
+    // again, and turns writing back on when it does. That is not only the next
+    // launch: on macOS the window closes through here and the app stays running
+    // to be reopened from the dock.
+    hydrated = false;
 }
 
 module.exports = {

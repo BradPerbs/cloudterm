@@ -188,6 +188,21 @@ function applyEvent(state, event) {
             draft = emptyDraft();
             break;
 
+        // A line the app wrote into the transcript itself, rather than anything
+        // the model said. The main process uses it to close out a conversation
+        // read back from disk whose last turn never finished, because the
+        // process running it went away.
+        case 'notice':
+            busy = false;
+            items.push({
+                kind: 'notice',
+                id: `nx-${event.at}-${items.length}`,
+                tone: event.tone || 'info',
+                text: event.text,
+            });
+            draft = emptyDraft();
+            break;
+
         case 'tool-failed':
             items.push({
                 kind: 'notice',
