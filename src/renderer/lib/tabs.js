@@ -15,6 +15,50 @@
  */
 
 /**
+ * Which of several sessions on the same host each one is.
+ *
+ * Four terminals on `web-01` are four tabs reading `web-01`, and the
+ * assistant's scope menu lists the same four indistinguishable rows. Picking
+ * the right one is a guess, which is no way to choose the box a command is
+ * about to run on. So each gets an ordinal: the first `web-01` is 1, the next
+ * is 2, counted the way you read the window, left to right along the strip and
+ * top to bottom within a split.
+ *
+ * A host with one session open gets nothing back. Numbering something that is
+ * already the only one of its kind is noise, and sameness is the whole problem
+ * being solved here.
+ *
+ * Positional, so closing the first of three renumbers the two behind it. That
+ * is the honest reading of "the second web-01": the second one you can see, not
+ * the second one ever opened. Numbers that outlived their neighbours would
+ * drift into a strip of two tabs labelled 3 and 7.
+ *
+ * `entries` are `{ id, key }` in that reading order, `key` being whatever
+ * counts as the same host. Returns a Map of id to ordinal holding only the ids
+ * that need one, so a caller can ask for any id and get `undefined` for the
+ * ones that should stay unnumbered.
+ */
+export function numberSessions(entries) {
+    const totals = new Map();
+    for (const entry of entries || []) {
+        if (!entry?.key) continue;
+        totals.set(entry.key, (totals.get(entry.key) || 0) + 1);
+    }
+
+    const ordinals = new Map();
+    const seen = new Map();
+
+    for (const entry of entries || []) {
+        if (!entry?.key || totals.get(entry.key) < 2) continue;
+        const ordinal = (seen.get(entry.key) || 0) + 1;
+        seen.set(entry.key, ordinal);
+        ordinals.set(entry.id, ordinal);
+    }
+
+    return ordinals;
+}
+
+/**
  * The palette. Every colour is used as a solid mark and as a wash behind a
  * group, so each carries both: `hex` for the mark, `tint`/`wash` at the low
  * alphas that survive being laid over either theme's background.

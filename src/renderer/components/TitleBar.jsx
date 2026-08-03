@@ -311,6 +311,24 @@ function SessionTab({
             </span>
             <span className="truncate flex-1 text-left min-w-0">{tab.title}</span>
 
+            {/* Which of several sessions on this host it is. Beside the title
+                rather than inside it: appended to the string it would be the
+                first thing the truncation ate, and it is the only thing on the
+                tab telling it from the one next to it.
+
+                Not the pane pill's shape either. That is a count and this is a
+                name, so it is drawn quietly, as part of what the tab is
+                called. */}
+            {tab.ordinal > 0 && (
+                <span
+                    className="shrink-0 text-[10px] font-semibold tabular-nums
+                        text-gray-400 dark:text-gray-500"
+                    title={`Session ${tab.ordinal} on this host`}
+                >
+                    #{tab.ordinal}
+                </span>
+            )}
+
             {/* A split tab shows only its focused pane's
                 name, so say how many others are behind it. */}
             {tab.paneCount > 1 && (

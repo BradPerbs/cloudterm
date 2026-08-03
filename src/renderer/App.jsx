@@ -25,6 +25,7 @@ import {
     createGroup,
     joinGroup,
     nextGroupColor,
+    numberSessions,
     suggestGroupName,
 } from './lib/tabs';
 import {
@@ -1239,6 +1240,30 @@ function App() {
     }, []);
 
     /**
+     * Which session is which, when several of them are on the same host.
+     *
+     * Computed once here rather than in each of the two places that show a
+     * session, because the whole value of the number is that the tab and the
+     * assistant's scope menu agree on it. Two lists counting separately would
+     * be worse than no numbers at all: they would look authoritative and point
+     * at different terminals.
+     *
+     * Every terminal pane is counted, connected or not, so a session dropping
+     * does not silently renumber the ones beside it.
+     */
+    const sessionOrdinals = useMemo(() => {
+        const entries = [];
+        for (const tab of tabs) {
+            if (tab.type !== 'terminal') continue;
+            for (const pane of collectPanes(tab.layout)) {
+                if (pane.mode !== 'terminal') continue;
+                entries.push({ id: pane.id, key: pane.host?.id || pane.title || '' });
+            }
+        }
+        return numberSessions(entries);
+    }, [tabs]);
+
+    /**
      * What the tab strip needs to know, which is about the tab's focused pane
      * rather than the tab. Derived rather than mirrored into the tab, so a
      * split can never leave the strip describing a pane that is gone.
@@ -1256,6 +1281,10 @@ function App() {
             // after a split changes which pane is focused.
             title: tab.customTitle || focused?.title || 'Session',
             renamed: Boolean(tab.customTitle),
+            // Which `web-01` this one is, when it is not the only one open. A
+            // tab the user has named is already telling them apart, so it is
+            // left alone: a number on a name somebody chose says nothing.
+            ordinal: tab.customTitle ? 0 : (sessionOrdinals.get(focused?.id) || 0),
             host: focused?.host,
             // One pane still dialling, or dropped, is worth showing on the tab.
             connected: sessions.length > 0 && sessions.every(pane => pane.connected),
@@ -1265,7 +1294,7 @@ function App() {
             sessionCount: sessions.length,
             liveCount: sessions.filter(pane => pane.connected).length,
         };
-    }), [tabs]);
+    }), [tabs, sessionOrdinals]);
 
     // Filter hosts and folders for current view
     const currentHosts = hosts.filter(h => (h.folderId || '') === currentFolderId);
@@ -1305,11 +1334,14 @@ function App() {
                     sessionId: pane.id,
                     hostName: pane.host?.name || pane.title || '',
                     address: pane.host?.host || '',
+                    // The same number the tab strip is showing, so "the second
+                    // web-01" means one terminal rather than two.
+                    ordinal: sessionOrdinals.get(pane.id) || 0,
                 });
             }
         }
         return sessions;
-    }, [tabs]);
+    }, [tabs, sessionOrdinals]);
 
     const activeSessionId = useMemo(() => {
         const tab = tabs.find(entry => entry.id === activeTabId);
@@ -1496,6 +1528,7 @@ function App() {
                                         ) : (
                                             <TerminalView
                                                 pane={pane}
+                                                ordinal={sessionOrdinals.get(pane.id) || 0}
                                                 terminalTheme={terminalTheme}
                                                 customTerminalTheme={customTerminalTheme}
                                                 terminalSettings={terminalSettings}

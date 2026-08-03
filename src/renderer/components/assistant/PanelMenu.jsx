@@ -29,6 +29,10 @@ import { Delete02Icon, Tick02Icon } from 'hugeicons-react';
  * on its own: that it is still being read, or that reading it failed and the
  * offer is to try again.
  *
+ * An option may carry a `badge`: a short string that sits beside the label
+ * instead of inside it, so it survives a name long enough to be truncated. The
+ * scope menu uses it to say which of four sessions on the same host a row is.
+ *
  * An option may also carry `onRemove`, which the history menu uses to throw a
  * conversation away. It is drawn beside the row rather than inside it, because
  * a button nested in a button is not a thing, and it only appears on hover: a
@@ -44,11 +48,27 @@ import { Delete02Icon, Tick02Icon } from 'hugeicons-react';
  */
 
 const ITEM = `w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left
-    transition-colors hover:bg-gray-100 dark:hover:bg-surface-control`;
+    transition-colors`;
 
-/** A step stronger than hover, so the current choice still reads as the current
- *  choice while the pointer is sitting on some other row. */
-const SELECTED = 'bg-gray-200/60 dark:bg-white/[0.09]';
+/** A row you are not on: nothing at rest, the ramp's first step under the pointer. */
+const HOVER = 'hover:bg-gray-100 dark:hover:bg-surface-control';
+
+/**
+ * The row you are on.
+ *
+ * The next step up the same ramp the hover uses, rather than a translucent
+ * white laid over the menu. Those are two different systems, and it showed:
+ * an overlay does not move when the app is retinted, so the current choice
+ * drifted grey against a themed hover sitting right above it.
+ *
+ * One step, not several. It has a tick as well, so this only has to answer
+ * "which one am I on" at a glance, and it has to keep doing that while the
+ * pointer is resting on some other row. Its own hover is a step further up
+ * again, or the row you are on would be the one row in the menu that does not
+ * respond to the pointer.
+ */
+const SELECTED = `bg-gray-200 dark:bg-surface-hover
+    hover:bg-gray-300 dark:hover:bg-surface-active`;
 
 const REMOVE = `absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md
     flex items-center justify-center transition-colors
@@ -136,7 +156,7 @@ export default function PanelMenu({
                                             if (option.value !== section.value) section.onChange(option.value);
                                         }}
                                         className={`${ITEM} ${option.onRemove ? 'pr-8' : ''}
-                                            ${option.value === section.value ? SELECTED : ''}`}
+                                            ${option.value === section.value ? SELECTED : HOVER}`}
                                     >
                                         {option.icon && (
                                             <span className={`w-4 h-4 flex items-center justify-center shrink-0
@@ -147,9 +167,22 @@ export default function PanelMenu({
                                             </span>
                                         )}
                                         <span className="flex-1 min-w-0">
-                                            <span className="block text-[13px] font-medium truncate
-                                                text-gray-900 dark:text-white">
-                                                {option.label}
+                                            <span className="flex items-baseline gap-1.5">
+                                                <span className="min-w-0 text-[13px] font-medium truncate
+                                                    text-gray-900 dark:text-white">
+                                                    {option.label}
+                                                </span>
+                                                {/* Beside the name rather than
+                                                    part of it, so a label long
+                                                    enough to be cut does not
+                                                    lose the one thing telling
+                                                    it from the row above. */}
+                                                {option.badge && (
+                                                    <span className="shrink-0 text-[10px] font-semibold
+                                                        tabular-nums text-gray-400 dark:text-neutral-500">
+                                                        {option.badge}
+                                                    </span>
+                                                )}
                                             </span>
                                             {option.hint && (
                                                 <span className="block text-[11px] leading-snug truncate

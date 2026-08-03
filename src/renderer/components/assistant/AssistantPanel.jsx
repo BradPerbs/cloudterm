@@ -163,6 +163,20 @@ function Usage({ account, rateLimit, costUsd, hasStoredKey }) {
     );
 }
 
+/**
+ * What to call one session.
+ *
+ * The ordinal is part of the name here rather than a badge beside it, unlike in
+ * the menu the name came from: these land in a sentence ("Ask about web-01 #2")
+ * and in the panel's own title, where there is nothing to hang a separate
+ * element off.
+ */
+function describeSession(session, fallback) {
+    if (!session) return fallback;
+    const name = session.hostName || session.address || 'Current session';
+    return session.ordinal > 0 ? `${name} #${session.ordinal}` : name;
+}
+
 function Notice({ item }) {
     const tone = item.tone === 'error'
         ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300'
@@ -353,18 +367,18 @@ function AssistantConversation({
      * itself the moment "All hosts" was picked, and the menu would describe the
      * same choice twice.
      */
-    const followLabel = useMemo(() => {
-        const target = sessions.find(session => session.sessionId === activeSessionId);
-        if (target) return target.hostName || target.address || 'Current session';
-        return 'Nothing connected';
-    }, [sessions, activeSessionId]);
+    const followLabel = useMemo(() => describeSession(
+        sessions.find(session => session.sessionId === activeSessionId),
+        'Nothing connected',
+    ), [sessions, activeSessionId]);
 
     /** What the panel is actually pointed at, for the title and placeholder. */
     const scopeLabel = useMemo(() => {
         if (pinned === 'global') return 'All hosts';
-        const target = sessions.find(session => session.sessionId === sessionId);
-        if (target) return target.hostName || target.address || 'Current session';
-        return 'No session open';
+        return describeSession(
+            sessions.find(session => session.sessionId === sessionId),
+            'No session open',
+        );
     }, [pinned, sessions, sessionId]);
 
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;

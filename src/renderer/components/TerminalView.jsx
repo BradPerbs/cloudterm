@@ -166,6 +166,11 @@ function fitToPane(term, fitAddon, container) {
  */
 function TerminalView({
     pane,
+    // Which of several sessions on the same host this one is, or 0 when it is
+    // the only one. Handed down rather than worked out here: the number only
+    // means anything across the whole window, and the tab strip and the
+    // assistant's scope menu have to agree with it.
+    ordinal = 0,
     terminalTheme,
     customTerminalTheme,
     terminalSettings = DEFAULT_TERMINAL_SETTINGS,
@@ -1175,6 +1180,21 @@ function TerminalView({
                     <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
                         {pane.title}
                     </span>
+
+                    {/* Which of several sessions on this host this pane is,
+                        matching the number on its tab and in the assistant's
+                        scope menu. Without it here, a split of three panes on
+                        one host is three identical headers, and "pin to
+                        web-01 #2" names a terminal you cannot find on screen. */}
+                    {ordinal > 0 && (
+                        <span
+                            className="shrink-0 text-[10px] font-semibold tabular-nums
+                                text-gray-400 dark:text-gray-500"
+                            title={`Session ${ordinal} on this host`}
+                        >
+                            #{ordinal}
+                        </span>
+                    )}
 
                     {/* Where `user@host` used to be written out.
 

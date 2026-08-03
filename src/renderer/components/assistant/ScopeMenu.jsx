@@ -39,6 +39,10 @@ export default function ScopeMenu({ pinned, onChange, sessions, followLabel, sco
             options: sessions.map(session => ({
                 value: session.sessionId,
                 label: session.hostName || session.address || session.sessionId,
+                // The number the tab strip is showing for this terminal, when
+                // it is one of several on the same host. Without it, four
+                // sessions on `web-01` are four rows nobody can choose between.
+                badge: session.ordinal > 0 ? `#${session.ordinal}` : '',
                 hint: session.hostName ? session.address : '',
                 icon: <ServerStack03Icon size={14} strokeWidth={1.5} />,
             })),
