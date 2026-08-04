@@ -40,6 +40,59 @@ const MAX_FILE_BYTES = 120000;
  * ------------------------------------------------------------------ */
 
 /**
+ * Whether the user has pinned this conversation to an explicit set of servers.
+ *
+ * The other two scopes are not fences. Following the session in front is a
+ * default for calls that name none, and "all hosts" is the absence of a limit.
+ * Only a set the user ticked is enforced here.
+ */
+function fenced(ctx) {
+    return ctx?.scope === 'targets';
+}
+
+/**
+ * Whether one session is inside the fence.
+ *
+ * Two ways in: the session itself was ticked, or the host behind it was. The
+ * second is what makes a pinned host mean the machine rather than one terminal
+ * on it, and it is also what lets `connect_host` be useful: the session it
+ * opens did not exist when the user was ticking boxes, and it has to be usable
+ * the moment it does.
+ */
+function sessionInScope(ctx, sessionId) {
+    if (!fenced(ctx)) return true;
+    if (ctx.sessionIds.includes(sessionId)) return true;
+    const info = transcript.info(sessionId);
+    return Boolean(info?.hostId && ctx.hostIds.includes(info.hostId));
+}
+
+function hostInScope(ctx, hostId) {
+    if (!fenced(ctx)) return true;
+    if (ctx.hostIds.includes(hostId)) return true;
+    // The host behind a pinned session, so a session opened from the Hosts page
+    // does not leave its own host unnameable.
+    return ctx.sessionIds.some(id => transcript.info(id)?.hostId === hostId);
+}
+
+/** What is inside the fence, named the way the tools take it. */
+function scopeSummary(ctx) {
+    const open = transcript.list().filter(session => sessionInScope(ctx, session.sessionId));
+    const parts = open.map(session => `${session.sessionId} (${session.hostName || session.address})`);
+    for (const hostId of ctx.hostIds) {
+        if (open.some(session => session.hostId === hostId)) continue;
+        parts.push(`host ${hostId} (not connected)`);
+    }
+    return parts.join(', ') || 'nothing that is currently open';
+}
+
+/** The refusal, written so the model's next move is a correct one. */
+function outOfScope(ctx, what) {
+    return `${what} is outside the set the user pinned this conversation to. `
+        + `In scope: ${scopeSummary(ctx)}. `
+        + 'Do not try to reach anything else; if the task needs it, say so and let the user widen the scope.';
+}
+
+/**
  * Which session a call is about.
  *
  * A tool may name one explicitly. When it does not, the session the panel is
@@ -47,20 +100,31 @@ const MAX_FILE_BYTES = 120000;
  * thing while looking at a server. With neither, the error lists what is open
  * rather than just saying no: the model's next move should be to pick one, and
  * it needs the ids to do that.
+ *
+ * A pinned set is enforced here, which is the one place every tool that touches
+ * a server passes through. Two servers ticked in the menu is a promise the app
+ * keeps, not an instruction the model agrees to and then forgets six calls
+ * later.
  */
 function resolveSession(input, ctx) {
     const requested = input?.session ? String(input.session) : '';
     const chosen = requested || ctx.boundSessionId || '';
 
     if (!chosen) {
-        const open = transcript.list();
+        const open = transcript.list().filter(session => sessionInScope(ctx, session.sessionId));
         if (open.length === 0) {
-            return { error: 'No sessions are open. Ask the user to connect to a host, or use connect_host.' };
+            return fenced(ctx)
+                ? { error: `Nothing in scope is open. In scope: ${scopeSummary(ctx)}.` }
+                : { error: 'No sessions are open. Ask the user to connect to a host, or use connect_host.' };
         }
         return {
             error: 'This call needs a session id. Open sessions: '
                 + open.map(s => `${s.sessionId} (${s.hostName || s.address})`).join(', '),
         };
+    }
+
+    if (!sessionInScope(ctx, chosen)) {
+        return { error: outOfScope(ctx, `Session "${chosen}"`) };
     }
 
     const info = transcript.info(chosen);
@@ -92,12 +156,28 @@ async function viaSftp(sessionId, fn) {
     return fail(result?.message || 'SFTP could not be opened on that session.');
 }
 
+/**
+ * Whether a saved host has a shell behind it.
+ *
+ * A record stored as `desktop.only` does not: it is an RDP or VNC box, usually
+ * a Windows one with no SSH server, and connecting to it opens a picture of a
+ * screen rather than a session anything here can act on. Every tool in this
+ * file works through a shell, so such a host is somewhere the assistant can
+ * read about but not work on.
+ */
+function hasShell(host) {
+    return !(host?.desktop?.enabled && host.desktop.only);
+}
+
 /** A saved host, with everything the assistant has no business seeing gone. */
 function publicHost(host) {
     return {
         id: host.id,
         name: host.name,
         protocol: host.protocol || 'ssh',
+        // Named as it is on an open session, and meaning the same thing: a
+        // target with no shell is a target no command can be run on.
+        canRunCommands: hasShell(host),
         address: host.protocol === 'serial'
             ? (host.serial?.path || '')
             : [host.host, host.port].filter(Boolean).join(':'),
@@ -125,18 +205,26 @@ const TOOLS = [
         description:
             'List the hosts saved in this SSH client, with their names, addresses, tags and folders. '
             + 'Use this to find the id of a host before connecting to it, or to answer questions about '
-            + 'what infrastructure the user has. Never returns passwords or keys.',
+            + 'what infrastructure the user has. A host with canRunCommands false is a remote desktop '
+            + 'with no shell behind it: it is part of their estate and you can talk about it, but you '
+            + 'cannot connect to it or run anything on it. Never returns passwords or keys.',
         shape: {
             query: z.string().optional().describe('Filter by name, address, or tag. Omit to list everything.'),
             limit: z.number().int().min(1).max(500).optional().describe('Maximum hosts to return. Defaults to 200.'),
         },
-        handler: async (input) => {
+        handler: async (input, ctx) => {
             const hosts = await store.getHosts();
             const folders = await store.getFolders();
             const folderName = new Map(folders.map(folder => [folder.id, folder.name]));
 
+            // A pinned conversation sees the hosts it was pinned to and no
+            // others. Returning the whole estate would be a list of machines
+            // that every other tool then refuses, which reads as a bug rather
+            // than as a boundary.
+            const reachable = hosts.filter(host => hostInScope(ctx, host.id));
+
             const needle = String(input.query || '').trim().toLowerCase();
-            const matched = hosts.filter((host) => {
+            const matched = reachable.filter((host) => {
                 if (!needle) return true;
                 const haystack = [
                     host.name, host.host, host.username,
@@ -150,6 +238,10 @@ const TOOLS = [
             return ok({
                 total: matched.length,
                 returned: Math.min(matched.length, limit),
+                scoped: fenced(ctx) || undefined,
+                note: fenced(ctx)
+                    ? 'Only the hosts the user pinned this conversation to are listed.'
+                    : undefined,
                 hosts: matched.slice(0, limit).map(host => ({
                     ...publicHost(host),
                     folder: folderName.get(host.folderId) || '',
@@ -168,10 +260,15 @@ const TOOLS = [
             + 'the user is looking at.',
         shape: {},
         handler: async (input, ctx) => {
-            const open = transcript.list();
+            const open = transcript.list().filter(session => sessionInScope(ctx, session.sessionId));
             return ok({
                 count: open.length,
                 current: ctx.boundSessionId || null,
+                scoped: fenced(ctx) || undefined,
+                note: fenced(ctx)
+                    ? 'Only the sessions the user pinned this conversation to are listed. '
+                        + 'Other terminals may be open; they are not yours to use.'
+                    : undefined,
                 sessions: open.map(session => ({
                     ...session,
                     current: session.sessionId === ctx.boundSessionId,
@@ -458,6 +555,22 @@ const TOOLS = [
             const host = hosts.find(entry => entry.id === input.hostId);
             if (!host) return fail(`There is no saved host with the id "${input.hostId}". Call list_hosts for the current list.`);
 
+            // Both checks come before the connection rather than after: a
+            // session opened out of scope, or into a desktop nothing can be run
+            // on, has already put a tab on the user's screen by the time the
+            // next tool call refuses it.
+            if (!hostInScope(ctx, host.id)) {
+                return fail(outOfScope(ctx, `The host "${host.name || host.id}"`));
+            }
+
+            if (!hasShell(host)) {
+                return fail(
+                    `"${host.name || host.id}" is a remote desktop with no shell behind it, so there is `
+                    + 'nothing here that can act on it. Connecting would open a screen the user has to '
+                    + 'drive themselves. Tell them that rather than trying another way in.'
+                );
+            }
+
             const result = await ctx.sessionAction({ action: 'connect', hostId: host.id, hostName: host.name });
             if (!result?.success) {
                 return fail(result?.message || `Could not connect to ${host.name}.`);
@@ -530,5 +643,7 @@ module.exports = {
     BY_NAME,
     isAutoApproved,
     resolveSession,
+    sessionInScope,
+    hostInScope,
     publicHost,
 };

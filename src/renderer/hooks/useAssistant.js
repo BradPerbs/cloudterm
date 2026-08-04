@@ -240,7 +240,18 @@ const INITIAL = {
     rateLimit: null,
 };
 
-export default function useAssistant({ scope, sessionId, enabled = true }) {
+/**
+ * The panel's target, as the main process takes it: a mode, the session a tool
+ * call falls back to when it names none, and the explicit set a pinned scope
+ * fences the conversation to. Built by `lib/assistant-scope`.
+ */
+export default function useAssistant({
+    scope,
+    sessionId,
+    sessionIds = [],
+    hostIds = [],
+    enabled = true,
+}) {
     const [state, setState] = useState(INITIAL);
     const [conversationId, setConversationId] = useState('');
     const [starting, setStarting] = useState(true);
@@ -252,6 +263,18 @@ export default function useAssistant({ scope, sessionId, enabled = true }) {
     // can filter on the current id without being torn down and rebuilt every
     // time the id changes.
     conversationRef.current = conversationId;
+
+    /**
+     * The target, as one value and as one dependency.
+     *
+     * Two arrays in a dependency list are two new identities on every render,
+     * which would push the scope over IPC on each one. The key is what the
+     * effect watches; the ref is what it sends, so a caller that does not
+     * memoise its arrays still gets exactly one call per real change.
+     */
+    const targetKey = `${scope}|${sessionId}|${sessionIds.join(',')}|${hostIds.join(',')}`;
+    const targetRef = useRef(null);
+    targetRef.current = { scope, sessionId, sessionIds, hostIds };
 
     /* Adopt the conversation from before a reload, or open a new one. */
     useEffect(() => {
@@ -272,7 +295,7 @@ export default function useAssistant({ scope, sessionId, enabled = true }) {
                     }
                 }
 
-                const created = await window.api.ai.start({ scope, sessionId });
+                const created = await window.api.ai.start(targetRef.current);
                 if (cancelled) return;
                 setConversationId(created.conversationId);
                 window.localStorage.setItem(STORAGE_KEY, created.conversationId);
@@ -301,11 +324,14 @@ export default function useAssistant({ scope, sessionId, enabled = true }) {
         return off;
     }, [enabled]);
 
-    /* Follow the pane the panel is pointed at. */
+    /* Follow the pane the panel is pointed at, or the set it is pinned to. */
     useEffect(() => {
         if (!conversationId) return;
-        window.api.ai.setScope(conversationId, scope, sessionId);
-    }, [conversationId, scope, sessionId]);
+        window.api.ai.setScope(conversationId, targetRef.current);
+        // `targetKey` is the target, flattened to something a dependency list
+        // can compare. See the note where it is built.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId, targetKey]);
 
     const send = useCallback(async (text) => {
         if (!conversationId) return;
@@ -368,11 +394,11 @@ export default function useAssistant({ scope, sessionId, enabled = true }) {
      */
     const reset = useCallback(async () => {
         if (conversationId) await window.api.ai.park(conversationId);
-        const created = await window.api.ai.start({ scope, sessionId });
+        const created = await window.api.ai.start(targetRef.current);
         setConversationId(created.conversationId);
         window.localStorage.setItem(STORAGE_KEY, created.conversationId);
         setState(INITIAL);
-    }, [conversationId, scope, sessionId]);
+    }, [conversationId]);
 
     /** Go back to an earlier conversation, replaying it through the reducer. */
     const open = useCallback(async (id) => {
@@ -396,13 +422,13 @@ export default function useAssistant({ scope, sessionId, enabled = true }) {
         if (!id) return;
         await window.api.ai.close(id);
         if (id === conversationId) {
-            const created = await window.api.ai.start({ scope, sessionId });
+            const created = await window.api.ai.start(targetRef.current);
             setConversationId(created.conversationId);
             window.localStorage.setItem(STORAGE_KEY, created.conversationId);
             setState(INITIAL);
         }
         await refreshConversations();
-    }, [conversationId, scope, sessionId, refreshConversations]);
+    }, [conversationId, refreshConversations]);
 
     return {
         items: state.items,

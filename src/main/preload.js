@@ -509,16 +509,20 @@ contextBridge.exposeInMainWorld('api', {
         // Write-only. The key goes in and never comes back out.
         setApiKey: (value) => ipcRenderer.invoke('ai-set-key', value),
 
-        start: ({ scope, sessionId } = {}) => ipcRenderer.invoke('ai-conversation-start', { scope, sessionId }),
+        // `sessionIds` and `hostIds` are the explicit set a pinned scope fences
+        // the conversation to. Empty for the two modes that are not a set.
+        start: ({ scope, sessionId, sessionIds, hostIds } = {}) =>
+            ipcRenderer.invoke('ai-conversation-start', { scope, sessionId, sessionIds, hostIds }),
         list: () => ipcRenderer.invoke('ai-conversation-list'),
         history: (conversationId) => ipcRenderer.invoke('ai-conversation-history', conversationId),
         // Releases the running query and keeps the transcript, so the
         // conversation can be picked up again from the history menu.
         park: (conversationId) => ipcRenderer.invoke('ai-conversation-park', conversationId),
         close: (conversationId) => ipcRenderer.invoke('ai-conversation-close', conversationId),
-        // Which session the panel is pointed at, or none for every host.
-        setScope: (conversationId, scope, sessionId) =>
-            ipcRenderer.invoke('ai-scope', { conversationId, scope, sessionId }),
+        // Which servers the panel is pointed at: the session in front, every
+        // host, or a pinned set of sessions and saved hosts.
+        setScope: (conversationId, target) =>
+            ipcRenderer.invoke('ai-scope', { conversationId, ...(target || {}) }),
 
         send: (conversationId, text) => ipcRenderer.invoke('ai-send', { conversationId, text }),
         interrupt: (conversationId) => ipcRenderer.invoke('ai-interrupt', conversationId),

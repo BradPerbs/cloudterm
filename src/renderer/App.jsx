@@ -19,6 +19,7 @@ import { useTerminalSettings } from './hooks/useTerminalSettings';
 import { useKeychain } from './hooks/useKeychain';
 import useSettingsSnapshot from './hooks/useSettingsSnapshot';
 import { APP_GUTTER } from './lib/layout';
+import { hostOs } from './lib/os-icons';
 import { tagCounts } from './lib/tags';
 import {
     createGroup,
@@ -140,14 +141,14 @@ function App() {
     activeNavRef.current = activeNav;
 
     /**
-     * Bumped when the chrome is used to ask for a page that is already up — the
+     * Bumped when the chrome is used to ask for a page that is already up: the
      * sidebar item you are standing on, the Home tab while Home is showing.
      *
      * That click has nothing to change, so on its own it does nothing at all,
      * and an editor sitting over the page stays there. But asking for a page
      * you can see is a way of asking for it back, which means what is over it
      * goes: this is the only signal that says so, since neither the section nor
-     * the tab has moved. Real navigation is not routed through here — leaving a
+     * the tab has moved. Real navigation is not routed through here: leaving a
      * page takes its sheet with it further down, and instantly, because that
      * sheet belongs to a page you are no longer looking at.
      */
@@ -1414,8 +1415,18 @@ function App() {
                 if (pane.mode !== 'terminal' || !pane.connected) continue;
                 sessions.push({
                     sessionId: pane.id,
+                    // The saved host this terminal came from, when it came from
+                    // one. It is what lets the scope menu say a host already
+                    // has sessions open, and what lets pinning that host cover
+                    // them without naming each one.
+                    hostId: pane.host?.id || '',
                     hostName: pane.host?.name || pane.title || '',
                     address: pane.host?.host || '',
+                    // The same pair the tab strip draws this session's icon
+                    // from, so a row in the assistant's picker and the tab it
+                    // refers to are recognisably the same machine.
+                    os: hostOs(pane.host),
+                    distro: pane.host?.distro || '',
                     // The same number the tab strip is showing, so "the second
                     // web-01" means one terminal rather than two.
                     ordinal: sessionOrdinals.get(pane.id) || 0,
@@ -1663,6 +1674,7 @@ function App() {
                 <AssistantPanel
                     open={assistantOpen}
                     sessions={assistantSessions}
+                    hosts={hosts}
                     activeSessionId={activeSessionId}
                     width={assistantWidth}
                     onWidthChange={setAssistantWidth}

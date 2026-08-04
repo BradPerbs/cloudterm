@@ -1,4 +1,5 @@
 const transcript = require('../transcript');
+const store = require('../store');
 
 /**
  * The system prompt.
@@ -65,17 +66,90 @@ function describeSession(session, current) {
     return parts.filter(Boolean).join(' ');
 }
 
+/** Where a saved host lives, for the one line that names it. */
+function hostAddress(host) {
+    if (!host) return '';
+    if (host.protocol === 'serial') return host.serial?.path || '';
+    return [host.host, host.port].filter(Boolean).join(':');
+}
+
 /**
- * The part that changes: what is open, and which of it the panel is pointed
- * at. Session scope is a default, not a fence: a question about a host is
- * often answered by looking at another one, and the user can see every session
- * in the list either way.
+ * The set the user pinned, spelled out.
+ *
+ * Every entry is named with the id the tools take, because the point of the
+ * block is that these are the only ids that will work. A pinned host is listed
+ * whether or not it is connected: an unopened one is a target with a step in
+ * front of it, not a target that is missing.
  */
-function situation({ scope, boundSessionId, host, commandMode }) {
+function pinned({ sessionIds, hostIds, boundSessionId }) {
+    const open = transcript.list();
+    const saved = hostIds.length > 0 ? store.getHosts() : [];
+    const total = sessionIds.length + hostIds.length;
+    const lines = [];
+
+    lines.push(
+        `The user has pinned this conversation to ${total === 1 ? 'one server' : `${total} servers`}, `
+        + 'listed below. Everything else is out of reach: the tools refuse any other session or host, '
+        + 'so do not plan a step that needs one. If the task cannot be done inside this set, say so '
+        + 'rather than working around it.',
+        '',
+        'In scope:'
+    );
+
+    for (const sessionId of sessionIds) {
+        const info = transcript.info(sessionId);
+        if (!info) {
+            lines.push(`- session ${sessionId}: closed since it was pinned, so nothing can run on it`);
+            continue;
+        }
+        lines.push(
+            `- session ${sessionId}: ${info.hostName || 'unnamed'}`
+            + `${info.address ? ` (${info.address})` : ''}`
+            + `${info.protocol && info.protocol !== 'ssh' ? ` [${info.protocol}]` : ''}`
+            + `${sessionId === boundSessionId ? ' <- calls that name no session act on this one' : ''}`
+        );
+    }
+
+    for (const hostId of hostIds) {
+        const host = saved.find(entry => entry.id === hostId);
+        const address = hostAddress(host);
+        const here = open.filter(session => session.hostId === hostId);
+
+        lines.push(
+            `- host ${hostId}: ${host?.name || 'unnamed'}${address ? ` (${address})` : ''}, `
+            + (here.length > 0
+                ? `already open as ${here.map(session => session.sessionId).join(', ')}, which are in scope too`
+                : 'not connected. Call connect_host with this id to open it')
+        );
+    }
+
+    if (!boundSessionId) {
+        lines.push(
+            '',
+            'More than one server is in scope, so nothing is assumed: name a session id on every call '
+            + 'that takes one. When a step applies to several, do them one at a time and attribute each '
+            + 'finding to the host it came from.'
+        );
+    }
+
+    return lines;
+}
+
+/**
+ * The part that changes: what is open, and which of it the panel is pointed at.
+ *
+ * Session scope is a default, not a fence: a question about a host is often
+ * answered by looking at another one, and the user can see every session in the
+ * list either way. A pinned set is the opposite, and says so, because there the
+ * user has answered "which servers" on purpose.
+ */
+function situation({ scope, boundSessionId, sessionIds = [], hostIds = [], host, commandMode }) {
     const open = transcript.list();
     const lines = [];
 
-    if (scope === 'session' && boundSessionId) {
+    if (scope === 'targets') {
+        lines.push(...pinned({ sessionIds, hostIds, boundSessionId }));
+    } else if (scope === 'session' && boundSessionId) {
         const info = transcript.info(boundSessionId);
         if (info) {
             lines.push(
@@ -97,13 +171,18 @@ function situation({ scope, boundSessionId, host, commandMode }) {
         );
     }
 
-    if (open.length > 0) {
-        lines.push('', `Open sessions (${open.length}):`);
-        for (const session of open) {
-            lines.push(describeSession(session, session.sessionId === boundSessionId));
+    // A pinned set has already named every session that can be used, with the
+    // ones that closed marked as such. Listing the rest underneath would be a
+    // list of ids that do not work.
+    if (scope !== 'targets') {
+        if (open.length > 0) {
+            lines.push('', `Open sessions (${open.length}):`);
+            for (const session of open) {
+                lines.push(describeSession(session, session.sessionId === boundSessionId));
+            }
+        } else {
+            lines.push('', 'No sessions are open at the moment.');
         }
-    } else {
-        lines.push('', 'No sessions are open at the moment.');
     }
 
     if (commandMode === 'background') {
@@ -120,7 +199,10 @@ function situation({ scope, boundSessionId, host, commandMode }) {
 function build(context) {
     const blocks = [BASE, '', '## Right now', '', situation(context)];
 
-    if (context.scope !== 'session') {
+    // Keyed on the default rather than the mode: a pinned set holding one
+    // session has one, and reads exactly like a single pin. Two of anything
+    // does not, whichever mode put them there.
+    if (!context.boundSessionId) {
         blocks.push(
             '',
             'Because no single session is pinned, be explicit in your reply about which host each '

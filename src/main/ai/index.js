@@ -138,14 +138,62 @@ archive.setSource(() => [...conversations.values()]
     .slice(0, archive.MAX_CONVERSATIONS)
     .map(archive.pack));
 
-function create({ scope = 'session', sessionId = '' } = {}) {
+/**
+ * Which servers a conversation is about, in the one shape the rest of this
+ * module reads.
+ *
+ *   global    everything, with nothing ruled out.
+ *
+ *   session   the session the panel is following. A default for tool calls that
+ *             name none, and deliberately not a fence: a question about one
+ *             server is often answered by looking at the one beside it.
+ *
+ *   targets   an explicit set of sessions and saved hosts, and nothing else.
+ *             This one is a fence, enforced in the tool handlers rather than
+ *             asked for in the prompt, because "only these two" is a promise
+ *             the app can keep and a sentence the model can only agree with.
+ *
+ * `boundSessionId` is what a call falls back to when it names no session. A
+ * pinned set has one only when there is a single session in it: guessing which
+ * of two servers "restart nginx" meant is the failure the set exists to
+ * prevent, so with two the tools ask for a name instead.
+ */
+function normalizeScope({ scope, sessionId = '', sessionIds = [], hostIds = [] } = {}) {
+    const sessions = Array.isArray(sessionIds) ? sessionIds.filter(Boolean).map(String) : [];
+    const hosts = Array.isArray(hostIds) ? hostIds.filter(Boolean).map(String) : [];
+
+    if (scope === 'global') {
+        return { scope: 'global', boundSessionId: '', sessionIds: [], hostIds: [] };
+    }
+
+    // An empty set is not a fence around nothing, it is someone who unpinned
+    // the last row. It falls back to following, which is where the panel puts
+    // itself in the same situation.
+    if (scope === 'targets' && sessions.length + hosts.length > 0) {
+        return {
+            scope: 'targets',
+            boundSessionId: sessions.length === 1 ? sessions[0] : '',
+            sessionIds: sessions,
+            hostIds: hosts,
+        };
+    }
+
+    return {
+        scope: 'session',
+        boundSessionId: String(sessionId || ''),
+        sessionIds: [],
+        hostIds: [],
+    };
+}
+
+function create(target = {}) {
     hydrate();
 
     const id = nextId('conv');
+    const scope = normalizeScope(target);
     conversations.set(id, {
         id,
-        scope,
-        boundSessionId: sessionId,
+        ...scope,
         session: null,
         starting: null,
         events: [],
@@ -167,7 +215,7 @@ function create({ scope = 'session', sessionId = '' } = {}) {
         updatedAt: Date.now(),
     });
     trim();
-    return { conversationId: id, scope, sessionId };
+    return { conversationId: id, ...scope };
 }
 
 /**
@@ -222,16 +270,17 @@ function emit(conversation, event) {
     if (!archive.isTransient(stamped.type)) archive.save();
 }
 
-/** Point an existing conversation at a different session, or at all of them. */
-function setScope(conversationId, { scope, sessionId = '' }) {
+/** Point an existing conversation at a different session, set, or all of them. */
+function setScope(conversationId, target) {
     hydrate();
 
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: false, message: 'That conversation is gone' };
-    conversation.scope = scope === 'global' ? 'global' : 'session';
-    conversation.boundSessionId = conversation.scope === 'session' ? sessionId : '';
+
+    const scope = normalizeScope(target);
+    Object.assign(conversation, scope);
     archive.save();
-    return { success: true, scope: conversation.scope, sessionId: conversation.boundSessionId };
+    return { success: true, ...scope };
 }
 
 function resolved() {
@@ -412,6 +461,8 @@ function ensureProvider(conversation) {
     const context = () => ({
         scope: conversation.scope,
         boundSessionId: conversation.boundSessionId,
+        sessionIds: conversation.sessionIds,
+        hostIds: conversation.hostIds,
         commandMode: resolved().commandMode,
     });
 
@@ -440,6 +491,11 @@ function ensureProvider(conversation) {
         toolContext: () => ({
             scope: conversation.scope,
             boundSessionId: conversation.boundSessionId,
+            // Read fresh on every call, like the settings above, so unticking a
+            // server mid-run takes it out of reach on the next tool call rather
+            // than the next conversation.
+            sessionIds: conversation.sessionIds,
+            hostIds: conversation.hostIds,
             settings: resolved(),
             sessionAction: (payload) => requestAction(conversation, payload),
         }),
@@ -570,6 +626,8 @@ async function send(conversationId, text) {
         const context = prompt.situation({
             scope: conversation.scope,
             boundSessionId: conversation.boundSessionId,
+            sessionIds: conversation.sessionIds,
+            hostIds: conversation.hostIds,
             commandMode: resolved().commandMode,
         });
 
@@ -663,6 +721,8 @@ function history(conversationId) {
         events: conversation.events,
         scope: conversation.scope,
         sessionId: conversation.boundSessionId,
+        sessionIds: conversation.sessionIds,
+        hostIds: conversation.hostIds,
         busy: conversation.busy,
         costUsd: conversation.costUsd,
         title: conversation.title,

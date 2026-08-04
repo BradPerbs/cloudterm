@@ -104,6 +104,11 @@ function pack(conversation) {
         id: conversation.id,
         scope: conversation.scope,
         sessionId: conversation.boundSessionId,
+        // The set a pinned conversation is fenced to. Session ids do not
+        // survive the app closing, and `unpack` drops them; host ids do, which
+        // is what lets "these two boxes" still mean something tomorrow.
+        sessionIds: conversation.sessionIds || [],
+        hostIds: conversation.hostIds || [],
         // The agent's own id for this chat, and which agent it belongs to. Both
         // or neither: see `unpack`.
         providerSessionId: conversation.providerSessionId || '',
@@ -176,10 +181,26 @@ function unpack(record, currentProvider) {
     const provider = typeof record.provider === 'string' ? record.provider : '';
     const resumable = provider && provider === currentProvider;
 
+    // The hosts of a pinned set outlive the app; its sessions do not. Every
+    // session id in a stored record belongs to a terminal that closed when the
+    // window did, so they are dropped and the hosts carry the fence. A set that
+    // was nothing but sessions falls back to following the session in front,
+    // which is what an empty set means everywhere else.
+    const hostIds = Array.isArray(record.hostIds) ? record.hostIds.filter(Boolean) : [];
+    const stillPinned = record.scope === 'targets' && hostIds.length > 0;
+
+    let scope = 'session';
+    if (record.scope === 'global') scope = 'global';
+    else if (stillPinned) scope = 'targets';
+
     return {
         id: record.id,
-        scope: record.scope === 'global' ? 'global' : 'session',
-        boundSessionId: typeof record.sessionId === 'string' ? record.sessionId : '',
+        scope,
+        boundSessionId: scope === 'session' && typeof record.sessionId === 'string'
+            ? record.sessionId
+            : '',
+        sessionIds: [],
+        hostIds: stillPinned ? hostIds : [],
         session: null,
         starting: null,
         events,

@@ -17,6 +17,16 @@ import ScopeMenu from './ScopeMenu';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
+import {
+    GLOBAL,
+    describe,
+    describeSession,
+    followScope,
+    globalScope,
+    prune,
+    toWire,
+    toggle,
+} from '../../lib/assistant-scope';
 
 /**
  * The assistant panel.
@@ -163,20 +173,6 @@ function Usage({ account, rateLimit, costUsd, hasStoredKey }) {
     );
 }
 
-/**
- * What to call one session.
- *
- * The ordinal is part of the name here rather than a badge beside it, unlike in
- * the menu the name came from: these land in a sentence ("Ask about web-01 #2")
- * and in the panel's own title, where there is nothing to hang a separate
- * element off.
- */
-function describeSession(session, fallback) {
-    if (!session) return fallback;
-    const name = session.hostName || session.address || 'Current session';
-    return session.ordinal > 0 ? `${name} #${session.ordinal}` : name;
-}
-
 function Notice({ item }) {
     const tone = item.tone === 'error'
         ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300'
@@ -224,11 +220,17 @@ function StreamingText({ text, onReveal }) {
  */
 function AssistantConversation({
     sessions,
+    hosts = [],
     activeSessionId,
     onOpenSettings,
     onClose,
 }) {
-    const [pinned, setPinned] = useState('follow');
+    /**
+     * Which servers this conversation is about: the session in front, every
+     * host, or an explicit set of sessions and saved hosts. See
+     * `lib/assistant-scope`, which owns the shape and the transitions.
+     */
+    const [scope, setScope] = useState(followScope);
     const [settings, setSettings] = useState(null);
     /**
      * The model list, as `{ provider, rows }`.
@@ -248,14 +250,12 @@ function AssistantConversation({
     const inputRef = useRef(null);
     const stickToBottom = useRef(true);
 
-    // `follow` tracks the pane in front; anything else is a deliberate pin and
-    // stays put while the user moves around the app.
-    const scope = pinned === 'global' ? 'global' : 'session';
-    const sessionId = pinned === 'follow'
-        ? activeSessionId
-        : (pinned === 'global' ? '' : pinned);
+    // `follow` is resolved against the pane in front here, so what goes over
+    // IPC is always a concrete answer. A pinned set stays put while the user
+    // moves around the app, which is the whole point of pinning it.
+    const target = useMemo(() => toWire(scope, activeSessionId), [scope, activeSessionId]);
 
-    const assistant = useAssistant({ scope, sessionId });
+    const assistant = useAssistant(target);
 
     // The model, the effort and the approval mode are all shown in the
     // composer, so the panel holds the settings rather than one field of them.
@@ -310,11 +310,12 @@ function AssistantConversation({
     }, []);
 
     // A session the panel was pinned to can be closed underneath it, which
-    // would otherwise leave it pointed at nothing with no sign of why.
+    // would otherwise leave it pointed at nothing with no sign of why. Pinned
+    // hosts survive: an unconnected host is still somewhere to work, and a
+    // session closing is often how one gets there.
     useEffect(() => {
-        if (pinned === 'follow' || pinned === 'global') return;
-        if (!sessions.some(session => session.sessionId === pinned)) setPinned('follow');
-    }, [sessions, pinned]);
+        setScope(current => prune(current, sessions.map(session => session.sessionId)));
+    }, [sessions]);
 
     // `preventScroll` because the card is mounted at its full width inside a
     // column that is still only a rail wide, and clipped to it. Focusing the
@@ -373,13 +374,20 @@ function AssistantConversation({
     ), [sessions, activeSessionId]);
 
     /** What the panel is actually pointed at, for the title and placeholder. */
-    const scopeLabel = useMemo(() => {
-        if (pinned === 'global') return 'All hosts';
-        return describeSession(
-            sessions.find(session => session.sessionId === sessionId),
-            'No session open',
-        );
-    }, [pinned, sessions, sessionId]);
+    const described = useMemo(
+        () => describe(scope, { sessions, hosts, activeSessionId }),
+        [scope, sessions, hosts, activeSessionId],
+    );
+
+    const setMode = useCallback(
+        mode => setScope(mode === GLOBAL ? globalScope() : followScope()),
+        [],
+    );
+
+    const toggleTarget = useCallback(
+        (kind, id) => setScope(current => toggle(current, kind, id)),
+        [],
+    );
 
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;
     const quickPrompts = settings?.quickPrompts || [];
@@ -397,11 +405,14 @@ function AssistantConversation({
                     promoting one out of a menu narrows the title rather
                     than crowding the row. */}
                 <ScopeMenu
-                    pinned={pinned}
-                    onChange={setPinned}
+                    scope={scope}
+                    onSetMode={setMode}
+                    onToggle={toggleTarget}
                     sessions={sessions}
+                    hosts={hosts}
+                    activeSessionId={activeSessionId}
                     followLabel={followLabel}
-                    scopeLabel={scopeLabel}
+                    scopeLabel={described.label}
                 />
 
                 {/* Starting again is the thing people do most often in a
@@ -602,9 +613,7 @@ function AssistantConversation({
                         value={text}
                         onChange={(event) => setText(event.target.value)}
                         onKeyDown={onKeyDown}
-                        placeholder={pinned === 'global'
-                            ? 'Ask about any host'
-                            : `Ask about ${scopeLabel}`}
+                        placeholder={`Ask about ${described.sentence}`}
                         className="block w-full max-h-40 px-3 pt-2.5 pb-1 bg-transparent
                             resize-none outline-none
                             text-[13px] leading-relaxed text-gray-900 dark:text-white
@@ -703,6 +712,7 @@ function AssistantConversation({
 export default function AssistantPanel({
     open,
     sessions,
+    hosts,
     activeSessionId,
     width,
     onWidthChange,
@@ -851,6 +861,7 @@ export default function AssistantPanel({
                 >
                     <AssistantConversation
                         sessions={sessions}
+                        hosts={hosts}
                         activeSessionId={activeSessionId}
                         onOpenSettings={onOpenSettings}
                         onClose={onClose}
