@@ -1,11 +1,13 @@
 # Build every platform and attach the results to a GitHub Release.
 #
-# One machine cannot do this. The app carries native binaries that npm installs
-# per platform and architecture (the Claude CLI inside @anthropic-ai, and the
-# serialport bindings), and npm only ever fetches the set for the host it runs
-# on. A macOS package built on Windows would have no Claude binary at all. So
+# One machine cannot do this. The app carries the serialport native bindings,
+# which npm installs per platform and architecture and only ever fetches for
+# the host it runs on, so a macOS package built on Windows would have none. So
 # each entry below installs and builds on its own runner, and the release job
 # collects what they produce.
+#
+# No agent CLI is shipped. All three providers drive the one already on the
+# user's machine, so nothing here has to fetch or match a 253MB binary.
 #
 # Push a tag to publish:
 #
@@ -56,13 +58,9 @@ jobs:
           # Intel dmg is cross-built. Packaging never executes the app, it only
           # copies binaries, so the host architecture does not matter there.
           #
-          # It matters a great deal to npm, though, and in two directions at
-          # once. The install has to be native or the renderer cannot build,
-          # because rollup loads a binary for the machine it is running on. The
-          # Claude CLI is the opposite: it has to match the machine the dmg is
-          # for. So the install stays native and claude-target names the one
-          # package swapped afterwards, once the build tools have done their
-          # work and only the shipped binary is still in question.
+          # It matters to npm, though: the install has to be native or the
+          # renderer cannot build, because rollup loads a binary for the
+          # machine it is running on.
           #
           # `--mac` and not `--mac dmg`, so the zip in the mac target list gets
           # built too. Squirrel updates a mac app from a zip and will not touch
@@ -71,7 +69,6 @@ jobs:
           - name: macos-x64
             os: macos-latest
             args: --mac --x64
-            claude-target: darwin-x64
           - name: macos-arm64
             os: macos-latest
             args: --mac --arm64
@@ -108,32 +105,6 @@ jobs:
 
       - run: npm run build:renderer
 
-      # Only the cross-built Intel dmg gets here. Everything above needed the
-      # host's own binaries, so npm installed the host's Claude one too. The
-      # renderer is built by now and nothing else runs locally, so the shipped
-      # binary can be put right: bring in the target's and drop every other,
-      # leaving exactly one for electron-builder to package.
-      - name: Swap in the target's Claude binary
-        if: matrix.claude-target != ''
-        shell: bash
-        run: |
-          set -e
-          target='${{ matrix.claude-target }}'
-          version=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
-
-          # npm pack only downloads. `npm install` was the obvious way to do
-          # this and the wrong one: it re-resolves the whole tree, which
-          # reinstates optional dependencies that later steps have removed.
-          tarball=$(npm pack "@anthropic-ai/claude-agent-sdk-${target}@${version}" 2>/dev/null | tail -1)
-
-          # Only once the download is in hand, so a failure here does not leave
-          # the build with no binary at all. The glob needs the trailing dash,
-          # which is what keeps it off the SDK package itself.
-          rm -rf node_modules/@anthropic-ai/claude-agent-sdk-*
-          mkdir -p "node_modules/@anthropic-ai/claude-agent-sdk-${target}"
-          tar -xzf "$tarball" -C "node_modules/@anthropic-ai/claude-agent-sdk-${target}" --strip-components=1
-          rm -f "$tarball"
-
       # ssh2 lists cpu-features as an optional dependency and uses it only to
       # prefer a hardware-accelerated cipher, behind a bare try/catch. It is
       # built with nan, and nan does not compile against Electron 43's V8
@@ -151,19 +122,31 @@ jobs:
         shell: bash
         run: rm -rf node_modules/cpu-features
 
-      # If the wrong one is here the build still succeeds and the assistant is
-      # dead on arrival, so it gets a line in the log rather than being a
-      # surprise inside a shipped dmg.
-      - name: Show which Claude binary this build will carry
-        shell: bash
-        run: ls node_modules/@anthropic-ai/ | grep claude-agent-sdk- || echo 'NONE FOUND'
-
       - name: Package
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           # There is no signing certificate on a CI runner. Without this,
           # electron-builder hunts for one and fails the macOS build.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # The agent SDK carries the Claude CLI as an optional platform package,
+      # a 253MB binary that the app deliberately does not ship: the provider
+      # drives the user's own install instead. npm still puts it in
+      # node_modules, so only the `files` excludes in package.json keep it out
+      # of the build, and the sole symptom of losing them is an installer three
+      # times the size. Cheaper to fail here than to notice on a release page.
+      - name: Check the agent CLI did not get packaged
+        shell: bash
+        run: |
+          set -e
+          found=$(find dist -maxdepth 12 -name 'claude-agent-sdk-*' || true)
+          if [ -n "$found" ]; then
+            echo 'The Claude CLI platform package was packaged into the app:'
+            echo "$found"
+            echo 'Check the "files" excludes in package.json.'
+            exit 1
+          fi
+          echo 'No agent CLI in the build, as intended.'
 
       # The app reads this file to find out a release exists, so a build that
       # did not write one produces an installer nobody can update from, and

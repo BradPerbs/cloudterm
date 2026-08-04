@@ -1,5 +1,6 @@
 const { app } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const catalog = require('../tools');
 
@@ -7,10 +8,16 @@ const catalog = require('../tools');
  * The Claude Code provider.
  *
  * Drives @anthropic-ai/claude-agent-sdk, which is the Claude Code harness as a
- * library. It spawns its own process and, on a machine where the user has
- * already signed in to Claude Code, uses that login: the common case here
- * stores no credential of ours at all, which is the point of leading with this
- * provider rather than a raw API client.
+ * library. The CLI it spawns is the user's own install, found by `findClaude`
+ * below, and on a machine already signed in to Claude Code it uses that login:
+ * the common case here stores no credential of ours at all, which is the point
+ * of leading with this provider rather than a raw API client.
+ *
+ * Nothing is bundled. The SDK ships the CLI as an optional platform package
+ * carrying a 253MB binary, which the build excludes; see the `files` list in
+ * package.json. That is the whole reason the installer is the size it is, and
+ * a copy frozen at whatever version shipped is worse than the one the user
+ * keeps updated anyway.
  *
  * Everything specific to that SDK lives in this file. The tool catalog, the
  * prompt and the orchestrator above it are written against a neutral shape, so
@@ -40,43 +47,158 @@ const SERVER_NAME = 'remote';
  */
 const EFFORT_LEVELS = [...require('../settings').EFFORTS];
 
-/**
- * Where the CLI is, for the one case the SDK cannot work out for itself.
- *
- * Left alone it resolves the binary with `require.resolve` from its own module
- * URL, which is right everywhere except inside a packaged app. There the answer
- * leads through `app.asar`, and that path can be read, because Electron patches
- * `fs` to see inside the archive. It cannot be run. To the operating system the
- * archive is one ordinary file, and there is no executable at that path to
- * spawn, so the CLI never starts and the model list comes back empty.
- *
- * electron-builder already unpacks binaries it finds in `node_modules`, so the
- * real one is sitting in `app.asar.unpacked` beside the archive. Only the path
- * needs pointing at it.
- *
- * Returns '' when there is nothing to correct: from a checkout there is no
- * archive and the SDK's own answer is already right, and if the unpacked copy
- * is not where it should be, the SDK's error about a missing binary is more
- * use than a path invented here that does not exist either.
- */
-function claudeExecutable() {
-    const suffix = process.platform === 'win32' ? '.exe' : '';
-    const target = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude${suffix}`;
+/** The first of these names the env has a value for, or ''. */
+function envValue(env, ...names) {
+    for (const name of names) {
+        if (env?.[name]) return env[name];
+    }
+    return '';
+}
 
-    let resolved;
+/** Entries of a directory, or none if it is missing or unreadable. */
+function readdir(readdirSync, directory) {
     try {
-        resolved = require.resolve(target);
+        return readdirSync(directory);
     } catch {
-        // No platform package for this machine, or a musl build, which the SDK
-        // looks for under a name of its own. Its own search is the better one.
-        return '';
+        return [];
+    }
+}
+
+/** Segment by segment, so 2.1.221 sorts above 2.1.99 rather than below it. */
+function compareVersions(left, right) {
+    for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+        const difference = (left[i] || 0) - (right[i] || 0);
+        if (difference) return difference;
+    }
+    return 0;
+}
+
+/**
+ * The copies of Claude Code that editor extensions carry, newest first.
+ *
+ * These come before a standalone install for a reason worth writing down. The
+ * extension is updated by the editor, and its directory names the version, so
+ * which one is newest can be known without running anything. A standalone
+ * install updates itself, and that can quietly stop: a half-finished update
+ * leaves a zero-byte file where the new version should be and the old binary
+ * still in place, so the machine goes on answering from a months-old model
+ * list with nothing to show that anything is wrong.
+ *
+ * Nothing here reads the installer's own `versions` or staging directories.
+ * Those are its business, and on a machine where an update has stalled the
+ * newest thing in them is precisely the broken one.
+ */
+function extensionRoots({ readdirSync, paths, home }) {
+    const editors = ['.vscode', '.vscode-insiders', '.cursor', '.windsurf'];
+    const found = [];
+
+    for (const editor of editors) {
+        const directory = paths.join(home, editor, 'extensions');
+        for (const entry of readdir(readdirSync, directory)) {
+            // The platform and architecture follow the version in the name.
+            // They are not matched on: an editor only ever installs the build
+            // for the machine it is on, and guessing at the spelling of that
+            // suffix on a platform this has not seen would fail closed.
+            const named = /^anthropic\.claude-code-(\d+(?:\.\d+)*)-/.exec(entry);
+            if (!named) continue;
+            found.push({
+                version: named[1].split('.').map(Number),
+                root: paths.join(directory, entry, 'resources', 'native-binary'),
+            });
+        }
     }
 
-    const archive = `app.asar${path.sep}`;
-    if (!resolved.includes(archive)) return '';
+    return found
+        .sort((a, b) => compareVersions(b.version, a.version))
+        .map(entry => entry.root);
+}
 
-    const unpacked = resolved.replace(archive, `app.asar.unpacked${path.sep}`);
-    return fs.existsSync(unpacked) ? unpacked : '';
+/**
+ * Every place a Claude Code install puts its binary, best first.
+ *
+ * Editor extensions lead, newest version first, for the reason given above
+ * them. Then PATH, because someone who has put the CLI somewhere of their own
+ * has already said where it is. Then the installers' own locations, which is
+ * what a packaged app actually needs: Electron inherits the PATH of whatever
+ * launched it, and a desktop shortcut has a far shorter one than a shell does,
+ * so the binary a terminal finds instantly is routinely invisible here.
+ *
+ * Real executables only. The SDK spawns what it is handed through
+ * `child_process.spawn` with no shell, and Node refuses to start a `.cmd` or
+ * `.bat` that way, so accepting an npm shim would mean resolving a path that
+ * then fails to launch with nothing useful to say about why. If that ever
+ * needs supporting, the SDK takes a `spawnClaudeCodeProcess` option and
+ * `cross-spawn` is already a dependency.
+ */
+function claudeCandidates({
+    platform = process.platform,
+    env = process.env,
+    home = os.homedir(),
+    readdirSync = fs.readdirSync,
+} = {}) {
+    const windows = platform === 'win32';
+    // Both halves named outright rather than leaning on the host's `path` and
+    // `path.delimiter`, which are the same thing in production and are not
+    // under test: the platform is an argument here, so the separators have to
+    // follow it rather than the machine running the check.
+    const paths = windows ? path.win32 : path.posix;
+    const name = windows ? 'claude.exe' : 'claude';
+    const pathEntries = String(envValue(env, 'PATH', 'Path', 'path'))
+        .split(windows ? ';' : ':')
+        .filter(Boolean);
+    const roots = [
+        ...extensionRoots({ readdirSync, paths, home }),
+        ...pathEntries,
+        paths.join(home, '.local', 'bin'),
+    ];
+
+    if (windows) {
+        const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData');
+        if (localAppData) roots.push(paths.join(localAppData, 'Programs', 'claude'));
+    } else {
+        roots.push('/opt/homebrew/bin', '/usr/local/bin', '/usr/bin');
+    }
+
+    // What the installer that predated the native one used, still the only
+    // copy on a machine that has not been through an update since.
+    roots.push(paths.join(home, '.claude', 'local'));
+
+    return [...new Set(roots.filter(Boolean).map(root => paths.join(root, name)))];
+}
+
+/**
+ * The user's own Claude Code, or '' if this machine has none.
+ *
+ * Nothing is bundled. Codex and OpenCode have always run the CLI already on
+ * the machine, under the login already on it, and this is the same bargain:
+ * the app carries no copy of a runtime, ships no credential, and does not go
+ * stale the week Claude Code updates.
+ */
+function findClaude(options = {}) {
+    const platform = options.platform || process.platform;
+    const accessSync = options.accessSync || fs.accessSync;
+    const statSync = options.statSync || fs.statSync;
+    const candidates = claudeCandidates({
+        platform,
+        env: options.env || process.env,
+        home: options.home || os.homedir(),
+        readdirSync: options.readdirSync || fs.readdirSync,
+    });
+
+    for (const candidate of candidates) {
+        try {
+            accessSync(candidate, platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
+            // An update that died part way through leaves a real file of zero
+            // bytes behind, which passes every existence check and then will
+            // not start. That is not a hypothetical: it is what a stalled
+            // self-update looks like on disk, and the symptom without this is
+            // an assistant that cannot say why it will not run.
+            if (statSync(candidate).size > 0) return candidate;
+        } catch {
+            // Keep looking.
+        }
+    }
+    return '';
 }
 
 /**
@@ -264,6 +386,13 @@ function localName(toolName) {
  * picker.
  */
 async function listModels({ settings = {} } = {}) {
+    // Before the SDK is loaded, so a machine without Claude Code pays neither
+    // the import nor the spawn. An empty list is the right answer here rather
+    // than a throw: the menus ask for this on their own, long before anyone
+    // has chosen this provider, and a missing CLI is not an error until they do.
+    const executable = findClaude();
+    if (!executable) return null;
+
     const sdk = await loadSdk();
 
     const input = createInputStream();
@@ -272,12 +401,10 @@ async function listModels({ settings = {} } = {}) {
     const env = { ...process.env };
     if (settings.apiKey) env.ANTHROPIC_API_KEY = settings.apiKey;
 
-    const executable = claudeExecutable();
-
     const stream = sdk.query({
         prompt: input,
         options: {
-            ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
+            pathToClaudeCodeExecutable: executable,
             allowedTools: [],
             permissionMode: 'default',
             abortController,
@@ -342,6 +469,11 @@ async function start({
     onEvent,
     resumeSessionId = '',
 }) {
+    const executable = findClaude();
+    if (!executable) {
+        throw new Error('Claude Code is not installed on this machine, or its CLI could not be found');
+    }
+
     const sdk = await loadSdk();
 
     const input = createInputStream();
@@ -403,8 +535,7 @@ async function start({
         settingSources: [],
     };
 
-    const executable = claudeExecutable();
-    if (executable) options.pathToClaudeCodeExecutable = executable;
+    options.pathToClaudeCodeExecutable = executable;
 
     if (settings.model) options.model = settings.model;
     if (settings.effort) options.effort = settings.effort;
@@ -618,10 +749,10 @@ function describeFailure(error) {
             + 'or add an API key in the assistant settings.';
     }
     if (/ENOENT|not found|spawn/i.test(text)) {
-        return 'The Claude Code runtime could not be started. Check that the app was installed completely, '
-            + `then try again. (${text})`;
+        return 'The Claude Code CLI could not be started. Install Claude Code and check that "claude" runs '
+            + `in a terminal, then try again. (${text})`;
     }
     return text;
 }
 
-module.exports = { start, listModels, LOCAL_TOOLS, SERVER_NAME };
+module.exports = { start, listModels, findClaude, claudeCandidates, LOCAL_TOOLS, SERVER_NAME };

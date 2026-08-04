@@ -146,6 +146,10 @@ Whichever you choose, the agent:
 - **Model and reasoning effort per conversation**, with what it is costing, or
   how much of your plan it has used, shown as it works
 
+> Claude Code has to be the native install, the one that puts `claude` in
+> `~/.local/bin`. An npm install leaves a `.cmd` shim on Windows, which cannot
+> be started the way the agent runs it.
+
 > On Windows, install OpenCode natively with Chocolatey, Scoop, npm, or its
 > release binary. A copy installed only inside WSL is not visible to the native
 > CloudTerm desktop app.
