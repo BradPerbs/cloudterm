@@ -1299,13 +1299,13 @@ body.pane-resizing-y .xterm {
 }
 
 /* The list itself, when what would receive the drop is the folder you are
-   standing in — which is where a card carried in through a spring-open goes.
+   standing in, which is where a card carried in through a spring-open goes.
    There is no card on screen to ring, so the room is ringed instead.
 
    An outline rather than the inset shadow the cards use: a shadow paints under
    the content, and the top row of cards sits flush against this edge. Quieter
    than the card ring on purpose, because it is a much larger shape saying a
-   much weaker thing — "anywhere here" rather than "this one". */
+   much weaker thing: "anywhere here" rather than "this one". */
 .org-drop-here {
     border-radius: 14px;
     outline: 2px solid rgba(17, 24, 39, 0.22);
@@ -1418,7 +1418,7 @@ body.org-dragging * {
 }
 
 /* A card the band, or a modifier-click, has picked out. The ring alone carries
-   it — the surface is left on the card's own background so a selected card
+   it: the surface is left on the card's own background so a selected card
    still reads as the same card, and hover still behaves normally. Drawn inset
    for the same reason .org-card-into is: an outer ring would shift the grid
    every time the selection grew. */
@@ -1525,6 +1525,38 @@ body.org-banding * {
 
 .session-tab[data-closing="true"] {
     animation: tab-collapse 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    pointer-events: none;
+}
+
+/* A tab being carried along the strip. It is placed by the pointer on every
+   frame, so the width transitions above must not also have a say in where it
+   is; putting it down hands it back to the strip's own rules.
+
+   Lifted with a drop-shadow rather than a box-shadow: a coloured tab already
+   carries one of those inline for its ring, and an inline rule wins over this
+   file. See useTabDrag. */
+.session-tab[data-dragging="true"] {
+    z-index: 30;
+    cursor: grabbing;
+    transition: none;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.22));
+}
+
+.dark .session-tab[data-dragging="true"] {
+    filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.6));
+}
+
+/* The cursor has to survive leaving the tab it picked up, and no tab the
+   carried one passes over should light up under it: the hover state swaps a
+   tab's icon for its close button, which is not an offer being made while
+   something is in the air. The gesture itself is driven from the window, so
+   taking the pointer away from the tabs costs it nothing. */
+body.tab-dragging,
+body.tab-dragging * {
+    cursor: grabbing !important;
+}
+
+body.tab-dragging .session-tab {
     pointer-events: none;
 }
 

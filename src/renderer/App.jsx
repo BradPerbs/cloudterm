@@ -26,6 +26,7 @@ import {
     joinGroup,
     nextGroupColor,
     numberSessions,
+    reorderTabs,
     suggestGroupName,
 } from './lib/tabs';
 import {
@@ -821,6 +822,19 @@ function App() {
         setTabs(prev => joinGroup(prev, tabId, groupId));
     }, []);
 
+    /**
+     * The strip, rearranged by hand.
+     *
+     * Order and group arrive together because the drop decided both: a tab let
+     * go of inside an outline is filed there, and one let go of outside every
+     * outline is loose, which is exactly what the strip was showing while it
+     * was being carried. The new order is what the next launch restores, since
+     * the session record is written from the tabs in the order they are held.
+     */
+    const handleReorderTabs = useCallback((orderedIds, tabId, groupId) => {
+        setTabs(prev => reorderTabs(prev, orderedIds, tabId, groupId));
+    }, []);
+
     const handleUngroupTab = useCallback((tabId) => {
         setTabs(prev => prev.map(tab => (
             tab.id === tabId ? { ...tab, groupId: null } : tab
@@ -1472,6 +1486,7 @@ function App() {
                     onTabGroup={handleGroupTab}
                     onTabUngroup={handleUngroupTab}
                     onTabNewGroup={handleNewGroupFromTab}
+                    onTabReorder={handleReorderTabs}
                     onGroupRename={handleRenameGroup}
                     onGroupColor={handleColorGroup}
                     onGroupDelete={handleDeleteGroup}

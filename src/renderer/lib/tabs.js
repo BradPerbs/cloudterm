@@ -158,6 +158,43 @@ export function segmentStrip(items, groups) {
 }
 
 /**
+ * The strip after a tab has been carried somewhere else in it.
+ *
+ * `orderedIds` is the strip as the drag left it and `groupId` is the group the
+ * tab was dropped inside, or null for loose. Where a tab was let go of decides
+ * both, which is the same rule the outline draws: inside it means in the group,
+ * outside it means out of it.
+ *
+ * Only the tabs that were on the strip when the drag started take part. Home
+ * keeps its place at the front, and so does anything that opened while the tab
+ * was in the air: the drop was not asked about them, and a slot they never had
+ * is not one to give away. Returns the same array when nothing moved, so React
+ * can skip the update.
+ */
+export function reorderTabs(tabs, orderedIds, movedId, groupId = null) {
+    const byId = new Map(tabs.map(tab => [tab.id, tab]));
+    const queue = (orderedIds || []).filter(id => byId.has(id));
+    if (!queue.includes(movedId)) return tabs;
+
+    const taking = new Set(queue);
+    let at = 0;
+
+    const next = tabs.map((tab) => {
+        if (!taking.has(tab.id)) return tab;
+
+        const landed = byId.get(queue[at]);
+        at += 1;
+
+        if (landed.id !== movedId) return landed;
+        return (landed.groupId || null) === (groupId || null)
+            ? landed
+            : { ...landed, groupId: groupId || null };
+    });
+
+    return next.some((tab, index) => tab !== tabs[index]) ? next : tabs;
+}
+
+/**
  * Move `tabId` so it sits at the end of `groupId`'s run, and mark it as
  * belonging to that group. Returns the same array when nothing needs to move,
  * so React can skip the update.

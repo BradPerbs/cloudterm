@@ -16,6 +16,7 @@ import {
 import { TITLE_BAR_HEIGHT } from '../lib/layout';
 import { IS_MAC } from '../lib/platform';
 import { OsIcon, hostOs } from '../lib/os-icons';
+import { useTabDrag } from '../hooks/useTabDrag';
 import ContextMenu from './ui/ContextMenu';
 import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
@@ -164,6 +165,7 @@ function SessionTab({
     active,
     closing,
     renaming,
+    dragProps,
     onSelect,
     onClose,
     onMenu,
@@ -240,6 +242,9 @@ function SessionTab({
             data-tab={tab.id}
             data-active={active ? 'true' : 'false'}
             data-closing={closing ? 'true' : undefined}
+            // Picking the tab up, and marking it while it is in hand. Spread
+            // here so a tab mid-close, which is handed none, simply cannot be.
+            {...dragProps}
             aria-hidden={closing || undefined}
             tabIndex={closing ? -1 : undefined}
             // A colour is worn as a wash over the tab's own background rather
@@ -504,6 +509,7 @@ function TitleBar({
     onTabGroup,
     onTabUngroup,
     onTabNewGroup,
+    onTabReorder,
     onGroupRename,
     onGroupColor,
     onGroupDelete,
@@ -518,6 +524,43 @@ function TitleBar({
     // Separate home tab from session tabs
     const homeTab = tabs.find(tab => tab.type === 'home');
     const sessionTabs = tabs.filter(tab => tab.type !== 'home');
+
+    /** The strip itself, which the drag measures the tabs against. */
+    const stripRef = useRef(null);
+
+    const { carrying, preview, tabProps } = useTabDrag({
+        containerRef: stripRef,
+        tabs: sessionTabs,
+        onReorder: onTabReorder,
+        enabled: Boolean(onTabReorder),
+    });
+
+    /**
+     * The strip as the drag is asking for it.
+     *
+     * Nothing is committed until the tab is let go of, so while one is in hand
+     * this is what the strip is: the order the drop would make, with the
+     * carried tab already wearing the group it would land in so the outline it
+     * is inside is drawn around it rather than beside it.
+     */
+    const arranged = useMemo(() => {
+        if (!preview) return sessionTabs;
+
+        const byId = new Map(sessionTabs.map(tab => [tab.id, tab]));
+        const asked = preview.ids.map(id => byId.get(id)).filter(Boolean);
+
+        // A tab opened while the drag was in flight, which the preview predates.
+        const taken = new Set(preview.ids);
+        for (const tab of sessionTabs) {
+            if (!taken.has(tab.id)) asked.push(tab);
+        }
+
+        return asked.map(tab => (
+            tab.id === carrying && (tab.groupId || null) !== (preview.groupId || null)
+                ? { ...tab, groupId: preview.groupId }
+                : tab
+        ));
+    }, [sessionTabs, preview, carrying]);
 
     /**
      * Tabs that have been closed but are still on screen, each remembered with
@@ -611,7 +654,7 @@ function TitleBar({
     // strip collapses in place instead of jumping to the end of it first.
     // Left to right, or a batch of them would land in the order they were
     // clicked rather than the order they sat in.
-    const stripItems = sessionTabs.map(tab => ({
+    const stripItems = arranged.map(tab => ({
         tab,
         active: activeTabId === tab.id,
         closing: false,
@@ -794,6 +837,9 @@ function TitleBar({
             active={active}
             closing={closing}
             renaming={renaming?.kind === 'tab' && renaming.id === tab.id}
+            // A tab on its way out is not one to pick up: it holds no slot in
+            // the strip any more, and the drag would be carrying a ghost.
+            dragProps={closing ? undefined : tabProps(tab.id)}
             onSelect={onTabClick}
             onClose={handleTabClose}
             onMenu={openTabMenu}
@@ -803,7 +849,7 @@ function TitleBar({
             onRenameCancel={cancelRename}
         />
     ), [
-        renaming, onTabClick, handleTabClose, openTabMenu, dropClosingTab,
+        renaming, tabProps, onTabClick, handleTabClose, openTabMenu, dropClosingTab,
         startRename, commitTabRename, cancelRename,
     ]);
 
@@ -863,6 +909,7 @@ function TitleBar({
 
                 {/* Session Tabs - Dynamic resizing like Chrome */}
                 <div
+                    ref={stripRef}
                     className="flex items-center flex-1 min-w-0 h-full overflow-hidden"
                     id="tab-bar"
                     style={{ gap: '4px' }}
