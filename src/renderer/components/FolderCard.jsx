@@ -1,5 +1,6 @@
 import { memo, useCallback } from 'react';
-import { MoreVerticalIcon } from 'hugeicons-react';
+import { MoreVerticalIcon, CloudIcon } from 'hugeicons-react';
+import { syncedFolder } from '../lib/server-sync';
 import IconTile from './hosts/IconTile';
 import MenuButton, { dropdownItems } from './ui/MenuButton';
 
@@ -17,6 +18,36 @@ import MenuButton, { dropdownItems } from './ui/MenuButton';
  */
 
 const stop = (event) => event.stopPropagation();
+
+const FOLDER = 'M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z';
+
+/** Swapped in while the folder is the drop target, so "this one, and inside
+    it" is legible at a glance. */
+const FOLDER_OPEN = 'M4 4h5l2 2h7a2 2 0 0 1 2 2v1H6.5a2 2 0 0 0-1.94 1.5L3 17V6a2 2 0 0 1 2-2zm2.5 7H21l-2.2 7.5A2 2 0 0 1 16.9 20H4a1 1 0 0 1-.97-1.24l2.02-6.5A1.5 1.5 0 0 1 6.5 11z';
+
+/**
+ * A cloud cut out of the folder's face, appended to `FOLDER` and filled
+ * even-odd.
+ *
+ * A hole rather than a second glyph on top: the tile's background is
+ * translucent, so anything drawn over the folder would have to guess the colour
+ * of the card underneath it. It also keeps the silhouette and the weight of an
+ * ordinary folder, one detail apart, which is what lets a mixed grid still read
+ * as a grid of folders.
+ */
+const CLOUD_CUTOUT = 'M7.9 16a1.9 1.9 0 0 1 1.05-3.45 2.9 2.9 0 0 1 5.5-.2 2.1 2.1 0 0 1 1.85 3.65z';
+
+/**
+ * Why a machine-managed folder is here, on the hover.
+ *
+ * The account folder says it in a badge as well, because that is the one the
+ * question gets asked about: it appears on its own the first time an account is
+ * connected, in among folders the user did make.
+ */
+const SYNC_TITLES = {
+    account: 'Synced from your CloudBlast account',
+    project: 'A project on your CloudBlast account. The sync keeps its name and its place',
+};
 
 /** "3 hosts · 1 folder", and a plain word when there is nothing in it. */
 function describeContents({ hosts, folders }) {
@@ -60,6 +91,10 @@ function FolderCard({
 
     const contents = describeContents(counts);
 
+    // Not a prop: it is a plain question about the folder's own id, and one
+    // place to ask it is one place for the answer to be wrong.
+    const synced = syncedFolder(folder.id);
+
     return (
         <div
             className={`folder-card org-card group relative cursor-pointer
@@ -82,25 +117,58 @@ function FolderCard({
         >
             <div className="flex items-center gap-2.5">
                 <IconTile size={isList ? 'sm' : 'md'} className="text-gray-500 dark:text-gray-300">
-                    {/* Swaps to an open folder while it is the drop target, so
-                        "this one, and inside it" is legible at a glance. */}
                     <svg
                         className={`${isList ? 'w-[18px] h-[18px]' : 'w-[21px] h-[21px]'} transition-transform ${dropInto ? 'scale-110' : ''}`}
                         viewBox="0 0 24 24"
                         fill="currentColor"
                         opacity="0.85"
                     >
-                        {dropInto
-                            ? <path d="M4 4h5l2 2h7a2 2 0 0 1 2 2v1H6.5a2 2 0 0 0-1.94 1.5L3 17V6a2 2 0 0 1 2-2zm2.5 7H21l-2.2 7.5A2 2 0 0 1 16.9 20H4a1 1 0 0 1-.97-1.24l2.02-6.5A1.5 1.5 0 0 1 6.5 11z" />
-                            : <path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" />}
+                        {/* An SVG ignores a `title` attribute, it wants a
+                            `<title>` child, so the glyph would otherwise be a
+                            silent one. */}
+                        {synced && !dropInto && <title>{SYNC_TITLES[synced]}</title>}
+
+                        {/* Even-odd only where there is a hole to punch: the
+                            open folder is two overlapping subpaths, and that
+                            rule would eat the overlap. */}
+                        <path
+                            fillRule={synced && !dropInto ? 'evenodd' : undefined}
+                            d={dropInto ? FOLDER_OPEN : (synced ? FOLDER + CLOUD_CUTOUT : FOLDER)}
+                        />
                     </svg>
                 </IconTile>
 
                 <div className={`min-w-0 flex-1 ${isList ? 'flex items-center gap-3' : ''}`}>
                     <div className={isList ? 'min-w-0 flex-1' : 'min-w-0'}>
-                        <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate leading-tight">
-                            {folder.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <h3 className="min-w-0 font-semibold text-gray-900 dark:text-white text-sm truncate leading-tight">
+                                {folder.name}
+                            </h3>
+
+                            {/* Read-only, so it stays part of the card's own
+                                click target rather than opting out of it the
+                                way the menu does: a badge that swallows the
+                                click is a dead spot on a card that opens.
+
+                                Only on the account folder. Every project inside
+                                it is synced too, and a column of identical
+                                pills saying so would be noise; their glyph and
+                                the folder they are sitting in have said it. */}
+                            {synced === 'account' && (
+                                <span
+                                    title={SYNC_TITLES.account}
+                                    // The same fill as the icon tile beside it,
+                                    // and translucent rather than a step of the
+                                    // ramp: the card moves up the ramp on hover,
+                                    // and a solid chip would be swallowed by it.
+                                    className="shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md
+                                        bg-gray-900/[0.06] dark:bg-white/10 text-gray-600 dark:text-gray-300"
+                                >
+                                    <CloudIcon size={11} strokeWidth={2.5} />
+                                    Synced
+                                </span>
+                            )}
+                        </div>
                         {!isList && (
                             <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
                                 {contents}
