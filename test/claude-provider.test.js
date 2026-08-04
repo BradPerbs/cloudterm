@@ -2,10 +2,10 @@ const assert = require('assert');
 
 const provider = require('../src/main/ai/providers/claude-code');
 
-/** A readdir that answers for one directory and 404s everywhere else. */
-function readdirFor(directory, entries) {
+/** A readdir that answers from a map and 404s everywhere else. */
+function readdirMap(directories) {
     return (asked) => {
-        if (asked === directory) return entries;
+        if (Object.prototype.hasOwnProperty.call(directories, asked)) return directories[asked];
         throw new Error('ENOENT');
     };
 }
@@ -52,11 +52,13 @@ async function run() {
         platform: 'win32',
         home: 'C:\\Users\\Mario',
         env: { Path: 'C:\\Tools' },
-        readdirSync: readdirFor('C:\\Users\\Mario\\.vscode\\extensions', [
-            'anthropic.claude-code-2.1.99-win32-x64',
-            'anthropic.claude-code-2.1.221-win32-x64',
-            'ms-python.python-2024.1.0',
-        ]),
+        readdirSync: readdirMap({
+            'C:\\Users\\Mario\\.vscode\\extensions': [
+                'anthropic.claude-code-2.1.99-win32-x64',
+                'anthropic.claude-code-2.1.221-win32-x64',
+                'ms-python.python-2024.1.0',
+            ],
+        }),
     });
     const base = 'C:\\Users\\Mario\\.vscode\\extensions\\anthropic.claude-code-';
     assert.deepStrictEqual(extensions.slice(0, 3), [
@@ -66,6 +68,42 @@ async function run() {
     ]);
     // Extensions that are not Claude Code are left alone.
     assert(!extensions.some(candidate => candidate.includes('ms-python')));
+
+    // The extension keeps its binary under one of two layouts, and prefers a
+    // directory per platform and architecture over the flat one. The musl
+    // suffix on the Linux builds is why those names are read off the disk
+    // rather than reconstructed.
+    const extensions2 = 'anthropic.claude-code-2.1.221-linux-x64';
+    const resources = `/home/mario/.vscode/extensions/${extensions2}/resources`;
+    const linux = provider.claudeCandidates({
+        platform: 'linux',
+        home: '/home/mario',
+        env: { PATH: '/usr/bin' },
+        readdirSync: readdirMap({
+            '/home/mario/.vscode/extensions': [extensions2],
+            [`${resources}/native-binaries`]: ['linux-x64-musl', 'linux-x64'],
+        }),
+    });
+    assert.deepStrictEqual(linux.slice(0, 4), [
+        `${resources}/native-binaries/linux-x64-musl/claude`,
+        `${resources}/native-binaries/linux-x64/claude`,
+        `${resources}/native-binary/claude`,
+        '/usr/bin/claude',
+    ]);
+
+    // A build that is not platform-specific has no suffix after the version,
+    // and still reads as one of these.
+    const universal = provider.claudeCandidates({
+        platform: 'darwin',
+        home: '/Users/mario',
+        env: {},
+        readdirSync: readdirMap({
+            '/Users/mario/.vscode/extensions': ['anthropic.claude-code-2.1.221'],
+        }),
+    });
+    assert(universal.includes(
+        '/Users/mario/.vscode/extensions/anthropic.claude-code-2.1.221/resources/native-binary/claude'
+    ));
 
     // PATH wins over the installer locations, so a copy the user put somewhere
     // of their own is the one that runs.

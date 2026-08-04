@@ -98,19 +98,31 @@ function extensionRoots({ readdirSync, paths, home }) {
             // The platform and architecture follow the version in the name.
             // They are not matched on: an editor only ever installs the build
             // for the machine it is on, and guessing at the spelling of that
-            // suffix on a platform this has not seen would fail closed.
-            const named = /^anthropic\.claude-code-(\d+(?:\.\d+)*)-/.exec(entry);
+            // suffix on a platform this has not seen would fail closed. The
+            // trailing dash is optional for the same reason, so a build that
+            // is not platform-specific still reads as one of these.
+            const named = /^anthropic\.claude-code-(\d+(?:\.\d+)*)(?:-|$)/.exec(entry);
             if (!named) continue;
-            found.push({
-                version: named[1].split('.').map(Number),
-                root: paths.join(directory, entry, 'resources', 'native-binary'),
-            });
+
+            // Two layouts, in the order the extension itself tries them: a
+            // directory per platform and architecture, then a flat one. The
+            // per-platform names carry a `-musl` suffix on the Linux builds
+            // that need it, so they are read off the disk rather than spelled
+            // out here, which would mean repeating the extension's own libc
+            // detection to get them wrong somewhere.
+            const resources = paths.join(directory, entry, 'resources');
+            const targets = paths.join(resources, 'native-binaries');
+            const roots = readdir(readdirSync, targets)
+                .map(target => paths.join(targets, target));
+            roots.push(paths.join(resources, 'native-binary'));
+
+            found.push({ version: named[1].split('.').map(Number), roots });
         }
     }
 
     return found
         .sort((a, b) => compareVersions(b.version, a.version))
-        .map(entry => entry.root);
+        .flatMap(entry => entry.roots);
 }
 
 /**
