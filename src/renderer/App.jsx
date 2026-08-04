@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { toastStyle as getToastStyle } from './lib/toast';
 import TitleBar from './components/TitleBar';
-import HostKeyModal from './components/HostKeyModal';
-import AuthPromptModal from './components/AuthPromptModal';
 import Sidebar from './components/Sidebar';
 import HomeView from './components/HomeView';
 import TerminalView from './components/TerminalView';
 import HostModal from './components/HostModal';
 import NewTabView from './components/NewTabView';
 import FolderModal from './components/FolderModal';
+import SessionScreen from './components/ui/SessionScreen';
 import SplitLayout from './components/panes/SplitLayout';
 import PanePicker from './components/panes/PanePicker';
 import AssistantPanel from './components/assistant/AssistantPanel';
@@ -333,27 +332,6 @@ function App() {
         }).catch(() => {});
     }, []);
 
-    // Host key confirmations raised by the main process mid-handshake
-    useEffect(() => window.api.hostKeys.onPrompt((prompt) => {
-        setHostKeyPrompts(prev => [...prev, prompt]);
-    }), []);
-
-    const handleHostKeyResponse = useCallback((requestId, accepted) => {
-        window.api.hostKeys.respond(requestId, accepted);
-        setHostKeyPrompts(prev => prev.filter(p => p.requestId !== requestId));
-    }, []);
-
-    // Keyboard-interactive rounds the main process could not answer on its own
-    // (a one-time code, a push approval, an expired password).
-    useEffect(() => window.api.auth.onPrompt((prompt) => {
-        setAuthPrompts(prev => [...prev, prompt]);
-    }), []);
-
-    const handleAuthPromptResponse = useCallback((requestId, answers) => {
-        window.api.auth.respond(requestId, answers);
-        setAuthPrompts(prev => prev.filter(p => p.requestId !== requestId));
-    }, []);
-
     /** The tab holding a pane, and the pane itself. */
     const locatePane = useCallback((paneId) => {
         for (const tab of tabsRef.current) {
@@ -363,6 +341,110 @@ function App() {
         }
         return null;
     }, []);
+
+    /**
+     * Put a prompt raised mid-handshake in front of the pane that raised it.
+     *
+     * Both kinds are stamped with the pane that was dialling (see ipc.js), and
+     * both are answered on that pane's own screen rather than in a modal over
+     * the window. Which means the tab holding it has to be the tab in front:
+     * the session cannot go any further until the question is answered, so
+     * there is nothing to be gained by leaving it asking in the background.
+     *
+     * A prompt that names no pane, or names one that has since closed, is still
+     * queued. It is asked over the window instead (see `strayPrompt` below).
+     * Nothing here ever answers on the user's behalf: a question about a host
+     * key that quietly declines itself is a connection that fails for no
+     * visible reason, which is worse than asking it in the wrong place.
+     */
+    const routePrompt = useCallback((prompt, queue) => {
+        const named = prompt?.tabId ? locatePane(prompt.tabId) : null;
+
+        // No pane named, or one that has closed. Fall back to the pane in
+        // front, which is where a dial the user has just started is: a question
+        // in the wrong pane can still be read and answered, and it is the same
+        // question either way.
+        const fallback = named ? null : (() => {
+            const tabs = tabsRef.current.filter(tab => tab.type === 'terminal');
+            const active = tabs.find(tab => tab.id === activeTabIdRef.current) || tabs[0];
+            if (!active) return null;
+            const paneId = active.focusedPaneId || collectPanes(active.layout)[0]?.id;
+            return paneId ? { tab: active, pane: { id: paneId } } : null;
+        })();
+
+        const found = named || fallback;
+        if (found) setActiveTabId(found.tab.id);
+
+        // Stamped with the pane it will be asked in, so everything downstream
+        // is keyed on one thing whether it was named or guessed at.
+        queue(current => [...current, { ...prompt, tabId: found?.pane.id || prompt.tabId }]);
+    }, [locatePane]);
+
+    // Host key confirmations raised by the main process mid-handshake
+    useEffect(() => window.api.hostKeys.onPrompt((prompt) => {
+        routePrompt(prompt, setHostKeyPrompts);
+    }), [routePrompt]);
+
+    const handleHostKeyResponse = useCallback((requestId, accepted) => {
+        window.api.hostKeys.respond(requestId, accepted);
+        setHostKeyPrompts(prev => prev.filter(p => p.requestId !== requestId));
+    }, []);
+
+    // Keyboard-interactive rounds the main process could not answer on its own
+    // (a one-time code, a push approval, an expired password).
+    useEffect(() => window.api.auth.onPrompt((prompt) => {
+        routePrompt(prompt, setAuthPrompts);
+    }), [routePrompt]);
+
+    const handleAuthPromptResponse = useCallback((requestId, answers) => {
+        window.api.auth.respond(requestId, answers);
+        setAuthPrompts(prev => prev.filter(p => p.requestId !== requestId));
+    }, []);
+
+    /**
+     * The question a given pane is being held up by, if any.
+     *
+     * A host key comes before a keyboard-interactive round for the same pane,
+     * because it is asked first and answering the second one would be typing a
+     * one-time code into a server that has not been identified yet.
+     */
+    const hostKeyPromptFor = useCallback(
+        (paneId) => hostKeyPrompts.find(prompt => prompt.tabId === paneId) || null,
+        [hostKeyPrompts]
+    );
+
+    const authPromptFor = useCallback(
+        (paneId) => (
+            hostKeyPrompts.some(prompt => prompt.tabId === paneId)
+                ? null
+                : authPrompts.find(prompt => prompt.tabId === paneId) || null
+        ),
+        [hostKeyPrompts, authPrompts]
+    );
+
+    /** Every pane on screen right now, whichever tab it is in. */
+    const paneIds = useMemo(() => {
+        const ids = new Set();
+        for (const tab of tabs) {
+            if (tab.type !== 'terminal') continue;
+            for (const pane of collectPanes(tab.layout)) ids.add(pane.id);
+        }
+        return ids;
+    }, [tabs]);
+
+    /**
+     * A question with no pane left to ask it in.
+     *
+     * It should not happen: every dial names the pane it is for. But a pane can
+     * be closed while its handshake is still mid-flight, and a prompt nobody
+     * can answer holds the main process open waiting for a reply. So the same
+     * screen is put over the window instead, which is the one case where any of
+     * this is not part of a pane.
+     */
+    const strayHostKeyPrompt = hostKeyPrompts.find(prompt => !paneIds.has(prompt.tabId)) || null;
+    const strayAuthPrompt = strayHostKeyPrompt
+        ? null
+        : authPrompts.find(prompt => !paneIds.has(prompt.tabId)) || null;
 
     /**
      * Rewrite one tab, leaving every other one untouched.
@@ -1558,6 +1640,10 @@ function App() {
                                                 onConnectionChange={handleConnectionChange}
                                                 onRegisterConnection={registerPaneConnection}
                                                 onUpdateHost={handleUpdateHost}
+                                                hostKeyPrompt={hostKeyPromptFor(pane.id)}
+                                                onHostKeyRespond={handleHostKeyResponse}
+                                                authPrompt={authPromptFor(pane.id)}
+                                                onAuthRespond={handleAuthPromptResponse}
                                             />
                                         )
                                     )}
@@ -1612,17 +1698,27 @@ function App() {
                 />
             )}
 
-            <HostKeyModal
-                prompt={hostKeyPrompts[0] || null}
-                onRespond={handleHostKeyResponse}
-            />
-
-            {/* Below the host key modal on purpose: a key has to be trusted
-                before anything is worth typing into that connection. */}
-            <AuthPromptModal
-                prompt={hostKeyPrompts.length === 0 ? (authPrompts[0] || null) : null}
-                onRespond={handleAuthPromptResponse}
-            />
+            {/* Host keys and authentication rounds are asked on the screen of
+                the pane that is dialling. This is only for the ones that name
+                no pane: the same screen, over the window, so a question can
+                never end up with nowhere to be asked. */}
+            {(strayHostKeyPrompt || strayAuthPrompt) && (
+                <div className="fixed inset-0 z-[200] bg-white dark:bg-surface-base text-gray-900 dark:text-white">
+                    <SessionScreen
+                        state={strayHostKeyPrompt ? 'hostkey' : 'auth'}
+                        address={
+                            strayHostKeyPrompt
+                                ? `${strayHostKeyPrompt.host}:${strayHostKeyPrompt.port}`
+                                : [strayAuthPrompt.username, strayAuthPrompt.host]
+                                    .filter(Boolean).join('@')
+                        }
+                        hostKeyPrompt={strayHostKeyPrompt}
+                        onHostKeyRespond={handleHostKeyResponse}
+                        authPrompt={strayAuthPrompt}
+                        onAuthRespond={handleAuthPromptResponse}
+                    />
+                </div>
+            )}
         </div>
     );
 }

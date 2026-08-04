@@ -18,7 +18,7 @@ import { protocolLabel } from '../lib/protocols';
 import SegmentedControl from './ui/SegmentedControl';
 import MenuButton from './ui/MenuButton';
 import Tooltip from './ui/Tooltip';
-import ConnectingSplash from './ui/ConnectingSplash';
+import SessionScreen from './ui/SessionScreen';
 import SftpView from './SftpView';
 import TunnelsView from './tunnels/TunnelsView';
 import VncView from './VncView';
@@ -194,6 +194,12 @@ function TerminalView({
     onConnectionChange,
     onRegisterConnection,
     onUpdateHost,
+    // The two questions a handshake can stop on, when it is this pane's
+    // handshake that stopped. Both are answered on the pane's own screen.
+    hostKeyPrompt = null,
+    onHostKeyRespond,
+    authPrompt = null,
+    onAuthRespond,
 }) {
     const rootRef = useRef(null);
     const terminalRef = useRef(null);
@@ -205,6 +211,25 @@ function TerminalView({
     const webglRef = useRef(null);
     const [logging, setLogging] = useState({ recording: false, fileName: '', always: false });
     const [isConnecting, setIsConnecting] = useState(true);
+    /**
+     * Whether this pane has ever had a session up.
+     *
+     * It is what decides who owns the pane when there is no connection: before
+     * the first one lands there is nothing in the terminal, so the session
+     * screen has it, and a failure is a screen rather than a red line in an
+     * otherwise blank buffer. After it, the scrollback is the pane, and a drop
+     * is reported in the header without covering a word of it.
+     */
+    const [everConnected, setEverConnected] = useState(false);
+
+    /**
+     * The question this pane's handshake is currently stopped on, if any.
+     *
+     * Read as an id rather than an object so the effects that depend on it fire
+     * once per question, and not again every time the queue behind it is
+     * rewritten.
+     */
+    const promptId = hostKeyPrompt?.requestId || authPrompt?.requestId || null;
     const [searchOpen, setSearchOpen] = useState(false);
     const [snippetsOpen, setSnippetsOpen] = useState(false);
     /**
@@ -696,29 +721,44 @@ function TerminalView({
         term.refresh(0, term.rows - 1);
     }, [terminalSettings.ligatures, attachRenderer, detachRenderer, pushResize]);
 
-    // Handle resize on visibility change or fullscreen toggle
+    // Handle resize on visibility change or fullscreen toggle. The terminal is
+    // not given focus while the session screen is asking something, since the
+    // answer is typed into that: see `promptId` below.
     useEffect(() => {
         if (!isActive) return;
         const timer = setTimeout(() => {
             pushResize();
-            if (isFocused) termRef.current?.focus();
+            if (isFocused && !promptId) termRef.current?.focus();
         }, 350); // Wait for sidebar animation
         return () => clearTimeout(timer);
-    }, [isActive, isFullscreen, isFocused, pane?.id, pushResize]);
+    }, [isActive, isFullscreen, isFocused, promptId, pane?.id, pushResize]);
 
     // Following the focused pane has to be immediate: the 350ms settle above is
     // there for an animating layout, and waiting that long to start typing in
-    // the pane you just clicked reads as a dropped keystroke.
+    // the pane you just clicked reads as a dropped keystroke. Answering a
+    // question hands focus back here, because this is where typing resumes.
     useEffect(() => {
-        if (isActive && isFocused) termRef.current?.focus();
-    }, [isActive, isFocused]);
+        if (isActive && isFocused && !promptId) termRef.current?.focus();
+    }, [isActive, isFocused, promptId]);
 
     // The overlay only covers the first dial. A later drop is reported in the
     // header and in the terminal itself, so it must not blank the scrollback
     // the user may still want to read.
     useEffect(() => {
         if (connection.status !== 'connecting') setIsConnecting(false);
+        if (connection.status === 'connected') setEverConnected(true);
     }, [connection.status]);
+
+    /**
+     * A question the handshake is waiting on has to be where it can be answered.
+     *
+     * A pane parked on files or a desktop comes back to its shell to ask: both
+     * of those ride the session being negotiated, so there is nothing behind
+     * them to look at until this is answered anyway.
+     */
+    useEffect(() => {
+        if (promptId) setViewMode('ssh');
+    }, [promptId]);
 
     // Only this component sees the session state. Report it up so the tab
     // strip can dim a dropped session.
@@ -854,7 +894,32 @@ function TerminalView({
     // Which viewer the pane gets. A record written before RDP existed has no
     // protocol and is VNC, which is what it was.
     const isRdp = desktop?.protocol === 'rdp';
-    const canReconnect = ['waiting', 'failed', 'closed'].includes(connection.status);
+    /**
+     * Which face the session screen is showing, or nothing when the terminal
+     * owns the pane.
+     *
+     * The order is the order of urgency. A question the handshake is blocked on
+     * comes before anything else, including over an established session's
+     * scrollback, because nothing else in this pane can proceed until it is
+     * answered. After that it is the first dial and how it went; once a session
+     * has landed, a drop is the header's business and the buffer stays put.
+     */
+    const sessionScreen =
+        hostKeyPrompt ? 'hostkey'
+        : authPrompt ? 'auth'
+        : isConnecting ? 'connecting'
+        : everConnected ? null
+        : ['connecting', 'reconnecting'].includes(connection.status) ? 'connecting'
+        // 'waiting' is the same face as 'failed', with the clock on it: a dial
+        // that never landed and is about to be tried again has not become a
+        // different situation.
+        : ['failed', 'waiting'].includes(connection.status) ? 'failed'
+        : null;
+
+    // The screen carries its own Try again, so the header does not put a second
+    // one beside it. Everything else that can be dialled again still does.
+    const canReconnect = ['waiting', 'failed', 'closed'].includes(connection.status)
+        && sessionScreen !== 'failed';
 
     /**
      * Move to the view a "Connect via…" asked for, once it can be shown.
@@ -1215,8 +1280,13 @@ function TerminalView({
                     {/* Anything other than a healthy session gets said out loud:
                         the status dot alone is too easy to miss. Narrow enough
                         and there is no room to say it; the dot keeps its
-                        tooltip, and a dead session grows a Reconnect button. */}
-                    {!isLive && connection.status !== 'connecting' && !compact && (
+                        tooltip, and a dead session grows a Reconnect button.
+
+                        Not while the session screen is up, though. It is saying
+                        the same thing in the middle of the pane, at a size that
+                        can be read, and the header repeating it in amber two
+                        inches above is one notice too many. */}
+                    {!isLive && connection.status !== 'connecting' && !compact && !sessionScreen && (
                         <span
                             className={`text-xs truncate ${
                                 connection.status === 'failed'
@@ -1408,16 +1478,29 @@ function TerminalView({
                 </div>
             </div>
 
-            {/* Connecting Animation Overlay - only show in SSH mode. The same
-                component the desktop views use; `top-11` is what keeps it below
-                this pane's header rather than over it. */}
-            {isConnecting && viewMode === 'ssh' && (
-                <ConnectingSplash
+            {/* The pane's own screen, for every moment it has no session: the
+                dial, the two questions a handshake can stop on, and a first
+                dial that did not land. `top-11` is what keeps it below this
+                pane's header rather than over it. */}
+            {sessionScreen && viewMode === 'ssh' && (
+                <SessionScreen
+                    state={sessionScreen}
                     title={pane.title}
-                    subtitle={`${pane.host?.username}@${pane.host?.host}:${pane.host?.port || 22}`}
+                    address={`${pane.host?.username}@${pane.host?.host}:${pane.host?.port || 22}`}
                     os={hostOs(pane.host)}
                     distro={pane.host?.distro}
-                    className="connecting-overlay top-11 z-20"
+                    background={themeConfig.background}
+                    accent={themeConfig.red}
+                    hostKeyPrompt={hostKeyPrompt}
+                    onHostKeyRespond={onHostKeyRespond}
+                    authPrompt={authPrompt}
+                    onAuthRespond={onAuthRespond}
+                    message={connection.message}
+                    retryIn={connection.retryIn}
+                    attempt={connection.attempt}
+                    maxAttempts={connection.maxAttempts}
+                    onReconnect={connection.reconnectNow}
+                    className="top-11 z-20"
                     style={{ backgroundColor: themeConfig.background, color: themeConfig.foreground }}
                 />
             )}

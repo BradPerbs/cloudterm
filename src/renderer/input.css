@@ -287,6 +287,59 @@ input[type="color"]::-webkit-color-swatch {
     animation: connect-fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* The session screen's other faces -----------------------------------------
+   A pane with no session up shows one screen, and every surface on it is mixed
+   out of `currentColor` for the reason the splash above is: it sits on the
+   terminal's own background, whichever of a dozen themes that is, and a fixed
+   grey would be a smear on half of them. The rgba line before each `color-mix`
+   is the fallback for an engine without it. */
+.session-well {
+    background-color: rgba(127, 127, 127, 0.07);
+    background-color: color-mix(in srgb, currentColor 6%, transparent);
+    border-color: rgba(127, 127, 127, 0.2);
+    border-color: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.session-rule {
+    border-color: rgba(127, 127, 127, 0.2);
+    border-color: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.session-ghost {
+    border-color: rgba(127, 127, 127, 0.28);
+    border-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.session-ghost:hover {
+    background-color: rgba(127, 127, 127, 0.12);
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.session-field {
+    background-color: rgba(127, 127, 127, 0.08);
+    background-color: color-mix(in srgb, currentColor 7%, transparent);
+    border-color: rgba(127, 127, 127, 0.24);
+    border-color: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.session-field:focus {
+    border-color: rgba(127, 127, 127, 0.5);
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Bare, like the transcript's own copy button: it sits on top of the string it
+   copies, where a fill or a border would be a second object. */
+.session-copy {
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+}
+
+.session-copy:hover,
+.session-copy:focus-visible,
+.session-copy[data-copied="true"] {
+    opacity: 1;
+}
+
 /* SFTP Drag and Drop animations */
 @keyframes sftp-drop-pulse {
 

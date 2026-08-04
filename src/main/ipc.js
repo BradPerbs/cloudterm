@@ -469,10 +469,17 @@ function register(getWindow) {
     // on, whatever it turns out to be: the dispatcher reads the host record and
     // picks between ssh.js, telnet.js and serial.js. See transport.js.
     handle('ssh-connect', async (event, payload) => {
+        // Both prompts below are raised mid-handshake, so they are stamped with
+        // the pane that is dialling. The renderer asks the question inside that
+        // pane rather than over the whole window, and a question with no pane
+        // left to ask it in can be answered for: see App.jsx.
+        const tabId = payload?.tabId || null;
+
         const result = await transport.connect(payload, {
             window: getWindow(),
-            requestTrust,
-            requestKeyboardInteractive,
+            requestTrust: (details) => requestTrust({ tabId, ...details }),
+            requestKeyboardInteractive: (details) =>
+                requestKeyboardInteractive({ tabId, ...details }),
         });
         // Forwards belong to the session, not the app run, so they are armed on
         // every successful dial, including the reconnect after a drop, where

@@ -37,6 +37,16 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
     const [retryIn, setRetryIn] = useState(0);
 
     /**
+     * Why the last dial failed, in main's own words.
+     *
+     * It goes into the terminal as well, but a first dial that never landed has
+     * no terminal worth reading: the pane shows the failure on its own screen,
+     * and that screen needs the reason rather than a line of scrollback behind
+     * it.
+     */
+    const [message, setMessage] = useState('');
+
+    /**
      * The hops this session was actually dialled through, outward first, as main
      * reported them at connect time. Empty for a connection that went straight
      * there, which is most of them.
@@ -128,6 +138,7 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
 
     const dial = useCallback(async ({ reconnect }) => {
         clearTimers();
+        setMessage('');
         setPhase(reconnect ? 'reconnecting' : 'connecting');
 
         const { cols, rows } = callbacks.current.getGeometry() || {};
@@ -157,6 +168,7 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
         }
 
         setPhase('failed');
+        setMessage(result.message || 'Connection failed');
         // Nothing is connected through anything any more. A path left on screen
         // over a dead session would be describing a connection that is gone.
         setRoute([]);
@@ -225,6 +237,7 @@ export function useSshConnection({ tabId, hostId, getGeometry, write, onResult }
         status,
         attempt,
         retryIn,
+        message,
         route,
         maxAttempts: MAX_ATTEMPTS,
         connect,

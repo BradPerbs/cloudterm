@@ -13,25 +13,10 @@ import SettingCard from './ui/SettingCard';
 import { formatDateTime } from '../../lib/format';
 import { toastOptions } from '../../lib/toast';
 
-/** Colour the algorithm badge so ed25519 reads as the good one at a glance. */
-const KEY_TYPE_STYLES = {
-    'ssh-ed25519': 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400',
-    'ecdsa-sha2-nistp256': 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
-    'ecdsa-sha2-nistp384': 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
-    'ecdsa-sha2-nistp521': 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
-    'rsa-sha2-512': 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
-    'rsa-sha2-256': 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
-    'ssh-rsa': 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
-    'ssh-dss': 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
-};
-
-const badgeFor = (keyType) =>
-    KEY_TYPE_STYLES[keyType] || 'bg-gray-100 dark:bg-surface-control text-gray-600 dark:text-gray-400';
-
 function KeyRow({ entry, onForget }) {
     return (
         <div className="flex items-center gap-3 py-2 pl-8 pr-3 border-t border-gray-100 dark:border-surface-control/60">
-            <span className={`shrink-0 px-2 py-0.5 rounded-md text-[10px] font-semibold font-mono ${badgeFor(entry.keyType)}`}>
+            <span className="shrink-0 w-36 font-mono text-[11px] truncate text-gray-500 dark:text-gray-400">
                 {entry.keyType || 'unknown'}
             </span>
 
