@@ -108,6 +108,19 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
                 const context = toolContext();
                 const settings = context.settings;
 
+                // Refused outright, before the approval path rather than
+                // inside it: there is no answer the user could give that would
+                // let this run, so asking would only be a card whose buttons
+                // both mean no.
+                const blocked = catalog.blockedReason(definition.name, input || {}, settings);
+                if (blocked) {
+                    onEvent({ type: 'tool-blocked', name: definition.name, rule: blocked });
+                    return {
+                        content: [{ type: 'text', text: catalog.blockedMessage(blocked) }],
+                        isError: true,
+                    };
+                }
+
                 // The gate. Not in the agent's own permission system, which is
                 // a different set of promises on every agent, but here, once,
                 // in front of the thing that actually touches a server.

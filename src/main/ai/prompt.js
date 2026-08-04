@@ -210,6 +210,25 @@ function build(context) {
         );
     }
 
+    // Said in advance so a refusal is not the way this is discovered. The list
+    // is enforced on every call whatever this block says, so a change made
+    // mid-conversation still bites; what it would not do is update the wording
+    // here, which is the lesser half.
+    if (context.blockedCommands?.length) {
+        blocks.push(
+            '',
+            '## Commands you may not run',
+            '',
+            'The user has blocked these. They are refused before they reach a server, there is no '
+            + 'approval that would let one through, and spelling one differently to mean the same thing '
+            + 'is not a way around it:',
+            ...context.blockedCommands.map(rule => `- \`${rule}\``),
+            '',
+            'If a task genuinely needs one, stop and say what you wanted to run and why, so the user can '
+            + 'do it themselves or change the list in Settings.'
+        );
+    }
+
     return blocks.join('\n');
 }
 

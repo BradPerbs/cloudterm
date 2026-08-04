@@ -332,6 +332,14 @@ const TOOLS = [
             const resolved = resolveSession(input, ctx);
             if (resolved.error) return fail(resolved.error);
 
+            // Checked here as well as at the approval gate. The gate is what
+            // keeps a pointless card off the screen; this is what makes the
+            // rule true, because every provider reaches a server through this
+            // function and one that forgot the gate would otherwise walk past
+            // the list entirely.
+            const blocked = blockedReason('run_command', input, ctx.settings);
+            if (blocked) return fail(blockedMessage(blocked));
+
             const timeout = (input.timeoutSeconds || 60) * 1000;
             const background = input.background === undefined
                 ? ctx.settings.commandMode === 'background'
@@ -396,6 +404,12 @@ const TOOLS = [
         handler: async (input, ctx) => {
             const resolved = resolveSession(input, ctx);
             if (resolved.error) return fail(resolved.error);
+
+            // Typing reaches the same shell that run_command does, so it
+            // answers to the same list. Without this the block would be one
+            // tool call wide.
+            const blocked = blockedReason('send_input', input, ctx.settings);
+            if (blocked) return fail(blockedMessage(blocked));
 
             const session = ssh.sessions.get(resolved.sessionId);
             const mark = transcript.cursor(resolved.sessionId);
@@ -607,6 +621,215 @@ const TOOLS = [
 
 const BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
 
+/* ------------------------------------------------------------------ *
+ * Blocked commands
+ *
+ * What this is, and what it is not.
+ *
+ * It is a guardrail. It catches the destructive command that arrives by
+ * accident: a model that misread the question, a suggestion copied out of a
+ * log, a plausible-looking answer to "clear some space". That is the common
+ * case by a wide margin, and refusing it outright is worth doing.
+ *
+ * It is not a security boundary, and it must never be treated as one. A shell
+ * has unlimited ways to spell the same command, and anything that can write a
+ * script can sidestep any list of words: `bash -c "$(echo cm0gLXJmIC8K |
+ * base64 -d)"` is not going to be caught here and neither is the next one.
+ * The control that actually stands between a compromised server and a bad
+ * command is the approval card, which is why nothing about this list loosens
+ * anything above it.
+ *
+ * So the matching below is written to be hard to trip over by accident rather
+ * than impossible to evade: it reads through the quoting, the wrappers, the
+ * flag spellings and the chaining that show up in ordinary commands, and it
+ * errs towards refusing when a string is ambiguous.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Words that stand in front of the command that actually runs.
+ *
+ * Seeing one is what lets `sudo rm -rf /` be read as the `rm` it is, rather
+ * than as a command called `sudo` that no rule mentions. See `readingsOf`.
+ */
+const WRAPPERS = new Set([
+    'sudo', 'doas', 'env', 'nice', 'ionice', 'nohup', 'time', 'timeout',
+    'command', 'builtin', 'exec', 'xargs', 'stdbuf', 'setsid', 'strace',
+]);
+
+/**
+ * Long flags that mean the same as a short letter, so `--recursive --force`
+ * is not a way around a rule written `-rf`.
+ *
+ * Deliberately short. These are the spellings that matter for the commands
+ * anyone actually blocks; a general table would be one per program and would
+ * still be incomplete.
+ */
+const LONG_FLAGS = {
+    recursive: 'r',
+    force: 'f',
+    all: 'a',
+    verbose: 'v',
+};
+
+/** Anything that can end one command and begin another, or nest one inside. */
+const SEPARATORS = /[;&|\n\r`(){}<>]/g;
+
+/** The last path segment, so `/bin/rm` and `rm` are the same command. */
+const commandName = (token) => token.split(/[/\\]/).pop();
+
+/**
+ * Drop the quoting that lets one word be written as several.
+ *
+ * `r''m`, `"rm"` and `r\m` are all `rm` to a shell, and a rule that missed
+ * that would be a rule that only stops the careless spelling.
+ */
+const unquote = (text) => text.replace(/['"]/g, '').replace(/\\(.)/g, '$1');
+
+/**
+ * Split a command line into the individual commands it runs.
+ *
+ * Substitutions and subshells are cut at their brackets rather than parsed, so
+ * the command inside `$(...)` is checked as its own segment. That over-splits
+ * a string with a stray bracket in it, which costs an occasional false refusal
+ * and never a missed one. For a list whose whole job is to say no, that is the
+ * direction to be wrong in.
+ */
+function segmentsOf(command) {
+    return unquote(String(command ?? '').toLowerCase())
+        .replace(SEPARATORS, '\n')
+        .split('\n')
+        .map(part => part.trim().replace(/\s+/g, ' '))
+        .filter(Boolean);
+}
+
+/**
+ * Read a command starting at one token: what is being run, which flags it
+ * carries, and its remaining arguments.
+ *
+ * Flags are gathered as a set of letters, so `-rf`, `-fr` and `-r -f` are one
+ * answer and the order they were typed in stops mattering.
+ */
+function parseFrom(tokens, position) {
+    const flags = new Set();
+    const positionals = [];
+
+    for (const token of tokens.slice(position + 1)) {
+        if (token.startsWith('--') && token.length > 2) {
+            const short = LONG_FLAGS[token.slice(2).split('=')[0]];
+            if (short) flags.add(short);
+        } else if (token.startsWith('-') && token.length > 1) {
+            for (const letter of token.slice(1)) flags.add(letter);
+        } else {
+            positionals.push(token);
+        }
+    }
+
+    return { name: commandName(tokens[position]), flags, positionals };
+}
+
+/**
+ * Every reading of a segment that could be the command it runs.
+ *
+ * Usually there is one, and it is the first word. A wrapper is what makes a
+ * second reading possible, and the reason this is a list rather than a single
+ * parse: `sudo -u root rm -rf /` cannot be read by walking past the wrapper's
+ * flags, because `-u` takes a value and knowing which flags do that means
+ * knowing every wrapper's option table. So once a wrapper has been seen, every
+ * later word is offered as a candidate and the rules decide.
+ *
+ * That permission is deliberately not granted without one. If any word could
+ * be the command, a rule naming `ls` would fire on `cat ls`, and a list that
+ * refuses things nobody asked it to is a list people turn off.
+ */
+function readingsOf(segment) {
+    const tokens = String(segment).split(' ').filter(Boolean);
+    const readings = [];
+
+    // `FOO=bar cmd` sets a variable for one command; the command is what
+    // follows it.
+    let start = 0;
+    while (start < tokens.length && /^[a-z_][a-z0-9_]*=/.test(tokens[start])) start += 1;
+
+    let sawWrapper = false;
+    for (let position = start; position < tokens.length; position += 1) {
+        const token = tokens[position];
+        if (token.startsWith('-')) continue;
+
+        readings.push(parseFrom(tokens, position));
+
+        if (WRAPPERS.has(commandName(token))) sawWrapper = true;
+        else if (!sawWrapper) break;
+    }
+
+    return readings;
+}
+
+/**
+ * Whether one command matches one rule.
+ *
+ * The rule's flags must all be present, and its words must lead the command's
+ * own. So `rm -rf` catches `rm -rf /var`, `rm -fr /var` and `rm -r -f /var`,
+ * while `rm -r /var` is left to the ordinary approval path: it is not what the
+ * rule named, and silently widening a rule is how a block list ends up
+ * refusing things nobody asked it to.
+ */
+function matchesRule(command, rule) {
+    if (command.name !== rule.name) return false;
+    for (const flag of rule.flags) {
+        if (!command.flags.has(flag)) return false;
+    }
+    return rule.positionals.every((word, position) => command.positionals[position] === word);
+}
+
+/** The text a tool call would put on a server, or '' for one that runs nothing. */
+function commandTextFor(toolName, input) {
+    if (toolName === 'run_command') return String(input?.command ?? '');
+    // Typing into the terminal reaches the same shell by another door. A list
+    // that only covered run_command would be one tool call away from useless.
+    if (toolName === 'send_input') return String(input?.text ?? '');
+    return '';
+}
+
+/**
+ * The blocked rule a call trips, or '' when it trips none.
+ *
+ * Returns the rule rather than a boolean so the refusal can quote the line the
+ * user wrote, which is the difference between "no" and "no, because of this,
+ * which you can change here".
+ */
+function blockedReason(toolName, input, settings) {
+    const rules = Array.isArray(settings?.blockedCommands) ? settings.blockedCommands : [];
+    if (rules.length === 0) return '';
+
+    const text = commandTextFor(toolName, input);
+    if (!text.trim()) return '';
+
+    const segments = segmentsOf(text);
+
+    for (const raw of rules) {
+        // A rule is taken literally, from its first word: it is what someone
+        // typed into a settings box, not something a shell handed us. That is
+        // also what lets a wrapper be blocked by name, since `sudo` as a rule
+        // has to mean the command `sudo`.
+        const tokens = unquote(String(raw).toLowerCase()).trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+        if (tokens.length === 0) continue;
+        const rule = parseFrom(tokens, 0);
+
+        for (const segment of segments) {
+            if (readingsOf(segment).some(reading => matchesRule(reading, rule))) return raw;
+        }
+    }
+
+    return '';
+}
+
+/** What the model is told, phrased so its next move is not to try again. */
+const blockedMessage = (rule) =>
+    `Refused: "${rule}" is on the blocked command list in this app's assistant settings, `
+    + 'so it cannot be run here and there is no approval that would let it through. '
+    + 'Do not try to reach the same result another way. Tell the user what you wanted to run '
+    + 'and why, and let them run it themselves or change the list in Settings.';
+
 /**
  * Whether a call can go ahead without asking, under the current policy.
  *
@@ -615,6 +838,11 @@ const BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
  * not revisited, and the safe answer is to ask.
  */
 function isAutoApproved(toolName, input, settings) {
+    // Before the approval mode, not after it. A blocked command is refused
+    // rather than approved, so it must never come back from here as "run it",
+    // and `never ask` is exactly the setting under which that would happen.
+    if (blockedReason(toolName, input, settings)) return false;
+
     if (settings.approval === 'never') return true;
     if (settings.approval === 'always') return false;
 
@@ -627,9 +855,16 @@ function isAutoApproved(toolName, input, settings) {
     // approve without looking.
     if (toolName === 'run_command') {
         const command = String(input?.command || '').trim().toLowerCase();
-        // Anything chained or redirected is judged as a whole rather than by
-        // its first word, because `ls; rm -rf /` starts with `ls`.
-        if (/[;&|><`$(]/.test(command)) return false;
+        // Anything chained, redirected or carried onto a second line is judged
+        // as a whole rather than by its first word, because `ls; rm -rf /` and
+        // `ls -la\nrm -rf /` both start with `ls`.
+        //
+        // The line breaks are not an afterthought to the list. A newline ends a
+        // command exactly as `;` does, so a payload whose first line is `ls`
+        // would otherwise be approved in full and run in full; and a carriage
+        // return is Enter to the PTY that the terminal path types into, which
+        // is the default place a command goes.
+        if (/[;&|><`$(\n\r]/.test(command)) return false;
         return settings.autoApproveCommands.some(prefix => (
             command === prefix || command.startsWith(`${prefix} `)
         ));
@@ -642,6 +877,8 @@ module.exports = {
     TOOLS,
     BY_NAME,
     isAutoApproved,
+    blockedReason,
+    blockedMessage,
     resolveSession,
     sessionInScope,
     hostInScope,

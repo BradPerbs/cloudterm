@@ -78,6 +78,19 @@ const DEFAULTS = {
     // Commands that never need approval no matter the mode above, matched on
     // the first word. Seeded with the ones whose whole purpose is to look.
     autoApproveCommands: ['ls', 'cat', 'head', 'tail', 'grep', 'ps', 'df', 'du', 'uptime', 'whoami', 'systemctl status', 'journalctl'],
+    /**
+     * Commands the assistant is never allowed to run, whatever else is set.
+     *
+     * The opposite end of the list above, and not a mirror of it. Being absent
+     * from `autoApproveCommands` only means "ask first", so a second list that
+     * also meant "ask first" would say nothing. These are refused outright: no
+     * approval card, no way to say yes, and `never ask` does not reach them
+     * either. That is the only reading that earns the setting its place.
+     *
+     * Seeded with the one command that is nearly always a mistake when it comes
+     * from something other than a person who meant it.
+     */
+    blockedCommands: ['rm -rf'],
     // One-click questions on the empty panel. Empty on purpose: a canned list
     // of things nobody here asked for is filler, and the useful ones are the
     // ones a particular person asks their particular fleet over and over.
@@ -99,6 +112,7 @@ function sanitize(raw) {
     const next = {
         ...DEFAULTS,
         autoApproveCommands: [...DEFAULTS.autoApproveCommands],
+        blockedCommands: [...DEFAULTS.blockedCommands],
         quickPrompts: [...DEFAULTS.quickPrompts],
     };
     if (raw && typeof raw === 'object') {
@@ -114,6 +128,15 @@ function sanitize(raw) {
         if (Array.isArray(raw.autoApproveCommands)) {
             next.autoApproveCommands = raw.autoApproveCommands
                 .map(entry => String(entry || '').trim().toLowerCase())
+                .filter(Boolean)
+                .slice(0, 100);
+        }
+        // Only replaced when the patch actually carries a list. An older config
+        // written before this setting existed leaves the default in place, so
+        // upgrading the app does not quietly unblock anything.
+        if (Array.isArray(raw.blockedCommands)) {
+            next.blockedCommands = raw.blockedCommands
+                .map(entry => String(entry || '').replace(/\s+/g, ' ').trim().toLowerCase())
                 .filter(Boolean)
                 .slice(0, 100);
         }
@@ -164,7 +187,19 @@ function persist() {
  * host store follows for passwords.
  */
 function get() {
-    return { ...load(), hasApiKey: Boolean(secret), encryptionAvailable: isEncryptionAvailable() };
+    return {
+        ...load(),
+        hasApiKey: Boolean(secret),
+        encryptionAvailable: isEncryptionAvailable(),
+        // What the app shipped with, so a settings page can offer the way back
+        // without keeping a second copy of these lists that drifts from this
+        // one. Read-only: `set` works from `load()`, not from here, so nothing
+        // on this view can be written back into the config by echoing it.
+        defaults: {
+            autoApproveCommands: [...DEFAULTS.autoApproveCommands],
+            blockedCommands: [...DEFAULTS.blockedCommands],
+        },
+    };
 }
 
 function set(patch) {

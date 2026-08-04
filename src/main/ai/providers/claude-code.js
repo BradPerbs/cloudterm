@@ -526,6 +526,15 @@ async function start({
                     : { behavior: 'deny', message: verdict.message || 'The user declined that.' };
             }
 
+            // Refused outright, before the approval path rather than inside
+            // it: there is no answer the user could give that would let this
+            // run, so asking would only be a card whose buttons both mean no.
+            const blocked = catalog.blockedReason(local, toolInput, current);
+            if (blocked) {
+                onEvent({ type: 'tool-blocked', name: local, rule: blocked });
+                return { behavior: 'deny', message: catalog.blockedMessage(blocked) };
+            }
+
             if (catalog.isAutoApproved(local, toolInput, current)) {
                 return { behavior: 'allow', updatedInput: toolInput };
             }

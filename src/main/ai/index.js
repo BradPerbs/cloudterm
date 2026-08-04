@@ -464,6 +464,7 @@ function ensureProvider(conversation) {
         sessionIds: conversation.sessionIds,
         hostIds: conversation.hostIds,
         commandMode: resolved().commandMode,
+        blockedCommands: resolved().blockedCommands,
     });
 
     // A session id belongs to the agent that issued it. Switching agents
@@ -527,6 +528,27 @@ function handleProviderEvent(conversation, event) {
             modelCatalogs.set(provider, event.models);
             notify('ai-models', { provider, models: event.models });
         }
+        return;
+    }
+
+    // A refusal belongs in the audit trail rather than in the chat. The model
+    // is told why in the tool result and will say so in its reply, so putting
+    // it in the transcript as well would be the same sentence twice; what is
+    // actually worth keeping is the record that something tried, next to the
+    // commands that did run.
+    if (event.type === 'tool-blocked') {
+        const target = conversation.boundSessionId || '';
+        const info = target ? transcript.info(target) : null;
+        activity.record({
+            category: 'security',
+            action: 'assistant.blocked',
+            outcome: 'warning',
+            target: info?.hostName || '',
+            subject: info?.address || '',
+            detail: `The assistant tried to run a command matching the blocked rule "${event.rule}"`,
+            hostId: info?.hostId || '',
+            hostName: info?.hostName || '',
+        });
         return;
     }
 

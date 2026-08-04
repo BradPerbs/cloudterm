@@ -99,6 +99,7 @@ export default function AssistantSection() {
     const [keyValue, setKeyValue] = useState('');
     const [keyState, setKeyState] = useState('');
     const [commands, setCommands] = useState('');
+    const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
 
     useEffect(() => {
@@ -110,6 +111,7 @@ export default function AssistantSection() {
             setProviders(status.providers || []);
             setTools(status.tools || []);
             setCommands((status.settings.autoApproveCommands || []).join('\n'));
+            setBlocked((status.settings.blockedCommands || []).join('\n'));
             setPrompts((status.settings.quickPrompts || []).join('\n'));
         }).catch(() => {});
 
@@ -146,6 +148,30 @@ export default function AssistantSection() {
         setCommands((next.autoApproveCommands || []).join('\n'));
     }, [commands, update]);
 
+    const saveBlocked = useCallback(async () => {
+        const list = blocked.split('\n').map(line => line.trim()).filter(Boolean);
+        const next = await update({ blockedCommands: list });
+        setBlocked((next.blockedCommands || []).join('\n'));
+    }, [blocked, update]);
+
+    /**
+     * Back to what the app shipped with.
+     *
+     * Both lists are free to be emptied or rewritten, which is the point of
+     * them. What that leaves is no way back: once the seeded entries are gone
+     * there is nothing on screen that remembers what they were. Main sends the
+     * defaults with the settings so this does not need its own copy of them.
+     */
+    const restoreCommands = useCallback(async () => {
+        const next = await update({ autoApproveCommands: settings.defaults.autoApproveCommands });
+        setCommands((next.autoApproveCommands || []).join('\n'));
+    }, [settings?.defaults, update]);
+
+    const restoreBlocked = useCallback(async () => {
+        const next = await update({ blockedCommands: settings.defaults.blockedCommands });
+        setBlocked((next.blockedCommands || []).join('\n'));
+    }, [settings?.defaults, update]);
+
     const savePrompts = useCallback(async () => {
         const list = prompts.split('\n').map(line => line.trim()).filter(Boolean);
         const next = await update({ quickPrompts: list });
@@ -161,6 +187,16 @@ export default function AssistantSection() {
     }
 
     const readOnlyTools = tools.filter(tool => tool.readOnly).length;
+
+    // Offered only once a list has actually moved away from the shipped one,
+    // so the row is not carrying a button that would do nothing. Compared
+    // against what is saved rather than what is in the box, because a list
+    // someone is halfway through typing has not changed anything yet.
+    const sameAsDefault = (list, fallback) => (list || []).join('\n') === (fallback || []).join('\n');
+    const canRestoreCommands = settings.defaults
+        && !sameAsDefault(settings.autoApproveCommands, settings.defaults.autoApproveCommands);
+    const canRestoreBlocked = settings.defaults
+        && !sameAsDefault(settings.blockedCommands, settings.defaults.blockedCommands);
 
     return (
         <>
@@ -227,7 +263,8 @@ export default function AssistantSection() {
                     className={DIVIDED}
                     title="Commands that never need approval"
                     description="One per line, matched on the whole first words. A command containing a pipe,
-                        a redirect, a semicolon or a substitution is always asked about, whatever it starts with."
+                        a redirect, a semicolon, a substitution or a second line is always asked about,
+                        whatever it starts with."
                 >
                     <div className="space-y-3">
                         <textarea
@@ -242,10 +279,61 @@ export default function AssistantSection() {
                             <Button size="sm" variant="secondary" onClick={saveCommands}>
                                 Save list
                             </Button>
+                            {canRestoreCommands && (
+                                <Button size="sm" variant="ghost" onClick={restoreCommands}>
+                                    Restore defaults
+                                </Button>
+                            )}
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                                 Only applies while approvals are set to "Changes only".
                             </span>
                         </div>
+                    </div>
+                </SettingRow>
+
+                <SettingRow
+                    className={DIVIDED}
+                    title="Commands it may never run"
+                    description={'One per line. These are refused outright rather than asked about, in every '
+                        + 'approval mode including "Never ask", and whether the assistant runs them on their '
+                        + 'own channel or types them into your terminal. Flags count: "rm -rf" also stops '
+                        + '"rm -fr", "rm -r -f" and "sudo /bin/rm --recursive --force".'}
+                >
+                    <div className="space-y-3">
+                        <textarea
+                            aria-label="Commands it may never run"
+                            rows={4}
+                            spellCheck={false}
+                            placeholder={'rm -rf\nshutdown\nmkfs'}
+                            className={`${FIELD_CLASS} font-jetbrains text-xs leading-relaxed resize-y
+                                placeholder:text-gray-500 dark:placeholder:text-neutral-400`}
+                            value={blocked}
+                            onChange={(event) => setBlocked(event.target.value)}
+                        />
+                        <div className="flex items-center gap-3">
+                            <Button size="sm" variant="secondary" onClick={saveBlocked}>
+                                Save list
+                            </Button>
+                            {canRestoreBlocked && (
+                                <Button size="sm" variant="ghost" onClick={restoreBlocked}>
+                                    Restore defaults
+                                </Button>
+                            )}
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                Clear the box to block nothing.
+                            </span>
+                        </div>
+                        {/* Said plainly, because a list like this invites the
+                            belief that it is a wall. It stops the destructive
+                            command that arrives by mistake, which is nearly all
+                            of them. It cannot stop one that is trying not to be
+                            recognised, and nothing here should be relied on as
+                            though it could. */}
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            A guardrail against mistakes, not a security control. A shell has too many ways to
+                            spell the same command for any list to catch them all, so keep approvals on for
+                            anything that matters.
+                        </p>
                     </div>
                 </SettingRow>
             </SettingCard>
