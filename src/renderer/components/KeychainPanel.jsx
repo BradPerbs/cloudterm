@@ -300,7 +300,7 @@ function KeychainPanel({
                 <div className="flex items-center gap-2 shrink-0">
                     <IconButton
                         onClick={() => handleNewKey('import')}
-                        title="Import an existing key"
+                        title="Import an existing key, from a file or pasted"
                         icon={<FileImportIcon size={18} strokeWidth={1.75} />}
                     />
                     {/* Only where there is a Hello to enrol into. Offering it on

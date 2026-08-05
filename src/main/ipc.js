@@ -18,6 +18,7 @@ const tunnels = require('./tunnels');
 const vnc = require('./vnc');
 const rdp = require('./rdp');
 const importer = require('./import');
+const importCommon = require('./import-common');
 const vault = require('./vault');
 const backup = require('./backup');
 const account = require('./account');
@@ -126,6 +127,30 @@ function describeCertificate(key) {
 // The mark is drawn 24 pixels square and the data URL rides along in the
 // settings snapshot, so there is no reason to carry a photograph.
 const MAX_LOGO_BYTES = 512 * 1024;
+
+// A private key file is a few KB at the very outside. The cap is here so that
+// pointing the picker at a disk image reports what it is instead of reading the
+// whole thing into memory to find out it is not a key.
+const MAX_KEY_BYTES = 256 * 1024;
+
+/**
+ * The certificate OpenSSH keeps next to a key, if there is one.
+ *
+ * `ssh` looks for `<identity>-cert.pub` beside the key it was given, and this
+ * looks in the same place. Anything that is not a certificate line is ignored
+ * rather than reported: a file that happens to sit there under that name is not
+ * an error in the import, it is just not a certificate.
+ */
+function readCertificateFile(privateKeyPath) {
+    const certPath = `${privateKeyPath}-cert.pub`;
+    try {
+        if (fs.statSync(certPath).size > MAX_KEY_BYTES) return '';
+        const text = fs.readFileSync(certPath, 'utf8').trim();
+        return text.includes('-cert-v01@openssh.com') ? text : '';
+    } catch {
+        return '';
+    }
+}
 
 // requestId -> resolve, for host key prompts awaiting a user decision.
 const pendingHostKeyPrompts = new Map();
@@ -329,6 +354,93 @@ function register(getWindow) {
         const pendingKeyId = `pending-${++promptCounter}`;
         pendingKeys.set(pendingKeyId, privateKey);
         return { publicKey, fingerprint, pendingKeyId };
+    });
+
+    /**
+     * Take a key off disk, the way `ssh -i` would find it.
+     *
+     * Pasting a private key into a textarea was the only way in, which meant
+     * opening `id_ed25519` in something else first and putting the whole of it
+     * on the clipboard. Picking the file instead reads it here, so the private
+     * half is held by the same map a generated one is and never crosses the
+     * bridge: the renderer is handed an id, a fingerprint and the public halves.
+     *
+     * The two files OpenSSH keeps beside a key come with it. `id_ed25519.pub`
+     * is where the fingerprint and the algorithm are most reliably read from,
+     * and `id_ed25519-cert.pub` is exactly what `ssh` picks up on its own, so
+     * requiring either to be found and pasted separately would be busywork.
+     *
+     * `replaces` is the id handed out by an earlier pick in the same form. A
+     * second choice drops the first rather than leaving a private key sitting
+     * in memory for a file the user changed their mind about.
+     */
+    handle('import-key-file', async (event, { replaces } = {}) => {
+        if (replaces) pendingKeys.delete(replaces);
+
+        const sshDir = path.join(app.getPath('home'), '.ssh');
+        const { canceled, filePaths } = await dialog.showOpenDialog(getWindow(), {
+            title: 'Choose a private key',
+            // Only when it is there: a defaultPath that does not exist opens
+            // somewhere arbitrary rather than the folder it names.
+            defaultPath: fs.existsSync(sshDir) ? sshDir : undefined,
+            // Hidden files, because `.ssh` itself is one on every platform.
+            properties: ['openFile', 'showHiddenFiles'],
+            // "All files" leads, since the keys people came here for have no
+            // extension at all: an extension filter hides `id_ed25519`.
+            filters: [
+                { name: 'All files', extensions: ['*'] },
+                { name: 'PEM and PuTTY keys', extensions: ['pem', 'key', 'ppk'] },
+            ],
+        });
+
+        const filePath = filePaths?.[0];
+        if (canceled || !filePath) return { success: false, canceled: true };
+
+        try {
+            const { size } = await fs.promises.stat(filePath);
+            if (size > MAX_KEY_BYTES) {
+                return {
+                    success: false,
+                    message: `That file is ${Math.round(size / 1024)} KB. No private key is `
+                        + 'anywhere near that big, so this is something else.',
+                };
+            }
+        } catch (error) {
+            return { success: false, message: error.message };
+        }
+
+        const inspected = importCommon.inspectIdentityFile(filePath);
+
+        if (inspected.state === 'ppk') {
+            return {
+                success: false,
+                message: 'That is a PuTTY .ppk file, which this cannot read as it stands. '
+                    + 'PuTTYgen can export it as an OpenSSH key, and that file imports fine.',
+            };
+        }
+
+        if (inspected.state !== 'ready' && inspected.state !== 'encrypted') {
+            return { success: false, message: inspected.reason || 'That file is not a private key' };
+        }
+
+        const pendingKeyId = `pending-${++promptCounter}`;
+        pendingKeys.set(pendingKeyId, inspected.text);
+
+        const publicHalf = importCommon.readPublicKey(filePath);
+
+        return {
+            success: true,
+            pendingKeyId,
+            file: path.basename(filePath),
+            type: inspected.type || '',
+            // Worth saying out loud in the form: an encrypted key saved without
+            // its passphrase is a key that cannot dial, and the failure comes
+            // much later, at the far end of a connection attempt.
+            encrypted: inspected.state === 'encrypted',
+            fingerprint: publicHalf?.fingerprint || inspected.fingerprint || '',
+            publicKey: publicHalf?.text || '',
+            certificate: readCertificateFile(filePath),
+        };
     });
 
     /* ---------------- Store: snippets ---------------- */

@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback, useRef } from 'react';
-import { FingerPrintIcon, ViewIcon, ViewOffIcon } from 'hugeicons-react';
+import { FileImportIcon, FingerPrintIcon, ViewIcon, ViewOffIcon } from 'hugeicons-react';
 import toast from 'react-hot-toast';
 import { toastOptions } from '../lib/toast';
 import Sheet from './ui/Sheet';
@@ -183,6 +183,12 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
     const [errors, setErrors] = useState({});
     const formRef = useRef(null);
 
+    // The file a key was read from, once one has been picked. Kept beside the
+    // form rather than in it, because none of it is part of the record: the
+    // store is handed what the file contained, not where it was sitting.
+    const [imported, setImported] = useState(null);
+    const [choosingFile, setChoosingFile] = useState(false);
+
     const generating = mode === 'generate' && !keyData;
     // Once the pair exists the form is describing a key that is already made,
     // so the options that produced it stop being questions.
@@ -208,8 +214,10 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
         }
 
         // An existing key already has its material stored, so a blank field is
-        // valid when editing.
-        if (mode === 'import' && !keyData?.hasPrivateKey && !formData.privateKey.trim()) {
+        // valid when editing. So is a blank one after a file was picked: that
+        // key is in the main process waiting to be claimed by id.
+        if (mode === 'import' && !keyData?.hasPrivateKey
+            && !formData.privateKey.trim() && !formData.pendingKeyId) {
             newErrors.privateKey = 'Private key is required';
         }
 
@@ -245,6 +253,64 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
             setIsGenerating(false);
         }
     }, [formData, onGenerate, validateForm]);
+
+    /**
+     * Take the key off disk instead of out of the clipboard.
+     *
+     * The file is read in the main process, so what comes back is everything
+     * the form can show about the key and nothing it should be holding: an id
+     * standing in for the private half, plus whatever the `.pub` and the
+     * `-cert.pub` beside it turned out to say. The name is filled in from the
+     * file only when the field is still empty, so picking a second file does
+     * not rename a key that has already been named.
+     */
+    const handleChooseFile = useCallback(async () => {
+        if (choosingFile) return;
+        setChoosingFile(true);
+        try {
+            // The id of an earlier pick, so a change of mind does not leave the
+            // first file's private key held in the main process.
+            const result = await window.api.keys.importFile({ replaces: formData.pendingKeyId });
+            if (result.canceled) return;
+
+            if (!result.success) {
+                toast.error(result.message || 'That file could not be read as a key',
+                    toastOptions({ duration: 5000 }));
+                return;
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                name: prev.name.trim() || result.file,
+                pendingKeyId: result.pendingKeyId,
+                // Whatever was pasted before is not what is being saved now.
+                privateKey: '',
+                type: result.type || prev.type,
+                fingerprint: result.fingerprint || prev.fingerprint,
+                publicKey: result.publicKey || prev.publicKey,
+                certificate: result.certificate || prev.certificate,
+            }));
+            setImported({ file: result.file, encrypted: result.encrypted });
+            setErrors(prev => ({ ...prev, name: '', privateKey: '' }));
+            toast.success(`Read ${result.file}`, toastOptions({ duration: 1800 }));
+        } catch (error) {
+            toast.error(`Could not read that file: ${error.message}`, toastOptions());
+        } finally {
+            setChoosingFile(false);
+        }
+    }, [choosingFile, formData.pendingKeyId]);
+
+    /**
+     * Back to the paste box.
+     *
+     * Only the private half goes: the public key, fingerprint and certificate
+     * the file filled in stay in their boxes, where they can be read and edited
+     * like anything else typed into this form.
+     */
+    const handleForgetFile = useCallback(() => {
+        setFormData(prev => ({ ...prev, pendingKeyId: '' }));
+        setImported(null);
+    }, []);
 
     /**
      * `reportValidity` keeps the browser's own `required` handling now that the
@@ -479,6 +545,35 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
                     private half or certificate to offer. */}
                 {!keyData?.hello && (mode === 'import' || formData.pendingKeyId || keyData) && (
                     <>
+                        {/* The other way in, and the one that does not involve
+                            opening a private key in a text editor first. It sits
+                            above the boxes it fills rather than beside the
+                            private key field alone, because one pick answers all
+                            four of them. */}
+                        {mode === 'import' && !formData.pendingKeyId && (
+                            <div className="rounded-xl border border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base/60 p-3 flex items-center gap-3">
+                                <div className="min-w-0 flex flex-col gap-0.5">
+                                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                        Import from a file
+                                    </span>
+                                    <span className="text-[11px] text-gray-500 dark:text-neutral-500">
+                                        Pick a key such as <span className="font-mono">id_ed25519</span>.
+                                        A <span className="font-mono">.pub</span> or
+                                        {' '}<span className="font-mono">-cert.pub</span> sitting beside it
+                                        comes too, and the key is read without passing through this window.
+                                    </span>
+                                </div>
+                                <Button
+                                    className="ml-auto shrink-0"
+                                    onClick={handleChooseFile}
+                                    disabled={choosingFile}
+                                    icon={<FileImportIcon size={15} strokeWidth={2} />}
+                                >
+                                    {choosingFile ? 'Choosing…' : 'Choose file'}
+                                </Button>
+                            </div>
+                        )}
+
                         <Field
                             label={mode === 'import' ? 'Public key (optional)' : 'Public key'}
                             hint={mode === 'import'
@@ -510,12 +605,13 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
                             </div>
                         </Field>
 
-                        {/* Private Key: pasted on import; generated keys never
-                            reach the renderer, so there is nothing to show */}
+                        {/* Private Key: pasted on import; a generated one and
+                            one read from a file both stay in the main process,
+                            so there is nothing to show but what they are. */}
                         {formData.pendingKeyId ? (
                             <div className="rounded-lg border border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base/60 p-3 flex flex-col gap-1">
                                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                                    Private key generated
+                                    {imported ? `Private key read from ${imported.file}` : 'Private key generated'}
                                 </span>
                                 <span className="text-[11px] text-gray-500 dark:text-neutral-500">
                                     It is held by the app and will be encrypted with the OS
@@ -525,6 +621,20 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
                                     <span className="text-[11px] font-mono break-all text-gray-600 dark:text-gray-300 mt-1">
                                         {formData.fingerprint}
                                     </span>
+                                )}
+                                {/* A wrong file is easy to pick out of a folder
+                                    of `id_` names, so both ways back are here.
+                                    A generated key has neither: there is no
+                                    other file, and the pair only exists once. */}
+                                {imported && (
+                                    <div className="flex gap-1 mt-1.5 -ml-2">
+                                        <Button size="sm" variant="ghost" onClick={handleChooseFile} disabled={choosingFile}>
+                                            {choosingFile ? 'Choosing…' : 'Choose another file'}
+                                        </Button>
+                                        <Button size="sm" variant="ghost" onClick={handleForgetFile}>
+                                            Paste instead
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         ) : (
@@ -581,13 +691,19 @@ function KeyModal({ keyData, initialMode = 'generate', dismiss, onClose, onSave,
                             the whole reason the field is here at all in import
                             mode: an encrypted key stored without one is a key
                             that can never dial, and there was nowhere to type
-                            it — nor anywhere to change it on an existing key. */}
+                            it, nor anywhere to change it on an existing key. */}
                         {!generating && (
                             <SecretField
                                 label="Passphrase"
-                                hint={keyData?.hasPassphrase
-                                    ? 'A passphrase is stored for this key. Leave blank to keep it.'
-                                    : 'Only if the private key above is encrypted.'}
+                                // A file the app has already read can say whether
+                                // it is encrypted, and it is worth saying here:
+                                // stored without one, that key fails at the far
+                                // end of a connection rather than on this form.
+                                hint={imported?.encrypted
+                                    ? `${imported.file} is encrypted. Without its passphrase the key cannot connect.`
+                                    : keyData?.hasPassphrase
+                                        ? 'A passphrase is stored for this key. Leave blank to keep it.'
+                                        : 'Only if the private key above is encrypted.'}
                                 value={formData.passphrase}
                                 placeholder={keyData?.hasPassphrase
                                     ? 'Stored, leave blank to keep'
