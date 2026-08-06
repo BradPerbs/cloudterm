@@ -94,6 +94,17 @@ contextBridge.exposeInMainWorld('api', {
          * tagging a dozen is a single write rather than a dozen saves.
          */
         tag: (edit) => ipcRenderer.invoke('tag-hosts', edit),
+
+        /**
+         * Dial an address that was typed rather than saved: `10.0.0.5`,
+         * `root@10.0.0.5:2222`, `box.example.com`.
+         *
+         * Main parses it and answers `{ success, message, host }`, where the
+         * host is an ordinary redacted record that exists for this app run
+         * only. Connect it by id like any other; nothing is written to disk,
+         * and the login is asked for on the pane while it dials.
+         */
+        quickConnect: (address) => ipcRenderer.invoke('host-quick-connect', String(address || '')),
     },
 
     folders: {

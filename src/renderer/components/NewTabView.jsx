@@ -1,7 +1,8 @@
 import { memo, useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Search01Icon, PlusSignIcon, CloudServerIcon, SearchRemoveIcon } from 'hugeicons-react';
+import { Search01Icon, PlusSignIcon, CloudServerIcon, SearchRemoveIcon, Plug01Icon } from 'hugeicons-react';
 import EmptyFrame from './ui/EmptyFrame';
 import { OsIcon, hostOs } from '../lib/os-icons';
+import { parseAddress, formatAddress } from '../lib/address';
 
 const RECENT_LIMIT = 5;
 
@@ -64,6 +65,55 @@ function HostRow({ host, folderName, selected, onSelect, onConnect }) {
     );
 }
 
+/**
+ * The row for an address that is not a saved host, offered whenever what has
+ * been typed reads as one. Deliberately the same shape as a host row, because
+ * it does the same thing: press it and this tab is that session.
+ *
+ * It sits last, under the matches. A query that matches a saved host almost
+ * always means that host, and Enter without arrowing should keep meaning the
+ * saved one; when nothing matches, this is the only row and Enter lands here.
+ */
+function AddressRow({ address, selected, onSelect, onConnect }) {
+    const ref = useRef(null);
+
+    useEffect(() => {
+        if (selected) ref.current?.scrollIntoView({ block: 'nearest' });
+    }, [selected]);
+
+    return (
+        <button
+            ref={ref}
+            type="button"
+            onMouseMove={onSelect}
+            onClick={onConnect}
+            className={`host-row w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
+                selected
+                    ? 'bg-gray-900/[0.06] dark:bg-surface-hover'
+                    : 'hover:bg-gray-900/[0.04] dark:hover:bg-surface-control'
+            }`}
+            data-selected={selected ? 'true' : 'false'}
+        >
+            <span className="w-7 h-7 flex items-center justify-center shrink-0 text-gray-400 dark:text-neutral-500">
+                <Plug01Icon className="w-6 h-6" size={24} strokeWidth={1.5} />
+            </span>
+
+            <span className="flex flex-col min-w-0 flex-1">
+                <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                    Connect to <span className="font-mono">{formatAddress(address)}</span>
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    Not saved. It asks for the login as it connects.
+                </span>
+            </span>
+
+            <span className={`shrink-0 transition-opacity ${selected ? 'opacity-100' : 'opacity-0'}`}>
+                <Kbd>↵</Kbd>
+            </span>
+        </button>
+    );
+}
+
 function SectionLabel({ children }) {
     return (
         <div className="px-3 pt-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
@@ -76,8 +126,13 @@ function SectionLabel({ children }) {
  * The "new tab" launcher, a command-palette style picker. Replaces the old
  * Connect-to-Host modal: choosing a host turns this tab into that session in
  * place, the way a browser's new tab becomes the page you open.
+ *
+ * The search box doubles as PuTTY's Host Name box. Anything typed into it that
+ * reads as an address is offered as one, so reaching a machine that was never
+ * saved is the same gesture as reaching one that was: type it, press Enter,
+ * answer the login on the pane. See `onQuickConnect` and lib/address.js.
  */
-function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose }) {
+function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNewHost, onClose }) {
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
     const searchRef = useRef(null);
@@ -119,26 +174,41 @@ function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose })
         return { sections, flat: [...recent, ...rest] };
     }, [hosts, query]);
 
+    // What was typed, if it reads as somewhere to connect to. Parsed on every
+    // keystroke, which it is cheap enough for, and deliberately strict: this is
+    // the host search as well, so a word like `prod` has to stay a search.
+    const address = useMemo(() => parseAddress(query), [query]);
+
+    // The address row is the one after the last host, so the cursor runs over
+    // the two lists as though they were one.
+    const addressIndex = address.ok ? flat.length : -1;
+    const total = flat.length + (address.ok ? 1 : 0);
+
     // Keep the highlight in range as the result set changes.
     useEffect(() => {
-        setSelected(s => Math.min(s, Math.max(flat.length - 1, 0)));
-    }, [flat.length]);
+        setSelected(s => Math.min(s, Math.max(total - 1, 0)));
+    }, [total]);
+
+    const choose = useCallback((position) => {
+        if (position === addressIndex) onQuickConnect?.(query.trim());
+        else if (flat[position]) onConnect(flat[position]);
+    }, [addressIndex, flat, query, onConnect, onQuickConnect]);
 
     const handleKeyDown = useCallback((event) => {
         if (event.key === 'ArrowDown') {
             event.preventDefault();
-            setSelected(s => (flat.length ? (s + 1) % flat.length : 0));
+            setSelected(s => (total ? (s + 1) % total : 0));
         } else if (event.key === 'ArrowUp') {
             event.preventDefault();
-            setSelected(s => (flat.length ? (s - 1 + flat.length) % flat.length : 0));
+            setSelected(s => (total ? (s - 1 + total) % total : 0));
         } else if (event.key === 'Enter') {
             event.preventDefault();
-            if (flat[selected]) onConnect(flat[selected]);
+            choose(selected);
         } else if (event.key === 'Escape') {
             event.preventDefault();
             onClose();
         }
-    }, [flat, selected, onConnect, onClose]);
+    }, [total, selected, choose, onClose]);
 
     let cursor = -1;
 
@@ -154,7 +224,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose })
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">New Session</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Pick a host to open it in this tab.
+                            Pick a host, or type an address to connect straight to it.
                         </p>
                     </div>
                     <button
@@ -178,7 +248,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose })
                         type="text"
                         value={query}
                         onChange={(e) => { setQuery(e.target.value); setSelected(0); }}
-                        placeholder="Search hosts…"
+                        placeholder="Search hosts, or type an address…"
                         spellCheck={false}
                         className="w-full h-12 pl-12 pr-24 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/70 text-gray-900 dark:text-white text-[15px] outline-none transition-colors focus:border-gray-300 dark:focus:border-neutral-700 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                     />
@@ -189,7 +259,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose })
 
                 {/* Results */}
                 <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 mt-2">
-                    {flat.length === 0 ? (
+                    {total === 0 ? (
                         hosts.length === 0 ? (
                             <EmptyFrame
                                 icon={<CloudServerIcon size={28} strokeWidth={1.5} />}
@@ -204,27 +274,44 @@ function NewTabView({ hosts, folders, isActive, onConnect, onNewHost, onClose })
                             />
                         )
                     ) : (
-                        sections.map((section, index) => (
-                            <div key={section.label || index}>
-                                {section.label && <SectionLabel>{section.label}</SectionLabel>}
-                                <div className="flex flex-col gap-0.5">
-                                    {section.items.map((host) => {
-                                        cursor += 1;
-                                        const position = cursor;
-                                        return (
-                                            <HostRow
-                                                key={host.id}
-                                                host={host}
-                                                folderName={folderNames[host.folderId]}
-                                                selected={position === selected}
-                                                onSelect={() => setSelected(position)}
-                                                onConnect={() => onConnect(host)}
-                                            />
-                                        );
-                                    })}
+                        <>
+                            {sections.map((section, index) => (
+                                <div key={section.label || index}>
+                                    {section.label && <SectionLabel>{section.label}</SectionLabel>}
+                                    <div className="flex flex-col gap-0.5">
+                                        {section.items.map((host) => {
+                                            cursor += 1;
+                                            const position = cursor;
+                                            return (
+                                                <HostRow
+                                                    key={host.id}
+                                                    host={host}
+                                                    folderName={folderNames[host.folderId]}
+                                                    selected={position === selected}
+                                                    onSelect={() => setSelected(position)}
+                                                    onConnect={() => onConnect(host)}
+                                                />
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            ))}
+
+                            {address.ok && (
+                                <div className="flex flex-col gap-0.5">
+                                    {/* Labelled only when it is sitting under
+                                        matches, where it would otherwise read
+                                        as one more of them. */}
+                                    {flat.length > 0 && <SectionLabel>Not saved</SectionLabel>}
+                                    <AddressRow
+                                        address={address}
+                                        selected={addressIndex === selected}
+                                        onSelect={() => setSelected(addressIndex)}
+                                        onConnect={() => choose(addressIndex)}
+                                    />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

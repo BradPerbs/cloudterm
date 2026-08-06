@@ -191,7 +191,13 @@ function buildConfig(credentials, hostVerifier) {
             config.privateKey = credentials.privateKey;
             if (credentials.passphrase) config.passphrase = credentials.passphrase;
         }
-    } else {
+    } else if (credentials.password) {
+        // Only when there is one. ssh2 counts a configured `password` by
+        // whether the field is present, so an empty string still buys an
+        // attempt that is offered and refused before anything else is tried,
+        // and against a server counting failures that attempt is not free. With
+        // the field left off it goes straight to keyboard-interactive, where a
+        // host with no password stored gets the server's own prompt.
         config.password = credentials.password;
     }
 
@@ -327,6 +333,42 @@ function openRelay(client, next) {
 async function dialHop(credentials, { sock, requestTrust, requestKeyboardInteractive }) {
     const name = credentials.label?.name || credentials.host;
 
+    /*
+     * An address typed into a picker can arrive without a user name, and SSH
+     * has no handshake to start without one: it is sent in the very first
+     * authentication request, before the server has offered anything and
+     * before there is a failure to fall back from. So this one question, alone
+     * of the two, has to be asked before the dial, which is `login as:` in
+     * PuTTY and the same prompt for the same reason.
+     *
+     * The password is not asked here. It is asked when the server asks for it,
+     * by which point its host key has been through the trust prompt: see the
+     * auth handler below.
+     */
+    if (credentials.promptCredentials && !credentials.username) {
+        if (!requestKeyboardInteractive) {
+            return { success: false, message: 'No user name to log in as' };
+        }
+
+        const replies = await requestKeyboardInteractive({
+            host: credentials.host,
+            port: credentials.port,
+            username: '',
+            name: 'Log in',
+            instructions: '',
+            prompts: [{ text: 'login as:', echo: true }],
+        });
+
+        // Cancelled, or the window went away. Either way nothing is dialled:
+        // there is no address to attempt without a user on it.
+        if (!replies) return { success: false, message: 'Authentication cancelled' };
+
+        credentials.username = String(replies[0] || '').trim();
+        if (!credentials.username) {
+            return { success: false, message: 'No user name to log in as' };
+        }
+    }
+
     // Pin the agent to one that is actually answering. Without this a stopped
     // agent surfaces as "All configured authentication methods failed", which
     // says nothing about the real problem.
@@ -379,8 +421,31 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
             client.end();
         });
 
+        /**
+         * The login typed at a prompt on this pane, kept only once the server
+         * has accepted it. See the `ready` handler.
+         *
+         * Held here rather than written to the record as it is answered,
+         * because a login that has not been tried yet may well be a typo, and
+         * an ad-hoc record only ever gets asked once: a wrong password stored
+         * on the first attempt would be resent silently by every reconnect
+         * after it, against a server that may be counting them, with no way to
+         * correct it short of opening another tab.
+         */
+        let learned = null;
+
         client.on('ready', () => {
             deadline.clear();
+
+            // Now it is known to work. Memory only, and only ever an ad-hoc
+            // record: rememberQuickConnect ignores every other id.
+            if (credentials.promptCredentials) {
+                store.rememberQuickConnect(credentials.hostId, {
+                    username: credentials.username,
+                    ...(learned === null ? {} : { password: learned }),
+                });
+            }
+
             settle({ success: true, client, message: 'Connected' });
         });
 
@@ -462,6 +527,26 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
                 answers[index] = replies[position] || '';
             });
 
+            /*
+             * An ad-hoc address learns its password from the round it was first
+             * asked for in, so the reconnect after a dropped link is silent
+             * rather than six password boxes on a bad line.
+             *
+             * Only the prompt that is unmistakably the password, by the same
+             * narrow test that decides whether a stored one may be sent, and
+             * only ever held: whether it is kept is the `ready` handler's to
+             * decide, since only the server can say whether it was right.
+             *
+             * Nothing is put on `credentials` either. A second round in this
+             * same attempt is the server rejecting the first, and answering it
+             * with what was just refused is exactly what the plan above exists
+             * to stop.
+             */
+            if (credentials.promptCredentials) {
+                const at = unanswered.findIndex(({ text, echo }) => !echo && PASSWORD_PROMPT.test(text));
+                if (at !== -1) learned = replies[at] || '';
+            }
+
             finish(answers);
         });
 
@@ -482,8 +567,135 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
             requestTrust,
         });
 
+        /**
+         * Log in to an address that arrived with nothing to log in with.
+         *
+         * ssh2's own handler walks whatever the config configured, and for an
+         * ad-hoc address that is nothing at all. This walks what the *server*
+         * says it will take instead, in the order a person would want to be
+         * asked:
+         *
+         *   none                    some servers simply let you in, and the
+         *                           attempt is also what makes the server send
+         *                           the list the next two steps read
+         *   keyboard-interactive    the server does the asking, in its own
+         *                           wording, through the handler above. This is
+         *                           the ordinary case on Linux and it is what
+         *                           `ssh` and PuTTY both end up in
+         *   password                the plain method, for the servers that
+         *                           offer only that. Nothing on the client asks
+         *                           in this one, so it is asked for here
+         *
+         * The point of doing it here rather than in a form before the dial is
+         * ordering: by now the handshake has happened, which means the host key
+         * has been through the trust prompt. Nobody is asked to type a password
+         * for a server they have not been told they do not recognise yet.
+         *
+         * One attempt per method and no going back: each list is walked once,
+         * and a keyboard-interactive round the user actually answered stops it
+         * from asking again as a password. A wrong password should cost one
+         * failure on the server's counter, not three.
+         */
+        const quickConnectAuth = () => {
+            const order = ['none', 'keyboard-interactive', 'password'];
+            let next = 0;
+            let asked = false;
+
+            return (authsLeft, partialSuccess, callback) => {
+                while (next < order.length) {
+                    const method = order[next++];
+
+                    // Skip what the server has said it will not take, once it
+                    // has said so. `authsLeft` is null until the first failure,
+                    // which is why `none` leads.
+                    if (method !== 'none' && Array.isArray(authsLeft) && !authsLeft.includes(method)) {
+                        continue;
+                    }
+
+                    // Both are configured on the client, so ssh2 fills them in
+                    // from the config it already holds. Naming keyboard-
+                    // interactive here is what routes it to the handler above.
+                    if (method !== 'password') return method;
+
+                    // A round the user answered and the server refused. Asking
+                    // the same question again under a different method name
+                    // would spend a second attempt on the same wrong answer.
+                    if (interactiveRounds > 0) return false;
+
+                    // No prompt channel wired up, so there is nobody to ask.
+                    if (!requestKeyboardInteractive) return false;
+
+                    asked = true;
+                    deadline.suspend();
+
+                    requestKeyboardInteractive({
+                        host: credentials.host,
+                        port: credentials.port,
+                        username: credentials.username,
+                        name: 'Log in',
+                        instructions: '',
+                        prompts: [{
+                            text: `${credentials.username}@${credentials.host}'s password:`,
+                            echo: false,
+                        }],
+                    }).then((replies) => {
+                        if (!replies) {
+                            // Settled with something truthful before the client
+                            // is ended, so the close below does not report this
+                            // as a connection the server dropped.
+                            settle({ success: false, message: 'Authentication cancelled' });
+                            client.end();
+                            return;
+                        }
+
+                        deadline.resume();
+
+                        // Held rather than kept, for the same reason as above:
+                        // the server has not seen it yet.
+                        learned = replies[0] || '';
+                        callback({
+                            type: 'password',
+                            username: credentials.username,
+                            password: learned,
+                        });
+                    });
+
+                    // Answered from the callback above once there is an answer.
+                    return undefined;
+                }
+
+                /*
+                 * Nothing left that an address on its own can answer, and the
+                 * user was never asked anything, so the server wants something
+                 * this has no way to offer: a key, a certificate, an agent.
+                 *
+                 * Named, because ssh2's own "All configured authentication
+                 * methods failed" is about configuration, and nothing here was
+                 * configured. It says to go and check settings that do not
+                 * exist, when what is needed is to save the host and give it a
+                 * key. Not said once a question has been put and answered: at
+                 * that point the server has a login and refused it, which is a
+                 * wrong password rather than a method that was never on offer.
+                 */
+                if (!asked && interactiveRounds === 0 && Array.isArray(authsLeft) && authsLeft.length) {
+                    settle({
+                        success: false,
+                        message: `This server accepts ${authsLeft.join(' or ')}, which an address on `
+                            + 'its own cannot offer. Save it as a host to connect with a key.',
+                    });
+                    client.end();
+                }
+
+                return false;
+            };
+        };
+
         try {
             const config = buildConfig(credentials, hostVerifier);
+
+            // Only for an address with no login on it. Every saved host keeps
+            // ssh2's own handler and the order it has always used.
+            if (credentials.promptCredentials) config.authHandler = quickConnectAuth();
             // ssh2 skips its own TCP connect when handed a socket, and treats a
             // stream with no `connecting` flag as already up, which a channel
             // is the moment forwardOut hands it over. The handshake deadline is

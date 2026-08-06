@@ -244,7 +244,7 @@ function describeAddress(host) {
 
 /** Enough to name a host in a log line, with no secret and no full record. */
 function describeHost(hostId) {
-    const host = load().hosts.find(h => h.id === hostId);
+    const host = findHost(hostId);
     if (!host) return { id: hostId, name: '', address: '' };
     return {
         id: hostId,
@@ -459,6 +459,16 @@ function getHosts() {
 }
 
 function saveHost(host) {
+    // An address dialled from a picker is not a saved record and must never
+    // become one by the back door. The renderer already knows not to save it
+    // back, but the call that would is the ordinary "remember when this was
+    // last reached" after a successful dial, and that one is easy to reach by
+    // accident. See openQuickConnect.
+    if (isQuickConnectId(host?.id)) {
+        const record = quickConnects.get(host.id);
+        return record ? redactHost(record) : null;
+    }
+
     const store = load();
     const id = host.id || `host-${Date.now()}`;
     const index = store.hosts.findIndex(h => h.id === id);
@@ -698,13 +708,126 @@ function tagHosts({ hostIds = [], add = [], remove = [] } = {}) {
     return { changed: touched.length, hostIds: touched.map(host => host.id) };
 }
 
+/* ------------------------------------------------------------------ *
+ * Quick connect
+ * ------------------------------------------------------------------ */
+
+/**
+ * An address typed into a picker, held as a host record for as long as the app
+ * is running and no longer.
+ *
+ * Everything downstream of the launcher works by host id: the dispatcher reads
+ * the protocol by id, the connection layer resolves a chain by id, the pane
+ * asks for a session by id. So an ad-hoc address becomes a record like any
+ * other, and none of that has to learn a second way of being told where to go.
+ * What makes it ad-hoc is only where it lives: in this map, never in `hosts`,
+ * so it is not saved, not listed, not exported and not backed up.
+ *
+ * The login goes on the record once the user has typed it, which is what makes
+ * a dropped session reconnect without stopping to ask again. It is in memory
+ * and in the clear, because there is nothing on disk for it to be encrypted
+ * against; it goes when the app locks, and when the app closes.
+ */
+const QUICK_PREFIX = 'quick-';
+
+const quickConnects = new Map();
+let quickCounter = 0;
+
+function isQuickConnectId(hostId) {
+    return String(hostId || '').startsWith(QUICK_PREFIX);
+}
+
+/**
+ * The record behind an id, wherever it lives.
+ *
+ * Only the lookups the connection path actually goes through use this. A quick
+ * connect has no folder, no tunnels and no desktop settings, so the readers for
+ * those find nothing and answer with their empty case, which is the right
+ * answer rather than a gap.
+ */
+function findHost(hostId) {
+    return quickConnects.get(hostId) || load().hosts.find(h => h.id === hostId) || null;
+}
+
+/**
+ * Turn a parsed address into something dialable. See src/main/address.js.
+ *
+ * The same address asked for twice is the same record, so a second tab to a
+ * machine already reached does not ask for the login again, and both panes go
+ * on sharing it the way two panes on a saved host do.
+ */
+function openQuickConnect(address) {
+    const host = String(address?.host || '').trim();
+    if (!host) return null;
+
+    const username = String(address?.username || '').trim();
+    const port = Number(address?.port) || defaultPort('ssh');
+    const asked = `${username} ${host} ${port}`;
+
+    for (const record of quickConnects.values()) {
+        if (record.asked === asked) return redactHost(record);
+    }
+
+    quickCounter += 1;
+    const record = {
+        id: `${QUICK_PREFIX}${quickCounter}`,
+        // Exactly what was typed, and what a later dial is matched against.
+        // Held apart from the fields below because those fill in as the login
+        // is answered, and what was asked for does not change with them.
+        asked,
+        // What tells the renderer not to save this back. See App.jsx.
+        ephemeral: true,
+        protocol: 'ssh',
+        host,
+        port,
+        username,
+        // Nothing is configured, which is exactly what an address on its own
+        // means. The connection layer asks on the pane that is dialling.
+        authMethod: 'password',
+        password: '',
+    };
+    record.name = describeAddress(record);
+
+    quickConnects.set(record.id, record);
+    return redactHost(record);
+}
+
+/**
+ * Keep what the user typed at the prompt, for as long as the record lives.
+ *
+ * Called by the connection layer once an answer has been given, so the next
+ * dial on the same address has it: a link that drops and comes back should not
+ * put a password box in front of someone six times on the way.
+ */
+function rememberQuickConnect(hostId, { username, password } = {}) {
+    const record = quickConnects.get(hostId);
+    if (!record) return;
+
+    if (typeof username === 'string' && username) {
+        record.username = username;
+        record.name = describeAddress(record);
+    }
+    if (typeof password === 'string') record.password = password;
+}
+
+/**
+ * Drop every ad-hoc record and the logins typed into them.
+ *
+ * Locking the app is meant to put the stored secrets out of reach, and a
+ * password sitting on one of these would be the one it did not.
+ */
+function forgetQuickConnects() {
+    for (const record of quickConnects.values()) record.password = '';
+    quickConnects.clear();
+}
+
 /**
  * Resolve the credentials for a host at connect time. Main process only:
  * the return value must never be sent over IPC.
  */
 function resolveCredentials(hostId) {
     const store = load();
-    const host = store.hosts.find(h => h.id === hostId);
+    const host = findHost(hostId);
     if (!host) return null;
 
     const protocol = normalizeProtocol(host.protocol);
@@ -765,6 +888,14 @@ function resolveCredentials(hostId) {
     // not found in keychain", over a key the connection was never going to use.
     if (protocol !== 'ssh') return credentials;
 
+    // An address typed into a picker arrives with no login on it, so the
+    // connection layer does the asking: the user name before it dials, since
+    // there is no handshake without one, and the password only once the server
+    // has asked for it and its host key has been accepted. Cleared as soon as
+    // there is a password to reuse, which is what makes the reconnect after a
+    // dropped link silent. See openQuickConnect and ssh.js.
+    if (host.ephemeral) credentials.promptCredentials = !host.password;
+
     if (credentials.authMethod === 'keychain') {
         const key = store.keys.find(k => k.id === host.keychainKeyId);
         if (!key) return { ...credentials, error: 'Selected SSH key not found in keychain' };
@@ -792,6 +923,10 @@ function resolveCredentials(hostId) {
         credentials.passphrase = decryptSecret(host.passphrase);
     } else if (credentials.authMethod === 'agent') {
         // The agent holds the key material; there is nothing to decrypt.
+    } else if (host.ephemeral) {
+        // Held in memory and in the clear: an ad-hoc record is never written,
+        // so there is no stored secret here to unwrap. See openQuickConnect.
+        credentials.password = String(host.password || '');
     } else {
         credentials.password = decryptSecret(host.password);
     }
@@ -844,7 +979,7 @@ function resolveChain(hostId) {
             return fail(`This connection is relayed through more than ${MAX_JUMP_HOPS} servers`);
         }
 
-        const host = store.hosts.find(h => h.id === currentId);
+        const host = findHost(currentId);
         if (!host) {
             // The target's own absence is the caller's ordinary "no such host";
             // a missing hop is a dangling reference, which reads differently.
@@ -902,7 +1037,7 @@ function resolveChain(hostId) {
  * secret in it would decrypt a private key just to read one string.
  */
 function getHostProtocol(hostId) {
-    const host = load().hosts.find(h => h.id === hostId);
+    const host = findHost(hostId);
     return normalizeProtocol(host?.protocol);
 }
 
@@ -1649,6 +1784,9 @@ module.exports = {
     duplicateHost,
     tagHosts,
     describeHost,
+    openQuickConnect,
+    rememberQuickConnect,
+    forgetQuickConnects,
     resolveCredentials,
     resolveChain,
     MAX_JUMP_HOPS,

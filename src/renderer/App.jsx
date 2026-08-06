@@ -504,6 +504,22 @@ function App() {
         return { success: true, tabId };
     }, []);
 
+    /**
+     * An address typed into a picker rather than a host chosen from one.
+     *
+     * Main parses it and hands back a host record that lives for this app run
+     * only; from there it is an ordinary connection, opened by id like any
+     * other, and the pane asks for the login while it dials. Answers null when
+     * the address will not do, having said so.
+     */
+    const openAddress = useCallback(async (address) => {
+        const result = await window.api.hosts.quickConnect(address);
+        if (result?.success && result.host) return result.host;
+
+        toast.error(result?.message || 'Could not read that address', { style: getToastStyle() });
+        return null;
+    }, []);
+
     const handleConnectResult = useCallback((paneId, result, { reconnect = false } = {}) => {
         // Anything the assistant is waiting on is answered first, whichever way
         // it went. A tool blocked on a connection that failed should be told
@@ -542,6 +558,13 @@ function App() {
             reconnect ? `Reconnected to ${host?.name || 'host'}` : `Connected to ${host?.name || 'host'}`,
             { style: getToastStyle() }
         );
+
+        // An address dialled from a picker is not a saved record and is not
+        // going to become one: there is no `lastConnectedAt` to write on it and
+        // nowhere to keep the OS it reports, and Recent is a list of the hosts
+        // someone chose to keep. Main refuses the save as well; this is so it
+        // is never asked for. See store.openQuickConnect.
+        if (host?.ephemeral) return;
 
         // The OS cannot have changed under a reconnect, and re-detecting it
         // would fire an exec on every wake from sleep.
@@ -1594,6 +1617,10 @@ function App() {
                                 folders={folders}
                                 isActive={activeTabId === tab.id}
                                 onConnect={(host) => handleConnect(host, tab.id)}
+                                onQuickConnect={async (address) => {
+                                    const host = await openAddress(address);
+                                    if (host) handleConnect(host, tab.id);
+                                }}
                                 onNewHost={handleNewHost}
                                 onClose={() => handleCloseTab(tab.id)}
                             />
@@ -1631,6 +1658,10 @@ function App() {
                                                 hosts={hosts}
                                                 isActive={isActiveTab && focused}
                                                 onPick={(host) => handlePanePick(tab.id, pane.id, host)}
+                                                onQuickConnect={async (address) => {
+                                                    const host = await openAddress(address);
+                                                    if (host) handlePanePick(tab.id, pane.id, host);
+                                                }}
                                                 onCancel={() => handleClosePane(tab.id, pane.id)}
                                             />
                                         ) : (

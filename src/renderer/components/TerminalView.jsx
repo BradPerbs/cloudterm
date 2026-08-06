@@ -1486,7 +1486,12 @@ function TerminalView({
                 <SessionScreen
                     state={sessionScreen}
                     title={pane.title}
-                    address={`${pane.host?.username}@${pane.host?.host}:${pane.host?.port || 22}`}
+                    // The user is left off when there is not one to name. A
+                    // typed address may have arrived without it, and this
+                    // screen is where it gets asked for: `@10.0.0.5:22` under
+                    // a box asking who to log in as reads as a bug.
+                    address={`${pane.host?.username ? `${pane.host.username}@` : ''}`
+                        + `${pane.host?.host || ''}:${pane.host?.port || 22}`}
                     os={hostOs(pane.host)}
                     distro={pane.host?.distro}
                     background={themeConfig.background}

@@ -29,6 +29,7 @@ const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const updates = require('./updates');
 const proxy = require('./proxy');
+const { parseAddress } = require('./address');
 const { describeTunnel } = require('./tunnel-config');
 const { describeDesktop } = require('./desktop-config');
 const { describeProxy, nameProxy } = require('./proxy-config');
@@ -265,6 +266,25 @@ function register(getWindow) {
 
     handle('get-hosts', () => store.getHosts());
     handle('save-host', (event, host) => store.saveHost(host));
+
+    /**
+     * An address typed into a picker rather than a host chosen from it.
+     *
+     * Parsed here rather than taken apart in the renderer, for the reason every
+     * other record is built in main: what gets dialled is decided on this side
+     * of the bridge. What goes back is an ordinary redacted host, held in
+     * memory for this app run only, which the pane then connects by id like any
+     * other. See store.openQuickConnect.
+     */
+    handle('host-quick-connect', (event, address) => {
+        const parsed = parseAddress(address);
+        const host = parsed.ok ? store.openQuickConnect(parsed) : null;
+
+        return host
+            ? { success: true, message: '', host }
+            : { success: false, message: 'That is not an address this can dial', host: null };
+    });
+
     handle('delete-host', (event, hostId) => store.deleteHost(hostId));
     handle('duplicate-host', (event, hostId) => store.duplicateHost(hostId));
     // Tagging a selection, in one write. Reads nothing but the tags, so it is
@@ -531,11 +551,14 @@ function register(getWindow) {
         logLock('lock.disable', vault.disable(password), 'Stored secrets are no longer behind a password'));
 
     // Locking drops every live session first. Leaving them up would keep the
-    // shells the password is meant to be guarding attached and running.
+    // shells the password is meant to be guarding attached and running. The
+    // ad-hoc records go with them: they hold a login in memory, which is the
+    // one secret locking the app would otherwise leave sitting where it was.
     handle('app-lock-lock', () => {
         const result = vault.lock();
         if (result.success) {
             transport.destroyAll();
+            store.forgetQuickConnects();
             notify('app-locked', {});
         }
         return logLock('lock.lock', result);
