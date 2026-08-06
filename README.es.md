@@ -273,6 +273,12 @@ Descarga la última versión para tu plataforma:
 | Windows | [Instalador, x64 (recomendado)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [Portable, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
 | Linux | [AppImage, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
 
+En Windows también puedes instalarlo y actualizarlo desde una terminal:
+
+```powershell
+winget install CloudBlast.CloudTerm
+```
+
 También puedes consultar [todas las versiones en GitHub](https://github.com/BradPerbs/cloudterm/releases).
 
 ### Compilar desde el código fuente

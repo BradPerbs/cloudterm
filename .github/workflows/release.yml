@@ -24,6 +24,9 @@
 # missing them is a release nobody can update to. `--publish never` below only
 # turns off uploading; the manifests are written either way, and a step in each
 # build job fails if one is not.
+#
+# Once the release exists, a last job points winget at it. That one is optional
+# and says so when it skips; docs/winget.md explains what it needs.
 
 name: Release
 
@@ -238,3 +241,48 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             *.exe *.dmg *.AppImage *.zip *.blockmap *.yml
+
+  winget:
+    name: Open the winget pull request
+    needs: release
+    runs-on: ubuntu-latest
+
+    # A fork can tag a release without owning a fork of winget-pkgs, and that
+    # should print a line rather than fail a release that has already gone out.
+    # `secrets` cannot be read from an `if:` at either the job or the step
+    # level, and a job-level `env:` is the one place it can be turned into
+    # something they can both read.
+    env:
+      HAS_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
+
+    steps:
+      # winget's package list is a repository of YAML, and a new version lands
+      # in it by pull request. The action reads this release, hashes the
+      # installer, copies the previous version's manifest forward with the new
+      # version, URL and hash, and opens that pull request against
+      # microsoft/winget-pkgs. A moderator or their CI merges it, usually
+      # within a day, and `winget upgrade` starts offering the new version.
+      #
+      # It cannot bootstrap the package: there has to be a previous version's
+      # manifest to copy, and the action stops with an error if there is not.
+      # scripts/winget-manifest.js writes that first one by hand, and
+      # docs/winget.md is the walk-through for submitting it.
+      #
+      # Nothing here can touch this repository. The token is only ever used to
+      # push a branch to a fork of winget-pkgs and open a pull request from it.
+      - uses: vedantmgoyal9/winget-releaser@v2
+        if: env.HAS_TOKEN == 'true'
+        with:
+          identifier: CloudBlast.CloudTerm
+          # Both Windows builds are `.exe` files, and the action's default
+          # pattern would sweep up the portable one as a second installer for
+          # the same architecture. Only the installer belongs in winget.
+          installers-regex: '^CloudTerm-Setup-x64\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Say why nothing was submitted
+        if: env.HAS_TOKEN != 'true'
+        run: |
+          echo 'No WINGET_TOKEN secret is set, so the winget package was left alone.'
+          echo 'The release itself is published and unaffected. docs/winget.md says'
+          echo 'what that secret is and how to create it.'

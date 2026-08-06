@@ -269,6 +269,12 @@ CloudTerm собирает все способы подключения к се�
 | Windows | [Установщик, x64 (рекомендуется)](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [Портативная версия, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
 | Linux | [AppImage, x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
 
+В Windows его также можно установить и обновлять из терминала:
+
+```powershell
+winget install CloudBlast.CloudTerm
+```
+
 Или просмотрите [все релизы на GitHub](https://github.com/BradPerbs/cloudterm/releases).
 
 ### Сборка из исходного кода

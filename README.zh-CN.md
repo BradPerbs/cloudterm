@@ -241,6 +241,12 @@ Debian 和 Fedora 的机器，不用去读主机名。
 | Windows | [安装版，x64（推荐）](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-Setup-x64.exe) · [便携版，x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x64.exe) |
 | Linux | [AppImage，x64](https://github.com/BradPerbs/cloudterm/releases/latest/download/CloudTerm-x86_64.AppImage) |
 
+在 Windows 上也可以直接从终端安装和更新：
+
+```powershell
+winget install CloudBlast.CloudTerm
+```
+
 也可以浏览 [GitHub 上的全部版本](https://github.com/BradPerbs/cloudterm/releases)。
 
 ### 从源码构建
