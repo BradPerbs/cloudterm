@@ -1,6 +1,6 @@
 {
     "name": "cloudblast-ssh",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Modern SSH Client built with Electron, React and xterm.js",
     "main": "src/main/main.js",
     "scripts": {
