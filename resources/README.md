@@ -22,9 +22,19 @@ every Windows build up to now quietly shipped the default Electron logo.
 electron-builder warns about a missing icon rather than failing, which is how
 that went unnoticed.
 
-**The current `build/icon.png` is `appicon.png` scaled up from 200x200**, since
-that was the only app art in the tree and 200px is below the minimum every
-target needs (256 for Linux and the Windows ico, 512 for the macOS icns). It is
-clean but soft, and it is worth replacing with a real 1024x1024 export the next
-time the source art is to hand. Dropping that in at the same path is the whole
-job: no configuration changes with it.
+**The current `build/icon.png` is built from `cloudterm.png` in the repo root**,
+which is 200x200 and so below the minimum every target needs (256 for Linux and
+the Windows ico, 512 for the macOS icns).
+
+The upscale is not a plain resample. `cloudterm.png` measures as a square flush
+to its canvas with a corner radius of exactly 30% of the side (a circle fits to
+0.08px rms) over a flat `#11121A`, so the frame is redrawn analytically at
+1024 from that geometry and only the cloud is resampled. That keeps the
+silhouette a one-pixel edge instead of feathering it over five, which is the
+part of an icon the eye reads first. The cloud itself is still a 5.12x
+interpolation and is soft if you go looking at full size, though it is
+invisible by the time anything downscales it to a taskbar.
+
+Replacing this with a real 1024x1024 export is still worth doing the next time
+the source art is to hand. Dropping that in at the same path is the whole job:
+no configuration changes with it.
