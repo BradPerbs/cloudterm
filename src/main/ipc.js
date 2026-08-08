@@ -1107,10 +1107,6 @@ function register(getWindow) {
 
     handle('monitor-check-now', () => monitor.checkNow());
 
-    handle('monitor-mark-read', () => monitor.markRead());
-
-    handle('monitor-clear-events', () => monitor.clearEvents());
-
     /* ---------------- Cloud setup snapshot ---------------- */
 
     handle('cloud-snapshot-status', () => cloudSnapshot.status());

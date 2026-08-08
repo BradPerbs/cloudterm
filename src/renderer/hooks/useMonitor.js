@@ -124,20 +124,6 @@ export default function useMonitor() {
         return next;
     }, []);
 
-    const markRead = useCallback(async () => {
-        if (!window.api?.monitor) return null;
-        const next = await window.api.monitor.markRead();
-        publish(next);
-        return next;
-    }, []);
-
-    const clearEvents = useCallback(async () => {
-        if (!window.api?.monitor) return null;
-        const next = await window.api.monitor.clearEvents();
-        publish(next);
-        return next;
-    }, []);
-
     return {
         state,
         // False only until the first answer arrives. A page that draws nothing
@@ -151,8 +137,6 @@ export default function useMonitor() {
         // being watched; `statuses` is the same thing keyed by id, for the card
         // that only asks about one host.
         hosts: state?.hosts || [],
-        events: state?.events || [],
-        unread: state?.unread || 0,
         // Why the last sweep is not to be believed, or '' when it is. Either
         // this machine has no network, or every host went quiet at the same
         // moment, which is nearly always the same thing seen from the other
@@ -161,7 +145,5 @@ export default function useMonitor() {
         suspectReason: state?.suspectReason || '',
         configure,
         checkNow,
-        markRead,
-        clearEvents,
     };
 }

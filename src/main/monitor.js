@@ -42,9 +42,6 @@ const { normalizeSettings, DEFAULT_SETTINGS } = require('./monitor-config');
 /** How many hosts are checked at once. Enough to keep a sweep brief. */
 const CONCURRENCY = 8;
 
-/** Kept for the bell in the title bar. Older than this and it is history. */
-const MAX_EVENTS = 50;
-
 /**
  * How long after waking before checks resume. A NIC that has not finished
  * coming up refuses connections in a way indistinguishable from a dead server.
@@ -73,13 +70,9 @@ let suspectSweeps = 0;
 let changeTimer = null;
 let notify = () => {};
 let getWindow = () => null;
-let counter = 0;
 
 // hostId -> { state, since, checkedAt, failures, message, latency, error }
 const statuses = new Map();
-
-// Newest first. The bell reads these; nothing else does.
-const events = [];
 
 /* ------------------------------------------------------------------ *
  * Settings
@@ -172,8 +165,6 @@ function snapshot() {
         suspectReason,
         lastSweepAt,
         hosts,
-        events: [...events],
-        unread: events.filter(event => event.unread).length,
     };
 }
 
@@ -185,8 +176,8 @@ function publish() {
  * Raise a Windows notification, if the settings and the platform allow one.
  *
  * Silent about its own failures on purpose. A toast that could not be shown is
- * not worth a second attempt at telling someone something, and the event is in
- * the bell and the activity log either way.
+ * not worth a second attempt at telling someone something, and the crossing is
+ * in the activity log either way.
  */
 function toast(title, body) {
     const current = load();
@@ -216,26 +207,14 @@ function toast(title, body) {
     }
 }
 
-/** Append to the bell's list, newest first. */
-function recordEvent({ hostId, hostName, state, title, body }) {
-    counter += 1;
-    events.unshift({
-        id: `mon-${Date.now().toString(36)}-${counter}`,
-        hostId,
-        hostName,
-        state,
-        title,
-        body,
-        at: Date.now(),
-        unread: true,
-    });
-
-    if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
-}
-
 /**
- * A host changed state. The one place a notification, a log entry and a bell
- * item are written, so the three can never disagree about what happened.
+ * A host changed state.
+ *
+ * The one place a notification and a log entry are written, so the two can
+ * never disagree about what happened. Both, and nothing else: the crossing is
+ * worth interrupting someone over once and worth keeping forever, and the
+ * activity log is what keeps it. There is no third copy held in memory for a
+ * panel to read, because the log already answers everything one could.
  */
 function announce(entry, state, { downtime = 0 } = {}) {
     const where = entry.address;
@@ -244,7 +223,6 @@ function announce(entry, state, { downtime = 0 } = {}) {
         const title = `${entry.name} is offline`;
         const body = `${where}: ${entry.message}`;
 
-        recordEvent({ hostId: entry.hostId, hostName: entry.name, state, title, body });
         toast(title, body);
 
         activity.record({
@@ -266,7 +244,6 @@ function announce(entry, state, { downtime = 0 } = {}) {
         ? `${where} answered after ${describeDuration(downtime)}`
         : `${where} answered`;
 
-    recordEvent({ hostId: entry.hostId, hostName: entry.name, state, title, body });
     if (load().notifyOnRecovery) toast(title, body);
 
     activity.record({
@@ -563,19 +540,6 @@ function checkNow() {
     return sweep({ manual: true });
 }
 
-/** The bell was opened. Nothing is deleted, only marked as seen. */
-function markRead() {
-    for (const event of events) event.unread = false;
-    publish();
-    return snapshot();
-}
-
-function clearEvents() {
-    events.length = 0;
-    publish();
-    return snapshot();
-}
-
 /**
  * The host list changed under us. Which hosts are watched, and on what port, is
  * read fresh at every sweep, so the only thing needed here is to bring the next
@@ -654,8 +618,6 @@ module.exports = {
     status,
     configure,
     checkNow,
-    markRead,
-    clearEvents,
     start,
     stop,
 };

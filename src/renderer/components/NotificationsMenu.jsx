@@ -1,19 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Notification03Icon } from 'hugeicons-react';
 import useUpdate from '../hooks/useUpdate';
-import useMonitor from '../hooks/useMonitor';
-import { since } from '../lib/monitor';
 import Tooltip from './ui/Tooltip';
 
 /**
  * The bell in the title bar and the panel that hangs off it.
  *
- * Two things fill it, and both are read here rather than handed down: the title
- * bar takes a dozen props already and has no stake in either of them. A new
- * release, from `useUpdate`, and hosts that stopped answering, from the
- * reachability monitor. Neither is anything the renderer asked for, which is
- * the whole reason they end up in a bell.
+ * The release notice is the one thing filling this so far, and it is read here
+ * rather than handed down: the title bar takes a dozen props already and has no
+ * stake in any of them. Nothing produces the general `items` yet, so the empty
+ * state is what is actually on screen most of the time -- an entry is rendered
+ * out all the same, because it is the part the feature will need to look right.
  *
  * Anchored by its right edge rather than its left: it sits a few pixels from
  * the window's corner, and a panel that grew rightwards from the button would
@@ -27,25 +25,16 @@ const EDGE = 8;
 // download in flight does not visibly reflow the panel when it finishes.
 const NOTICE = 'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left';
 
-/** items: { id, title, body, time, unread, tone } */
+/** Placeholder shape, so the panel below reads as the thing it will be. */
+// items: { id, title, body, time, unread }
 
-/**
- * One line of news.
- *
- * Not a button. Every one of these is something that already happened, on a
- * host this panel has no way to take you to, so there is nothing to press: a
- * row that highlighted under the pointer and then did nothing would be worse
- * than one that plainly does not.
- */
 function NotificationItem({ item }) {
     return (
-        <div className="w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left">
+        <button className="w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800">
             <span
                 aria-hidden="true"
                 className={`mt-[7px] w-1.5 h-1.5 rounded-full shrink-0 ${
-                    item.unread
-                        ? (item.tone === 'down' ? 'bg-rose-500' : 'bg-blue-500')
-                        : 'bg-transparent'
+                    item.unread ? 'bg-blue-500' : 'bg-transparent'
                 }`}
             />
             <span className="flex-1 min-w-0">
@@ -69,11 +58,11 @@ function NotificationItem({ item }) {
                     </span>
                 )}
             </span>
-        </div>
+        </button>
     );
 }
 
-export default function NotificationsMenu() {
+export default function NotificationsMenu({ items = [], onMarkAllRead }) {
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState(null);
     const btnRef = useRef(null);
@@ -82,20 +71,6 @@ export default function NotificationsMenu() {
     // `open` is the panel's own state above, so the browser handoff is renamed
     // rather than shadowed.
     const { status, open: openInBrowser, download, install } = useUpdate();
-
-    // Hosts that stopped answering, and the ones that came back. Main keeps the
-    // list and the read flags, so a window reload does not resurrect a week of
-    // notifications as unread.
-    const { events, markRead } = useMonitor();
-
-    const items = useMemo(() => events.map(event => ({
-        id: event.id,
-        title: event.title,
-        body: event.body,
-        time: since(event.at),
-        unread: event.unread,
-        tone: event.state === 'offline' ? 'down' : 'up',
-    })), [events]);
 
     // `available` and not `newer`: in notify mode a version the user has
     // already been sent to download is still newer, and still not worth a dot
@@ -127,13 +102,6 @@ export default function NotificationsMenu() {
             : (status?.mode === 'install' ? download : openInBrowser);
 
     const unread = items.filter(item => item.unread).length;
-
-    // A host that is down outranks everything else the bell can hold, including
-    // a waiting build: one of them is a thing to get round to, the other is a
-    // server that is not there. Only one dot is ever drawn, so the order these
-    // are tested in is the order they matter in.
-    const down = items.some(item => item.unread && item.tone === 'down');
-    const dotColor = down ? 'bg-rose-500' : update ? 'bg-emerald-500' : 'bg-blue-500';
 
     // The row's insides, lifted out because the row is a button most of the
     // time and a plain div while a download is running.
@@ -216,15 +184,18 @@ export default function NotificationsMenu() {
                         strokeWidth={2}
                     />
 
-                    {/* Red is a host that stopped answering, green a new
-                        version, blue anything else unread. Ringed in the bar's
-                        own background so it stays legible where it overlaps the
-                        bell's outline. */}
+                    {/* A waiting build is the one thing here worth a colour of
+                        its own, and it outranks the unread count: only one dot
+                        ever shows, and green means there is a new version.
+                        Ringed in the bar's own background so it stays legible
+                        where it overlaps the bell's outline. */}
                     {(update || unread > 0) && (
                         <span
                             aria-hidden="true"
                             className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full
-                                ring-2 ring-white dark:ring-surface-base ${dotColor}`}
+                                ring-2 ring-white dark:ring-surface-base ${
+                                update ? 'bg-emerald-500' : 'bg-blue-500'
+                            }`}
                         />
                     )}
                 </button>
@@ -252,7 +223,7 @@ export default function NotificationsMenu() {
                             <button
                                 className="text-[10px] font-medium text-gray-400 dark:text-neutral-500
                                     hover:text-gray-900 dark:hover:text-white transition-colors"
-                                onClick={() => markRead()}
+                                onClick={() => onMarkAllRead?.()}
                             >
                                 Mark all read
                             </button>
