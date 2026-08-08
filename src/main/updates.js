@@ -851,15 +851,6 @@ function start(notify) {
 
     if (DISABLED) return;
 
-    const current = load();
-    const age = current.checkedAt ? Date.now() - Date.parse(current.checkedAt) : NaN;
-
-    // A check that already happened today does not need repeating because the
-    // app restarted; an app left running for a week does need one.
-    const first = Number.isFinite(age) && age >= 0 && age < AUTO_INTERVAL_MS
-        ? AUTO_INTERVAL_MS - age
-        : LAUNCH_DELAY_MS;
-
     const tick = () => {
         check().catch(() => {
             // `runInstall` and `runNotify` both fold every failure into the
@@ -869,7 +860,23 @@ function start(notify) {
         pollTimer.unref?.();
     };
 
-    pollTimer = setTimeout(tick, first);
+    /*
+     * Every launch, thirty seconds in, and once a day after that for as long as
+     * the app stays open.
+     *
+     * The launch check used to be skipped when one had already run inside the
+     * last twenty-four hours, on the reasoning that restarting the app is not a
+     * reason to ask GitHub again. It is, though, and it is the only lever a user
+     * has: closing and reopening is what anybody does when they think the app
+     * has missed something, and the answer was that it would keep saying nothing
+     * until whatever was left of the day had run out.
+     *
+     * Being wrong about it costs nothing, which is what makes the old caution
+     * the wrong trade. The request carries the stored ETag, so the ordinary
+     * answer is a 304 that GitHub does not count against the rate limit, and the
+     * manual allowance is only ever spent by the button in Settings.
+     */
+    pollTimer = setTimeout(tick, LAUNCH_DELAY_MS);
     // A day-long timer is not a reason to keep the process alive on a platform
     // where closing the window is meant to end it.
     pollTimer.unref?.();
