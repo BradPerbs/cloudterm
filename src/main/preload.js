@@ -479,6 +479,19 @@ contextBridge.exposeInMainWorld('api', {
         onResume: (callback) => subscribe('system-resume', callback),
     },
 
+    /**
+     * Whether the app launches itself when the machine starts.
+     *
+     * The system holds the answer (a Run key entry on Windows, a login item on
+     * macOS), so `status` asks it rather than reading a setting of ours, and
+     * both calls answer with `supported` and a reason: a development run and a
+     * platform with no login items are both switches that cannot be offered.
+     */
+    startup: {
+        status: () => ipcRenderer.invoke('startup-status'),
+        setEnabled: (enabled) => ipcRenderer.invoke('startup-set-enabled', enabled),
+    },
+
     dialog: {
         save: (options) => ipcRenderer.invoke('show-save-dialog', options || {}),
         open: (options) => ipcRenderer.invoke('show-open-dialog', options || {}),

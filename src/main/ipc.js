@@ -29,6 +29,7 @@ const activity = require('./activity');
 const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const updates = require('./updates');
+const startup = require('./startup');
 const proxy = require('./proxy');
 const { parseAddress } = require('./address');
 const { describeTunnel } = require('./tunnel-config');
@@ -1559,6 +1560,13 @@ function register(getWindow) {
     // asked to.
     handle('ai-approval-response', (event, payload) => assistant.respondToApproval(payload || {}));
     handle('ai-action-response', (event, payload) => assistant.respondToAction(payload || {}));
+
+    /* ---------------- Startup ---------------- */
+
+    // Read from the system on every call rather than cached, because the user
+    // can turn this off somewhere that is not this app.
+    handle('startup-status', () => startup.status());
+    handle('startup-set-enabled', (event, enabled) => startup.setEnabled(enabled));
 
     /* ---------------- Window ---------------- */
 
