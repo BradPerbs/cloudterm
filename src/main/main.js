@@ -117,6 +117,17 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    /*
+     * Windows attributes a notification to an Application User Model ID, and
+     * without one set it uses the host executable's: toasts from the monitor
+     * would arrive branded as Electron, and on some builds be dropped outright.
+     * The same id electron-builder writes into the Start Menu shortcut, which
+     * is what the toast has to be matched against.
+     *
+     * Harmless everywhere else; the call is a no-op off Windows.
+     */
+    app.setAppUserModelId('com.cloudblast.ssh');
+
     ipc.register(getWindow);
     createWindow();
 

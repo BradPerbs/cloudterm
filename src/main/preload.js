@@ -403,6 +403,29 @@ contextBridge.exposeInMainWorld('api', {
         onState: (callback) => subscribe('server-sync-state', callback),
     },
 
+    /**
+     * Watching whether hosts are still answering.
+     *
+     * Everything here is main's: it owns the timer, the states and the Windows
+     * notifications, because a renderer that was reloading would be a renderer
+     * not noticing a server go down. This side reads the states and changes the
+     * settings, and never learns an address it did not already have from the
+     * host list.
+     */
+    monitor: {
+        status: () => ipcRenderer.invoke('monitor-status'),
+        configure: (patch) => ipcRenderer.invoke('monitor-configure', patch || {}),
+        // Sweeps now, whether or not monitoring is switched on.
+        checkNow: () => ipcRenderer.invoke('monitor-check-now'),
+        markRead: () => ipcRenderer.invoke('monitor-mark-read'),
+        clearEvents: () => ipcRenderer.invoke('monitor-clear-events'),
+
+        // Every sweep and every state change. Nothing in the renderer asked for
+        // these, which is the point: the host cards and the bell keep up with a
+        // timer they do not own.
+        onState: (callback) => subscribe('monitor-state', callback),
+    },
+
     cloudSnapshot: {
         status: () => ipcRenderer.invoke('cloud-snapshot-status'),
         setEnabled: (enabled) => ipcRenderer.invoke('cloud-snapshot-set-enabled', enabled),

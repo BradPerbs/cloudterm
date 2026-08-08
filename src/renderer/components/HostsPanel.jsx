@@ -33,6 +33,7 @@ import { hostKind, protocolLabel } from '../lib/protocols';
 import { hostHasTags, tagCounts, toggleTag } from '../lib/tags';
 import { useCardDrag } from '../hooks/useCardDrag';
 import { useFlipOrder } from '../hooks/useFlipOrder';
+import useMonitor from '../hooks/useMonitor';
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection';
 import { CARD_GRID } from '../lib/layout';
 import {
@@ -181,6 +182,11 @@ function HostsPanel({
 
     useEffect(() => { localStorage.setItem(VIEW_KEY, view); }, [view]);
     useEffect(() => { localStorage.setItem(SORT_KEY, sort); }, [sort]);
+
+    // How the watched hosts are answering. Read here rather than by each card:
+    // the states arrive as one push from main after every sweep, and a
+    // subscription per card would be several hundred of them on a long list.
+    const { statuses } = useMonitor();
 
     /**
      * A dialog opened here belongs to this page, and goes when the page does.
@@ -1139,6 +1145,7 @@ function HostsPanel({
                                 key={host.id}
                                 host={host}
                                 connected={connectedHostIds?.has(host.id)}
+                                status={statuses.get(host.id) || null}
                                 folderLabel={filtering ? (labels.get(host.folderId || '') || '') : ''}
                                 items={hostMenu(host)}
                                 onConnect={() => onConnect(host)}

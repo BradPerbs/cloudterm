@@ -318,6 +318,12 @@ const describeValue = (value, field) => {
         // anyone would read the row to find: `9600 8N1 → 115200 8N1` is the
         // whole explanation for a console that started printing garbage.
         if (field === 'serial') return describeSerial(value);
+        // The monitor block is almost all one switch, and whether it is on is
+        // the whole content of the change. "monitoring changed" would hide it.
+        if (field === 'monitor') {
+            const port = value.enabled && value.port ? ` (port ${value.port})` : '';
+            return `${value.enabled ? 'on' : 'off'}${port}`;
+        }
         return 'changed';
     }
     if (typeof value === 'boolean') return value ? 'on' : 'off';

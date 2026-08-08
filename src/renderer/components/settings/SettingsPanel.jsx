@@ -4,6 +4,7 @@ import GeneralPage from './pages/GeneralPage';
 import AppearancePage from './pages/AppearancePage';
 import TerminalPage from './pages/TerminalPage';
 import AssistantPage from './pages/AssistantPage';
+import MonitoringPage from './pages/MonitoringPage';
 import LoggingPage from './pages/LoggingPage';
 import SecurityPage from './pages/SecurityPage';
 import AccountPage from './pages/AccountPage';
@@ -16,6 +17,7 @@ const PAGES = {
     appearance: AppearancePage,
     terminal: TerminalPage,
     assistant: AssistantPage,
+    monitoring: MonitoringPage,
     logging: LoggingPage,
     security: SecurityPage,
     account: AccountPage,

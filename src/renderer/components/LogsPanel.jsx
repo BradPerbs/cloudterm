@@ -20,6 +20,7 @@ import {
     ArrowRight01Icon,
     SearchRemoveIcon,
     TimelineIcon,
+    PulseRectangle01Icon,
 } from 'hugeicons-react';
 import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
@@ -65,6 +66,7 @@ const KIND_ICONS = {
     disconnect: Link01Icon,
     tunnel: PlugSocketIcon,
     desktop: ComputerIcon,
+    monitor: PulseRectangle01Icon,
     add: PlusSignIcon,
     edit: PencilEdit02Icon,
     delete: Delete02Icon,

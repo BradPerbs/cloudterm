@@ -25,6 +25,11 @@ const ACTIONS = {
     'tunnel.stop': { verb: 'Stopped port forward %s', kind: 'tunnel' },
     'desktop.open': { verb: 'Opened the desktop at %s', failed: 'Could not open the desktop at %s', kind: 'desktop' },
     'desktop.close': { verb: 'Closed the desktop at %s', kind: 'desktop' },
+    // Written by the reachability monitor, on the transition only, so a host
+    // that was down for an hour is two lines rather than sixty. `host.offline`
+    // is always recorded as a failure, so it only ever uses the second wording.
+    'host.offline': { verb: '%s stopped answering', failed: '%s stopped answering', kind: 'monitor' },
+    'host.online': { verb: '%s is answering again', kind: 'monitor' },
 
     'host.create': { verb: 'Added host %s', kind: 'add' },
     'host.update': { verb: 'Edited host %s', kind: 'edit' },
@@ -113,6 +118,7 @@ const FIELD_LABELS = {
     agentPath: 'agent path',
     agentForward: 'agent forwarding',
     tunnels: 'port forwards',
+    monitor: 'monitoring',
     proxyId: 'proxy',
     viaProxyId: 'chained through',
     remoteDns: 'proxy resolves names',

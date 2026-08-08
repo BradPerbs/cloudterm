@@ -12,8 +12,10 @@ import TagInput from './ui/TagInput';
 import StoredSecretHint from './ui/StoredSecretHint';
 import Field, { FIELD_CLASS, MONO_FIELD_CLASS } from './ui/Field';
 import { HOST_KINDS, DEFAULT_PORTS, DEFAULT_SERIAL, hostKind } from '../lib/protocols';
+import { monitorSupport, defaultCheckPort } from '../lib/monitor';
 import { nameProxy, proxyRoute } from '../lib/proxies';
 import { useProxies } from '../hooks/useProxies';
+import useMonitor from '../hooks/useMonitor';
 
 const AUTH_METHODS = [
     { id: 'password', label: 'Password', hint: 'Send a stored password' },
@@ -85,6 +87,10 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         proxyId: host?.proxyId || '',
         initCommand: host?.initCommand || '',
         tunnels: host?.tunnels || [],
+        // Whether a timer checks that this host is still answering, and on what
+        // port. Port 0 means the one it connects on, resolved at check time so
+        // that moving the SSH port moves the check with it.
+        monitor: { enabled: false, port: 0, ...(host?.monitor || {}) },
         // The editor keeps the VNC password inside this block for the sake of
         // the form; `submit` lifts it back out to the flat field the store
         // encrypts, which is the only place it is ever stored.
@@ -103,6 +109,13 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     // is global, cached, and the Proxies page keeps every mounted copy current,
     // so a proxy added a moment ago is already on offer here.
     const { proxies } = useProxies();
+
+    // Monitoring has a master switch elsewhere, and a host set to be watched
+    // while that is off would sit there doing nothing with this form having
+    // cheerfully accepted the setting. So it is read here, and can be turned on
+    // from here: sending someone to Settings to make the switch they just used
+    // mean something is a worse answer than offering it where they are.
+    const { settings: monitorSettings, configure: configureMonitor } = useMonitor();
 
     const handleChange = useCallback((field, value) => {
         setFormData(previous => ({ ...previous, [field]: value }));
@@ -126,6 +139,17 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     // Files, forwards and a tunnelled desktop are SSH channels, and telnet and
     // serial reach devices that have none.
     const sshHost = kind === 'ssh';
+
+    /**
+     * Whether this host can be watched, answered against the form rather than
+     * against the saved record: choosing a jump host should close the section
+     * as you choose it, not after a save and a reopen.
+     */
+    const watchable = monitorSupport(formData);
+    const checkPort = defaultCheckPort(formData);
+    const checkPortHint = checkPort
+        ? `Left blank, this host is checked on port ${checkPort}, the one it connects on.`
+        : 'Left blank, this host is checked on the port it connects on.';
 
     /**
      * What the jump host picker offers. The current choice stays on the list
@@ -205,6 +229,14 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
             initCommand: (formData.initCommand || '').split('\n')[0].trim(),
             tunnels: tunnelCount ? plural(tunnelCount, 'forward') : '',
             desktop: desktop.enabled ? (desktop.protocol === 'rdp' ? 'RDP' : 'VNC') : '',
+            // Not "Watched" for a host that has since been given a jump host:
+            // the switch is still set, and the save is about to clear it,
+            // because there is no route from here to check. Asked again here
+            // rather than read off `watchable`, which is a fresh object every
+            // render and would defeat the memo it was added to.
+            monitor: formData.monitor?.enabled && monitorSupport(formData).ok
+                ? (formData.monitor.port ? `Watched on port ${formData.monitor.port}` : 'Watched')
+                : '',
             advanced: formData.legacyAlgorithms ? 'Legacy algorithms allowed' : '',
         };
     }, [formData, hosts, proxies]);
@@ -784,6 +816,94 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                                 placeholder={sshHost ? 'cd /srv/app && tmux attach' : 'terminal length 0'}
                             />
                         </Field>
+                    </Disclosure>
+                    )}
+
+                    {/* Whether a timer checks this host is still there. Offered
+                        for every kind but serial, because it is a question about
+                        an address rather than about a session: a telnet console
+                        server and a Windows box with nothing but RDP on it are
+                        both worth knowing the state of. A serial cable has no
+                        socket to knock on. */}
+                    {!isSerial && (
+                    <Disclosure
+                        title="Monitoring"
+                        summary={summaries.monitor}
+                        defaultOpen={Boolean(formData.monitor?.enabled)}
+                    >
+                        {watchable.ok ? (
+                            <div className="flex flex-col gap-3">
+                                <Checkbox
+                                    variant="card"
+                                    checked={Boolean(formData.monitor?.enabled)}
+                                    onChange={(e) => handleChange('monitor', {
+                                        ...formData.monitor,
+                                        enabled: e.target.checked,
+                                    })}
+                                    label="Watch this host"
+                                    description="While the app is open, check on a timer that something is
+                                        still answering here. A host that stops raises a notification once,
+                                        and its card is marked until it comes back."
+                                />
+
+                                {formData.monitor?.enabled && (
+                                    <>
+                                        <Field
+                                            label="Check port"
+                                            hint={`${checkPortHint} Set it to watch something else on the
+                                                same machine, a web server or a database, rather than the
+                                                login this host is reached by.`}
+                                        >
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={65535}
+                                                value={formData.monitor?.port || ''}
+                                                onChange={(e) => handleChange('monitor', {
+                                                    ...formData.monitor,
+                                                    port: parseInt(e.target.value, 10) || 0,
+                                                })}
+                                                className={`${FIELD_CLASS} font-mono`}
+                                                placeholder={checkPort ? String(checkPort) : 'e.g. 443'}
+                                            />
+                                        </Field>
+
+                                        {/* Without this the switch above is
+                                            saved and silently never acted on,
+                                            which is the whole trap of a feature
+                                            with a master switch somewhere else.
+
+                                            The same box the sections above use
+                                            to say a list is empty, rather than a
+                                            warning: nothing is wrong here, there
+                                            is just one more switch, and it is
+                                            offered rather than pointed at. */}
+                                        {monitorSettings && !monitorSettings.enabled && (
+                                            <div className="px-3 py-2.5 rounded-xl border border-gray-300
+                                                dark:border-surface-control bg-gray-50 dark:bg-surface-base
+                                                text-gray-500 dark:text-gray-400 text-sm flex items-center gap-3">
+                                                <span className="flex-1 min-w-0">
+                                                    Monitoring is off for the app, so this host will be set up
+                                                    and not yet checked.
+                                                </span>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="shrink-0"
+                                                    onClick={() => configureMonitor({ enabled: true })}
+                                                >
+                                                    Turn it on
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-[11px] text-gray-500 dark:text-neutral-500">
+                                {watchable.reason}
+                            </p>
+                        )}
                     </Disclosure>
                     )}
 

@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 import { MoreVerticalIcon } from 'hugeicons-react';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { DEFAULT_PORTS, hostKind, protocolLabel } from '../lib/protocols';
+import { STATE_STYLES, stateOf, describeStatus } from '../lib/monitor';
 import IconTile from './hosts/IconTile';
 import MenuButton, { dropdownItems } from './ui/MenuButton';
 import Tag from './ui/Tag';
@@ -41,6 +42,7 @@ function HostCard({
     view = 'grid',
     folderLabel = '',
     connected = false,
+    status = null,
     dragging = false,
     selected = false,
     items = [],
@@ -75,6 +77,15 @@ function HostCard({
 
     const protocol = host.protocol || 'ssh';
     const kind = hostKind(host);
+
+    /**
+     * How the last reachability check went, or null for a host nobody is
+     * watching. `unknown` counts as nothing to show: a host switched on a
+     * moment ago has not been checked yet, and a grey dot appearing for one
+     * sweep would read as a state rather than as the absence of one.
+     */
+    const watchState = stateOf(status);
+    const watch = watchState && watchState !== 'unknown' ? STATE_STYLES[watchState] : null;
 
     /**
      * What this host connects with, and as whom.
@@ -196,12 +207,27 @@ function HostCard({
                     />
                     {/* A live session is the one thing about a host that is true
                         this second rather than whenever it was last saved, so it
-                        is marked on the icon rather than written in the meta. */}
-                    {connected && (
+                        is marked on the icon rather than written in the meta.
+
+                        A watched host that is not connected puts its last check
+                        in the same corner, because it is the same kind of fact
+                        and there is only one corner. It never competes with the
+                        badge above it: a session that is open has already proved
+                        the host is up, more recently and more thoroughly than a
+                        check could. The two are told apart by fill. Solid is a
+                        connection, hollow is a host believed to be answering,
+                        and red is one that is not. */}
+                    {connected ? (
                         <span
                             title="Connected"
                             className="absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500
                                 ring-2 ring-white dark:ring-surface-control"
+                        />
+                    ) : watch && (
+                        <span
+                            title={describeStatus(status)}
+                            className={`absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full
+                                ring-2 ring-white dark:ring-surface-control ${watch.dot}`}
                         />
                     )}
                 </IconTile>

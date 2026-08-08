@@ -23,6 +23,7 @@ const vault = require('./vault');
 const backup = require('./backup');
 const account = require('./account');
 const serverSync = require('./server-sync');
+const monitor = require('./monitor');
 const cloudSnapshot = require('./cloud-snapshot');
 const activity = require('./activity');
 const sessionLog = require('./session-log');
@@ -178,6 +179,11 @@ function register(getWindow) {
     // signed out or locked: it settles into doing nothing and retries when the
     // vault is unlocked.
     serverSync.start(notify);
+
+    // The reachability poller. Given the window as well as the notifier because
+    // it raises Windows notifications of its own, and a toast that is clicked
+    // has to be able to bring the app forward.
+    monitor.start(notify, getWindow);
 
     // Registers the store hooks that queue an upload, and pulls whatever another
     // device saved. Same tolerance for being signed out or locked.
@@ -1092,6 +1098,18 @@ function register(getWindow) {
         const report = await serverSync.sync({ manual: true });
         return { report, status: serverSync.status() };
     });
+
+    /* ---------------- Host monitoring ---------------- */
+
+    handle('monitor-status', () => monitor.status());
+
+    handle('monitor-configure', (event, patch) => monitor.configure(patch || {}));
+
+    handle('monitor-check-now', () => monitor.checkNow());
+
+    handle('monitor-mark-read', () => monitor.markRead());
+
+    handle('monitor-clear-events', () => monitor.clearEvents());
 
     /* ---------------- Cloud setup snapshot ---------------- */
 
