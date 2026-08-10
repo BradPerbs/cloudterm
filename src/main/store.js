@@ -4,6 +4,7 @@ const fs = require('fs');
 const { normalizeTunnels } = require('./tunnel-config');
 const { normalizeSnippet, normalizeSnippets } = require('./snippet-config');
 const { normalizeDesktop } = require('./desktop-config');
+const { normalizeBmc } = require('./bmc-config');
 const { normalizeMonitor, monitorSupport, defaultCheckPort } = require('./monitor-config');
 const { normalizeProxy, describeProxy, MAX_PROXY_HOPS } = require('./proxy-config');
 const { normalizeTags, applyTagEdit, sameTags } = require('./host-tags');
@@ -18,17 +19,23 @@ const activity = require('./activity');
 
 const SCHEMA_VERSION = 2;
 
-// Fields that must never be written in the clear. `vncPassword` and
-// `rdpPassword` are flat rather than nested inside the `desktop` block so that
-// every mechanism keyed off this list (encryption on save, the re-encrypt pass
-// when the vault opens, redaction, backup export and restore) covers them
-// without knowing anything about remote desktops.
+// Fields that must never be written in the clear. `vncPassword`, `rdpPassword`
+// and `bmcPassword` are flat rather than nested inside the `desktop` and `bmc`
+// blocks so that every mechanism keyed off this list (encryption on save, the
+// re-encrypt pass when the vault opens, redaction, backup export and restore)
+// covers them without knowing anything about remote desktops or service
+// processors.
 //
 // "Never leaves the main process" holds for all of these but `rdpPassword`,
 // which is the documented exception: CredSSP runs in the WASM client, so rdp.js
 // returns it once at open. It is still stored, logged and redacted like the
 // rest, and never appears in a host record crossing IPC.
-const SECRET_FIELDS = ['password', 'privateKey', 'passphrase', 'vncPassword', 'rdpPassword'];
+//
+// `bmcPassword` is not an exception, and is the one it would be worst to make
+// one of: it is root on the hardware, under the operating system. bmc.js puts
+// it into the guest page from the main process precisely so it never has to
+// pass through our own renderer.
+const SECRET_FIELDS = ['password', 'privateKey', 'passphrase', 'vncPassword', 'rdpPassword', 'bmcPassword'];
 
 /**
  * The only secret a proxy record has, named separately so a proxy is not written
@@ -195,13 +202,14 @@ function mergeSecrets(record, incoming, existing = {}, fields = SECRET_FIELDS) {
 
 /** Strip secrets before anything crosses the IPC boundary. */
 function redactHost(host) {
-    const { password, privateKey, passphrase, vncPassword, rdpPassword, ...rest } = host;
+    const { password, privateKey, passphrase, vncPassword, rdpPassword, bmcPassword, ...rest } = host;
     return {
         ...rest,
         hasPassword: Boolean(password),
         hasPrivateKey: Boolean(privateKey),
         hasVncPassword: Boolean(vncPassword),
         hasRdpPassword: Boolean(rdpPassword),
+        hasBmcPassword: Boolean(bmcPassword),
     };
 }
 
@@ -476,7 +484,7 @@ function saveHost(host) {
     const existing = index >= 0 ? store.hosts[index] : {};
 
     // Never trust redaction flags coming back from the renderer.
-    const { hasPassword, hasPrivateKey, hasVncPassword, hasRdpPassword, ...incoming } = host;
+    const { hasPassword, hasPrivateKey, hasVncPassword, hasRdpPassword, hasBmcPassword, ...incoming } = host;
     const record = mergeSecrets({ ...existing, ...incoming, id }, incoming, existing);
 
     // Tunnels carry no secrets, but they do come from the renderer and drive
@@ -488,6 +496,12 @@ function saveHost(host) {
     // dials, so it is normalised before it is ever stored rather than trusted
     // at the point it is used.
     if (record.desktop !== undefined) record.desktop = normalizeDesktop(record.desktop);
+
+    // And for the BMC block, which decides what URL a pane loads and, through
+    // `trustedCert`, which certificate it will accept without asking. A
+    // fingerprint arriving as anything other than a trimmed string is a trust
+    // decision made by malformed data, so it is normalised before it is stored.
+    if (record.bmc !== undefined) record.bmc = normalizeBmc(record.bmc);
 
     // And again for the monitor block, which decides what address a background
     // timer opens a connection to every minute. A port arriving as a string, or
@@ -1131,6 +1145,71 @@ function desktopFor(host) {
 function getHostDesktop(hostId) {
     const host = load().hosts.find(h => h.id === hostId);
     return desktopFor(host);
+}
+
+/* ------------------------------------------------------------------ *
+ * Service processors (IPMI / BMC)
+ * ------------------------------------------------------------------ */
+
+/**
+ * A host's BMC block, with the address filled in.
+ *
+ * A blank address means the host itself, for the boards that share the machine's
+ * NIC rather than having a dedicated one. Same reasoning as desktopFor: it would
+ * otherwise be the same answer typed into a second box.
+ */
+function bmcFor(host) {
+    const bmc = normalizeBmc(host?.bmc);
+    if (!bmc.host && host?.host) return { ...bmc, host: host.host };
+    return bmc;
+}
+
+/** Whether a host has a BMC configured, for the parts of the UI that only ask that. */
+function getHostBmc(hostId) {
+    const host = load().hosts.find(h => h.id === hostId);
+    return bmcFor(host);
+}
+
+/**
+ * Resolve a host's BMC settings, password included.
+ *
+ * Main process only, under the same rule as resolveCredentials and
+ * resolveDesktop: this return value must never be sent over IPC as it stands.
+ * There is no exception here of the kind rdp.js documents. bmc.js is the only
+ * caller, and it puts the password into the guest page itself rather than
+ * handing it to anything that could pass it on.
+ *
+ * No proxy chain, unlike resolveDesktop. A `<webview>` load goes out through
+ * Chromium's own network stack, which this app's SOCKS records do not configure,
+ * so pretending to apply one here would be describing a route that is not taken.
+ */
+function resolveBmc(hostId) {
+    const host = load().hosts.find(h => h.id === hostId);
+    if (!host) return null;
+
+    return {
+        ...bmcFor(host),
+        password: decryptSecret(host.bmcPassword),
+    };
+}
+
+/**
+ * Record the certificate a user has agreed to for a host's BMC.
+ *
+ * Written straight onto the record rather than through saveHost, because
+ * saveHost is the renderer's path and this decision is made in the main process
+ * on behalf of a prompt the renderer only displayed. Going the long way round
+ * would mean handing the renderer a host record to send back, which is how a
+ * trust decision picks up an edit nobody made.
+ */
+function trustBmcCert(hostId, fingerprint) {
+    const store = load();
+    const host = store.hosts.find(h => h.id === hostId);
+    if (!host || !fingerprint) return false;
+
+    host.bmc = normalizeBmc({ ...normalizeBmc(host.bmc), trustedCert: fingerprint });
+    persist();
+    return true;
 }
 
 /* ------------------------------------------------------------------ *
@@ -1829,6 +1908,7 @@ function importAll(payload, { overwrite = false } = {}) {
                 // listening sockets and must not reach the runtime malformed.
                 if (record.tunnels !== undefined) record.tunnels = normalizeTunnels(record.tunnels);
                 if (record.desktop !== undefined) record.desktop = normalizeDesktop(record.desktop);
+                if (record.bmc !== undefined) record.bmc = normalizeBmc(record.bmc);
                 if (record.monitor !== undefined) record.monitor = normalizeMonitor(record.monitor);
                 // A backup is a file a person can edit, so the tag list arrives
                 // as untrusted as one from the editor does.
@@ -1910,6 +1990,9 @@ module.exports = {
     getHostTunnels,
     resolveDesktop,
     getHostDesktop,
+    resolveBmc,
+    getHostBmc,
+    trustBmcCert,
     getMonitorTargets,
     listMonitoredHosts,
     getProxies,

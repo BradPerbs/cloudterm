@@ -76,8 +76,52 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
-            webviewTag: false,
+            /*
+             * On for one feature: the IPMI pane, which loads a service
+             * processor's own web interface (see src/main/bmc.js).
+             *
+             * The alternative, a WebContentsView, is positioned by the main
+             * process and painted outside the DOM, so it would sit on top of
+             * every split, dropdown and modal and have to be moved by hand on
+             * every layout change. A `<webview>` is an element: it clips,
+             * scrolls and stacks like the rest of the pane.
+             *
+             * What keeps this from widening the app's attack surface is
+             * `will-attach-webview` below, which is where the guest's
+             * privileges are actually decided. Turning the tag on only makes
+             * the element available; it grants the guest nothing.
+             */
+            webviewTag: true,
         },
+    });
+
+    /*
+     * Every `<webview>` the renderer creates, on the way in.
+     *
+     * A guest here is a BMC's web UI: vendor JavaScript, often a decade old,
+     * from a device on the LAN. It gets no preload, no node integration and no
+     * escape from its sandbox, and those are enforced here rather than trusted
+     * from the element's attributes, because the attributes are written by the
+     * renderer and this is not.
+     */
+    mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+        delete webPreferences.preload;
+        webPreferences.nodeIntegration = false;
+        webPreferences.nodeIntegrationInSubFrames = false;
+        webPreferences.contextIsolation = true;
+        webPreferences.sandbox = true;
+        webPreferences.webSecurity = true;
+        webPreferences.allowRunningInsecureContent = false;
+        webPreferences.experimentalFeatures = false;
+
+        // Only ever http(s), and only ever into a partition bmc.js owns. A
+        // guest asking for `file://`, or for the default session, is not one of
+        // ours and does not get to attach.
+        const url = String(params.src || '');
+        const partition = String(params.partition || '');
+        if (!/^https?:\/\//i.test(url) || !partition.startsWith('bmc-')) {
+            event.preventDefault();
+        }
     });
 
     // The renderer displays untrusted remote output; it must never navigate

@@ -4,6 +4,7 @@ import AgentAuthFields from './AgentAuthFields';
 import SerialFields from './hosts/SerialFields';
 import TunnelsEditor from './tunnels/TunnelsEditor';
 import DesktopEditor from './desktop/DesktopEditor';
+import BmcEditor from './bmc/BmcEditor';
 import Sheet from './ui/Sheet';
 import Button, { IconButton } from './ui/Button';
 import Checkbox from './ui/Checkbox';
@@ -95,6 +96,10 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         // the form; `submit` lifts it back out to the flat field the store
         // encrypts, which is the only place it is ever stored.
         desktop: host?.desktop ? { ...host.desktop, password: '' } : {},
+        // Same arrangement as `desktop`: the editor keeps the IPMI password
+        // inside this block for the sake of the form, and `submit` lifts it back
+        // out to the flat field the store encrypts.
+        bmc: host?.bmc ? { ...host.bmc, password: '' } : {},
     }));
     const [showPassword, setShowPassword] = useState(false);
     // Secrets are never sent to the renderer, so an existing one shows as a
@@ -103,6 +108,9 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     // Tracked apart from the SSH secrets: removing a stored login password is
     // not a reason to also drop the desktop's.
     const [clearDesktopPassword, setClearDesktopPassword] = useState(false);
+    // And again for the IPMI's, which belongs to the board rather than to the
+    // machine and has no reason to be cleared alongside either of the others.
+    const [clearBmcPassword, setClearBmcPassword] = useState(false);
     const formRef = useRef(null);
 
     // Read straight from the hook rather than threaded down as a prop: the list
@@ -133,9 +141,11 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     const kind = hostKind(formData);
     const isSerial = kind === 'serial';
     const isDesktop = kind === 'desktop';
+    const isIpmi = kind === 'ipmi';
     // A shell of some sort. The things that need one (run-on-connect, the
-    // session port) are offered for the other three and not for a desktop.
-    const hasShell = !isDesktop;
+    // session port) are offered for the protocols and not for a desktop or an
+    // IPMI, neither of which opens a session at all.
+    const hasShell = !isDesktop && !isIpmi;
     // Files, forwards and a tunnelled desktop are SSH channels, and telnet and
     // serial reach devices that have none.
     const sshHost = kind === 'ssh';
@@ -229,6 +239,9 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
             initCommand: (formData.initCommand || '').split('\n')[0].trim(),
             tunnels: tunnelCount ? plural(tunnelCount, 'forward') : '',
             desktop: desktop.enabled ? (desktop.protocol === 'rdp' ? 'RDP' : 'VNC') : '',
+            bmc: formData.bmc?.enabled
+                ? (formData.bmc.host || 'Same as the host')
+                : '',
             // Not "Watched" for a host that has since been given a jump host:
             // the switch is still set, and the save is about to clear it,
             // because there is no route from here to check. Asked again here
@@ -244,6 +257,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
     const handleKind = useCallback((next) => {
         setFormData(previous => {
             const desktop = previous.desktop || {};
+            const bmc = previous.bmc || {};
 
             if (next === 'desktop') {
                 return {
@@ -261,6 +275,19 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                         // never made.
                         transport: 'direct',
                     },
+                    // The two shell-less kinds are one answer to one question,
+                    // so choosing this one puts the other back to being a view
+                    // rather than the whole host.
+                    bmc: { ...bmc, only: false },
+                };
+            }
+
+            if (next === 'ipmi') {
+                return {
+                    ...previous,
+                    protocol: 'ssh',
+                    bmc: { ...bmc, enabled: true, only: true },
+                    desktop: { ...desktop, only: false },
                 };
             }
 
@@ -279,6 +306,9 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                 // kept, since an SSH host with a desktop view is an ordinary thing
                 // to be, but it is no longer the only reason to open the host.
                 desktop: { ...desktop, only: false },
+                // And the same for the IPMI, which is if anything more ordinary
+                // to have alongside a shell than instead of one.
+                bmc: { ...bmc, only: false },
             };
         });
     }, []);
@@ -303,6 +333,12 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         const isRdp = desktop.protocol === 'rdp';
         const desktopSecret = desktopPassword || (clearDesktopPassword ? null : '');
 
+        // The IPMI password goes the same way, and for the same reason. There is
+        // only one field for it to land in, so unlike the desktop's it needs no
+        // choosing between two.
+        const { password: bmcPassword, ...bmc } = formData.bmc || {};
+        const bmcSecret = bmcPassword || (clearBmcPassword ? null : '');
+
         // Every list, tab and log line calls a host by its name, so the record
         // always carries one, but it does not have to be typed. Left blank it
         // becomes the address, which is what anyone would have written anyway
@@ -316,10 +352,12 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                 ...formData,
                 name,
                 desktop,
+                bmc,
                 // '' keeps whatever is stored, so the protocol not in use is
                 // left exactly as it was.
                 vncPassword: isRdp ? '' : desktopSecret,
                 rdpPassword: isRdp ? desktopSecret : '',
+                bmcPassword: bmcSecret,
                 password: secret(formData.password),
                 privateKey: secret(formData.privateKey),
                 passphrase: secret(formData.passphrase),
@@ -412,6 +450,8 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                             className={hasShell ? 'col-span-3' : 'col-span-4'}
                             hint={isDesktop
                                 ? 'Where the desktop is. Used unless the Desktop section below names a different address.'
+                                : isIpmi
+                                ? 'Where the service processor is. Used unless the IPMI section below names a different address.'
                                 : undefined}
                         >
                             <input
@@ -610,6 +650,23 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                             passwordCleared={clearDesktopPassword}
                             onChange={(next) => handleChange('desktop', next)}
                             onClearPassword={() => setClearDesktopPassword(true)}
+                        />
+                    </div>
+                )}
+
+                {/* And the same for an IPMI host, which is likewise nothing but
+                    this: the picker at the top has already said so, `managed`
+                    tells the editor not to ask again, and these settings are the
+                    whole of what it needs. */}
+                {isIpmi && (
+                    <div className="pt-1 border-t border-gray-100 dark:border-surface-control">
+                        <BmcEditor
+                            managed
+                            bmc={formData.bmc}
+                            hasPassword={host?.hasBmcPassword}
+                            passwordCleared={clearBmcPassword}
+                            onChange={(next) => handleChange('bmc', next)}
+                            onClearPassword={() => setClearBmcPassword(true)}
                         />
                     </div>
                 )}
@@ -946,6 +1003,26 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                             passwordCleared={clearDesktopPassword}
                             onChange={(next) => handleChange('desktop', next)}
                             onClearPassword={() => setClearDesktopPassword(true)}
+                        />
+                    </Disclosure>
+
+                    {/* The *other* way to reach a service processor: an IPMI
+                        view alongside the shell and files rather than instead of
+                        them. A host that is only a BMC is the IPMI kind at the
+                        top. Unlike the desktop, this needs nothing from the
+                        connection configured above; it is a second address for
+                        the same machine, reachable when the machine is not. */}
+                    <Disclosure
+                        title="IPMI"
+                        summary={summaries.bmc}
+                        defaultOpen={Boolean(formData.bmc?.enabled)}
+                    >
+                        <BmcEditor
+                            bmc={formData.bmc}
+                            hasPassword={host?.hasBmcPassword}
+                            passwordCleared={clearBmcPassword}
+                            onChange={(next) => handleChange('bmc', next)}
+                            onClearPassword={() => setClearBmcPassword(true)}
                         />
                     </Disclosure>
 

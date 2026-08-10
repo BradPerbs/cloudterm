@@ -53,16 +53,28 @@ export const HOST_KINDS = [
         summary: 'RDP or VNC, with no shell behind it',
         detail: 'Opens straight into the remote desktop and never dials SSH. For a Windows box, which usually has no SSH server on it.',
     },
+    {
+        id: 'ipmi',
+        label: 'IPMI',
+        summary: 'A service processor, and nothing behind it',
+        detail: 'Opens straight into the BMC\'s own web interface and never dials the machine. For an iDRAC, iLO or Supermicro board in front of a host this app has no session on.',
+    },
 ];
 
 /**
  * Which of those a saved record is.
  *
- * A host that is only a desktop is stored as an SSH host carrying
- * `desktop.only`, so the kind has to be read off both fields rather than off
- * `protocol` alone.
+ * A host that is only a desktop, or only a service processor, is stored as an
+ * SSH host carrying `desktop.only` or `bmc.only`, so the kind has to be read off
+ * those fields rather than off `protocol` alone.
+ *
+ * IPMI is tested first. The picker sets one or the other and clears the one it
+ * is not, so a record with both is one that predates the picker knowing about
+ * IPMI at all, and for that record the service processor is the answer that
+ * still reaches something.
  */
 export function hostKind(host) {
+    if (host?.bmc?.enabled && host.bmc.only) return 'ipmi';
     if (host?.desktop?.enabled && host.desktop.only) return 'desktop';
     return host?.protocol || 'ssh';
 }

@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Cancel01Icon, Maximize01Icon, Minimize01Icon, CommandLineIcon, Folder01Icon, Camera01Icon, Refresh01Icon, ArrowDataTransferHorizontalIcon, ComputerIcon, LayoutTwoColumnIcon, LayoutTwoRowIcon, ArrowExpand01Icon, ArrowShrink01Icon, Search01Icon, FlashIcon, Menu01Icon, Megaphone02Icon, RecordIcon, StopCircleIcon } from 'hugeicons-react';
+import { Cancel01Icon, Maximize01Icon, Minimize01Icon, CommandLineIcon, CpuIcon, Folder01Icon, Camera01Icon, Refresh01Icon, ArrowDataTransferHorizontalIcon, ComputerIcon, LayoutTwoColumnIcon, LayoutTwoRowIcon, ArrowExpand01Icon, ArrowShrink01Icon, Search01Icon, FlashIcon, Menu01Icon, Megaphone02Icon, RecordIcon, StopCircleIcon } from 'hugeicons-react';
 import { resolveTerminalTheme } from '../hooks/useTerminalTheme';
 import { DEFAULT_TERMINAL_SETTINGS, resolveFontFamily } from '../hooks/useTerminalSettings';
 import toast from 'react-hot-toast';
@@ -23,6 +23,7 @@ import SftpView from './SftpView';
 import TunnelsView from './tunnels/TunnelsView';
 import VncView from './VncView';
 import RdpView from './RdpView';
+import BmcView from './BmcView';
 import SearchBar from './terminal/SearchBar';
 import PaneRoute, { DesktopPaneRoute } from './terminal/PaneRoute';
 import SnippetPalette from './snippets/SnippetPalette';
@@ -241,8 +242,29 @@ function TerminalView({
      */
     const desktopOnly = Boolean(pane?.host?.desktop?.enabled && pane.host.desktop.only);
 
-    // 'ssh' | 'sftp' | 'tunnels' | 'desktop'
-    const [viewMode, setViewMode] = useState(desktopOnly ? 'desktop' : 'ssh');
+    /**
+     * And a host that is only a service processor: an IPMI in front of a machine
+     * this app will never hold a shell on. Read here for the same reason
+     * `desktopOnly` is, and it outranks it when both are set, because a pane
+     * cannot open on two things and the IPMI is the one that reaches a board
+     * that is powered off.
+     */
+    const bmcOnly = Boolean(pane?.host?.bmc?.enabled && pane.host.bmc.only);
+
+    /**
+     * A pane with no SSH session behind it, by either route.
+     *
+     * The session's own chrome (the status dot, the route mark, Reconnect) is
+     * keyed off this rather than off `desktopOnly` alone, because all three
+     * describe a connection that a pane like this never opens and would
+     * otherwise sit on "connecting" forever.
+     */
+    const sessionless = desktopOnly || bmcOnly;
+
+    // 'ssh' | 'sftp' | 'tunnels' | 'desktop' | 'bmc'
+    const [viewMode, setViewMode] = useState(
+        bmcOnly ? 'bmc' : desktopOnly ? 'desktop' : 'ssh',
+    );
 
     /**
      * A view the pane was asked to open on, still waiting on what carries it.
@@ -254,12 +276,16 @@ function TerminalView({
      * session is ready. Cleared once honoured, and by any manual switch: after
      * you have chosen a view yourself, nothing should move it for you.
      */
-    const pendingView = useRef(['sftp', 'desktop'].includes(pane?.view) ? pane.view : null);
+    const pendingView = useRef(['sftp', 'desktop', 'bmc'].includes(pane?.view) ? pane.view : null);
 
-    // The element the desktop puts its own controls in. State rather than a ref
+    // The element a view puts its own controls in. State rather than a ref
     // because the child portals into it, and a ref would still be null on the
     // render that matters.
-    const [desktopToolbar, setDesktopToolbar] = useState(null);
+    //
+    // Shared by every view that has controls of its own, rather than one slot
+    // each: only one view is in front at a time, so a second slot would be an
+    // empty div in the header for the whole life of the pane.
+    const [paneToolbar, setPaneToolbar] = useState(null);
     // Once opened, the SFTP pane stays mounted: unmounting it would throw away
     // the browsing position and stop the transfer queue reporting progress.
     const [sftpOpened, setSftpOpened] = useState(false);
@@ -267,6 +293,11 @@ function TerminalView({
     // session and its framebuffer just for glancing at the shell. Open from the
     // start when the desktop is the only thing this pane is for.
     const [desktopOpened, setDesktopOpened] = useState(desktopOnly);
+    // And the IPMI, for the strongest version of the same reason: unmounting it
+    // would throw away a logged-in session on the vendor's own UI, and whatever
+    // half-finished form was on screen with it. Open from the start when the
+    // IPMI is the only thing this pane is for.
+    const [bmcOpened, setBmcOpened] = useState(bmcOnly);
     const [width, setWidth] = useState(Infinity);
     // The view switcher and the Reconnect button never collapse, and both are
     // text-sized, so how much room is left for the action buttons is measured
@@ -629,8 +660,11 @@ function TerminalView({
 
             // Nothing to dial: this host has no SSH server, and attempting one
             // would spend the retry budget failing at a machine that was never
-            // going to answer.
+            // going to answer. True of a desktop-only host, and more plainly
+            // true of an IPMI-only one, where the machine behind the service
+            // processor may not even be powered on.
             if (pane?.host?.desktop?.enabled && pane.host.desktop.only) return;
+            if (pane?.host?.bmc?.enabled && pane.host.bmc.only) return;
 
             if (connectedPanes.has(pane.id)) return;
             connectedPanes.add(pane.id);
@@ -895,6 +929,15 @@ function TerminalView({
     // protocol and is VNC, which is what it was.
     const isRdp = desktop?.protocol === 'rdp';
     /**
+     * The IPMI view, which is the one thing in this pane that needs neither an
+     * SSH session nor even a running machine. So unlike `hasDesktop` it is not
+     * gated on `sshHost`: a serial console into a switch and a BMC beside it is
+     * an ordinary pairing, and the whole point of a service processor is that it
+     * answers when nothing else does.
+     */
+    const bmc = pane?.host?.bmc;
+    const hasBmc = Boolean(bmc?.enabled);
+    /**
      * Which face the session screen is showing, or nothing when the terminal
      * owns the pane.
      *
@@ -929,19 +972,27 @@ function TerminalView({
      * and is ready at once. A request the host cannot satisfy simply never
      * comes due, which leaves the pane on its shell rather than on a view with
      * nothing behind it.
+     *
+     * The IPMI waits on nothing at all. It is a second address for the machine,
+     * reached by this app rather than through it, so "once it can be shown" is
+     * immediately, and making it queue behind a session would defeat the point
+     * of asking for it.
      */
     useEffect(() => {
         const next = pendingView.current;
         if (!next) return;
 
-        const ready = next === 'desktop' ? desktopReady : (sshHost && isLive);
+        const ready = next === 'bmc' ? hasBmc
+            : next === 'desktop' ? desktopReady
+            : (sshHost && isLive);
         if (!ready) return;
 
         pendingView.current = null;
         if (next === 'sftp') setSftpOpened(true);
         if (next === 'desktop') setDesktopOpened(true);
+        if (next === 'bmc') setBmcOpened(true);
         setViewMode(next);
-    }, [desktopReady, sshHost, isLive]);
+    }, [desktopReady, sshHost, isLive, hasBmc]);
 
     // Splitting from the host you are already on is the common case, so it is
     // what the plain entries do; the "with…" pair opens the new pane on a
@@ -1224,10 +1275,11 @@ function TerminalView({
                 isSplit && !isFocused ? 'opacity-60' : 'opacity-100'
             }`}>
                 <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
-                    {/* The SSH session's state, which a desktop-only pane does
-                        not have: it would sit on "connecting" forever, and the
-                        desktop reports its own status in the bar just below. */}
-                    {!desktopOnly && (
+                    {/* The SSH session's state, which a desktop-only or
+                        IPMI-only pane does not have: it would sit on
+                        "connecting" forever, and both of those report their own
+                        status in the bar just below. */}
+                    {!sessionless && (
                         <Tooltip label={statusUi.label}>
                             <span
                                 role="img"
@@ -1272,8 +1324,12 @@ function TerminalView({
 
                         A desktop-only pane has no session to describe, so it
                         reads the path off the desktop instead. Same mark, same
-                        place; only the source differs. */}
-                    {desktopOnly
+                        place; only the source differs.
+
+                        An IPMI-only pane gets no mark at all: its address is
+                        already on the bar below, as a URL, and a second copy of
+                        it here would be the only thing the mark had to say. */}
+                    {bmcOnly ? null : desktopOnly
                         ? <DesktopPaneRoute paneId={pane.id} isRdp={isRdp} />
                         : <PaneRoute route={connection.route} />}
 
@@ -1307,16 +1363,21 @@ function TerminalView({
                         ref={fixedRef}
                         className={`flex items-center shrink-0 ${compact ? 'gap-1.5' : 'gap-2'}`}
                     >
-                        {/* Where the desktop hangs its own controls. Empty, and
-                            so invisible, for every other view. */}
+                        {/* Where the desktop and the IPMI hang their own
+                            controls. Empty, and so invisible, for every view
+                            that has none. */}
                         <div
-                            ref={setDesktopToolbar}
+                            ref={setPaneToolbar}
                             // Same gap as the actions to its right: these sit in
                             // one row and should read as one row.
                             className={`flex items-center empty:hidden ${compact ? 'gap-1.5' : 'gap-2'}`}
                         />
 
-                        {isRdp && viewMode === 'desktop' && !desktopOnly && (
+                        {/* The divider between a view's own controls and the
+                            switcher. Only where both are on screen: a pane whose
+                            switcher is hidden has nothing to divide from. */}
+                        {((isRdp && viewMode === 'desktop' && !desktopOnly)
+                            || (viewMode === 'bmc' && !bmcOnly)) && (
                             <div className="h-5 w-px bg-gray-200 dark:bg-surface-control" />
                         )}
 
@@ -1325,7 +1386,7 @@ function TerminalView({
                             telnet or serial one: a shell, with no files,
                             forwards or desktop to switch to. The header already
                             says which host it is. */}
-                        {!desktopOnly && (sshHost || hasDesktop) && (
+                        {!desktopOnly && !bmcOnly && (sshHost || hasDesktop || hasBmc) && (
                         <SegmentedControl
                             ariaLabel="Terminal view"
                             size={narrow ? 'sm' : 'md'}
@@ -1337,6 +1398,7 @@ function TerminalView({
                                 setViewMode(next);
                                 if (next === 'sftp') setSftpOpened(true);
                                 if (next === 'desktop') setDesktopOpened(true);
+                                if (next === 'bmc') setBmcOpened(true);
                             }}
                             segments={[
                                 // The shell, files and forwards are all views on
@@ -1400,13 +1462,24 @@ function TerminalView({
                                         ? (isRdp ? 'Windows remote desktop' : 'Remote desktop')
                                         : 'Connect over SSH to reach the desktop',
                                 }] : []),
+                                // Never disabled, unlike the desktop. A service
+                                // processor is reachable when the machine in
+                                // front of it is not, which is the entire reason
+                                // to have one, so gating this on a live session
+                                // would hide it exactly when it is wanted.
+                                ...(hasBmc ? [{
+                                    value: 'bmc',
+                                    label: compact ? null : 'IPMI',
+                                    icon: <CpuIcon size={13} strokeWidth={2.25} />,
+                                    title: 'The service processor’s web interface',
+                                }] : []),
                             ]}
                         />
                         )}
 
                         {/* The SSH session's own divider and Reconnect. Neither
                             belongs to a pane that has no session. */}
-                        {!desktopOnly && (
+                        {!sessionless && (
                             <div className="h-5 w-px bg-gray-200 dark:bg-surface-control" />
                         )}
 
@@ -1552,7 +1625,7 @@ function TerminalView({
                             // names the host and says whether it is up, so a
                             // second bar underneath repeating that was two rows
                             // of chrome to show one desktop.
-                            toolbarHost={viewMode === 'desktop' ? desktopToolbar : null}
+                            toolbarHost={viewMode === 'desktop' ? paneToolbar : null}
                         />
                     ) : (
                         <VncView
@@ -1563,6 +1636,27 @@ function TerminalView({
                             isLive={isLive}
                         />
                     )}
+                </div>
+            )}
+
+            {/* IPMI: mounted once opened and then hidden, like the desktop.
+                Tearing it down would drop a logged-in session on the board's own
+                UI and put the next visit back at its login page. */}
+            {bmcOpened && (
+                <div
+                    className="flex-1 overflow-hidden relative"
+                    style={{ display: viewMode === 'bmc' ? 'block' : 'none' }}
+                >
+                    <BmcView
+                        paneId={pane.id}
+                        host={pane.host}
+                        isActive={isActive && viewMode === 'bmc'}
+                        // Same reasoning as the desktop's: the pane header
+                        // already names the host and says whether it is up, so a
+                        // second bar underneath repeating that was two rows of
+                        // chrome to show one web page.
+                        toolbarHost={viewMode === 'bmc' ? paneToolbar : null}
+                    />
                 </div>
             )}
 

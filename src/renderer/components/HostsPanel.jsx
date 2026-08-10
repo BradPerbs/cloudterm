@@ -5,6 +5,7 @@ import {
     CloudServerIcon,
     CommandLineIcon,
     ComputerIcon,
+    CpuIcon,
     Copy01Icon,
     Delete02Icon,
     Edit02Icon,
@@ -777,6 +778,7 @@ function HostsPanel({
         // them, so the entry names the one this host is actually set up for.
         const desktopLabel = host.desktop?.protocol === 'rdp' ? 'RDP' : 'VNC';
         const hasDesktop = Boolean(host.desktop?.enabled);
+        const hasBmc = Boolean(host.bmc?.enabled);
 
         /**
          * Every way in, in the order they are worth trying.
@@ -790,6 +792,14 @@ function HostsPanel({
                 label: `Connect via ${desktopLabel}`,
                 icon: <ComputerIcon size={ICON} />,
                 onClick: () => connectAs(host, 'desktop'),
+            }]
+            // And an IPMI-only host is the same case again: there is no session
+            // to open, so the board's own interface is the only way in.
+            : kind === 'ipmi'
+            ? [{
+                label: 'Open the IPMI',
+                icon: <CpuIcon size={ICON} />,
+                onClick: () => connectAs(host, 'bmc'),
             }]
             : [
                 {
@@ -806,6 +816,15 @@ function HostsPanel({
                     label: `Connect via ${desktopLabel}`,
                     icon: <ComputerIcon size={ICON} />,
                     onClick: () => connectAs(host, 'desktop'),
+                },
+                // Offered whatever the host connects over, unlike the desktop:
+                // the service processor is a second address for the machine and
+                // needs nothing from the session, which is exactly why it is
+                // worth reaching for when the session is the thing that is down.
+                hasBmc && {
+                    label: 'Open the IPMI',
+                    icon: <CpuIcon size={ICON} />,
+                    onClick: () => connectAs(host, 'bmc'),
                 },
                 // A Windows box with no desktop set up is the one case where the
                 // missing entry is the surprising part, so it is shown and

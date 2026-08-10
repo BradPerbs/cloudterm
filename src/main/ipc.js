@@ -16,6 +16,7 @@ const remoteEdit = require('./remote-edit');
 const screenshot = require('./screenshot');
 const tunnels = require('./tunnels');
 const vnc = require('./vnc');
+const bmc = require('./bmc');
 const rdp = require('./rdp');
 const importer = require('./import');
 const importCommon = require('./import-common');
@@ -34,6 +35,7 @@ const proxy = require('./proxy');
 const { parseAddress } = require('./address');
 const { describeTunnel } = require('./tunnel-config');
 const { describeDesktop } = require('./desktop-config');
+const { describeBmc } = require('./bmc-config');
 const { describeProxy, nameProxy } = require('./proxy-config');
 
 /**
@@ -157,6 +159,10 @@ function readCertificateFile(privateKeyPath) {
 
 // requestId -> resolve, for host key prompts awaiting a user decision.
 const pendingHostKeyPrompts = new Map();
+// requestId -> resolve, for BMC certificate prompts awaiting one. Separate from
+// the host key map because a page load is held open on each of these, so
+// cancelling them has to deny the load rather than leave Chromium waiting.
+const pendingCertPrompts = new Map();
 // requestId -> resolve, for keyboard-interactive rounds awaiting answers.
 const pendingAuthPrompts = new Map();
 // pendingKeyId -> freshly generated private key, awaiting a save.
@@ -200,6 +206,7 @@ function register(getWindow) {
     tunnels.setNotifier(notify);
     vnc.setNotifier(notify);
     rdp.setNotifier(notify);
+    bmc.setNotifier(notify);
     activity.setNotifier(notify);
 
     // Waking from sleep is when a session is most likely to be dead and a
@@ -218,6 +225,7 @@ function register(getWindow) {
         tunnels.cleanup(tabId);
         vnc.cleanup(tabId);
         rdp.cleanup(tabId);
+        bmc.cleanup(tabId);
     });
 
     /**
@@ -235,6 +243,24 @@ function register(getWindow) {
         pendingHostKeyPrompts.set(requestId, resolve);
         window.webContents.send('host-key-prompt', { requestId, ...details });
     });
+
+    /**
+     * The same question for a BMC's TLS certificate. Resolves false with no
+     * window, so a page load is never silently trusted either.
+     *
+     * Handed to bmc.js rather than called from it, so that module stays free of
+     * any knowledge of how a prompt reaches a person, exactly as ssh.js is.
+     */
+    bmc.setTrustRequester((details) => new Promise((resolve) => {
+        const window = getWindow();
+        if (!window || window.isDestroyed()) {
+            resolve(false);
+            return;
+        }
+        const requestId = `bc-${++promptCounter}`;
+        pendingCertPrompts.set(requestId, resolve);
+        window.webContents.send('bmc-cert-prompt', { requestId, ...details });
+    }));
 
     /**
      * Put a keyboard-interactive round in front of the user: a one-time code,
@@ -730,6 +756,66 @@ function register(getWindow) {
 
     // The desktop's own name arrives in ServerInit, which only the viewer parses.
     handle('vnc-name', (event, { paneId, name }) => vnc.setDesktopName(paneId, name));
+
+    /* ---------------- Service processors (IPMI / BMC) ---------------- */
+
+    handle('bmc-get', (event, paneId) => bmc.get(paneId));
+
+    /**
+     * Prepare a BMC pane. Returns the URL and partition for the `<webview>` to
+     * load; the password stays in main, and reaches the page from there.
+     */
+    handle('bmc-open', async (event, { paneId, hostId }) => {
+        const result = await bmc.open(paneId, hostId);
+
+        activity.record({
+            category: 'connection',
+            action: 'bmc.open',
+            outcome: result.success ? 'success' : 'failure',
+            target: describeBmc(store.getHostBmc(hostId)),
+            detail: 'IPMI',
+            message: result.success ? '' : (result.message || ''),
+            ...describeDesktopHost(hostId),
+        });
+
+        return result;
+    });
+
+    /**
+     * The renderer handing over the guest page it has just created. Everything
+     * done *to* that page (the login, the popup policy, the load reporting)
+     * happens in main from here on.
+     */
+    handle('bmc-attach', (event, { paneId, webContentsId }) => bmc.attach(paneId, webContentsId));
+
+    /** Fill the login form again, from the pane's own button. */
+    handle('bmc-login', (event, paneId) => bmc.login(paneId));
+
+    handle('bmc-close', (event, { paneId, hostId }) => {
+        const existed = Boolean(bmc.get(paneId));
+        const result = bmc.close(paneId);
+
+        if (existed && hostId) {
+            activity.record({
+                category: 'connection',
+                action: 'bmc.close',
+                target: describeBmc(store.getHostBmc(hostId)),
+                detail: 'IPMI',
+                ...describeDesktopHost(hostId),
+            });
+        }
+
+        return result;
+    });
+
+    handle('bmc-cert-response', (event, { requestId, accepted }) => {
+        const resolve = pendingCertPrompts.get(requestId);
+        if (resolve) {
+            pendingCertPrompts.delete(requestId);
+            resolve(Boolean(accepted));
+        }
+        return true;
+    });
 
     /* ---------------- Remote desktop: RDP ---------------- */
 
@@ -1587,6 +1673,10 @@ function register(getWindow) {
 function cancelPendingPrompts() {
     for (const resolve of pendingHostKeyPrompts.values()) resolve(false);
     pendingHostKeyPrompts.clear();
+    // Each of these is a page load held open waiting for an answer. Denying
+    // them lets those loads fail instead of hanging on a window that has gone.
+    for (const resolve of pendingCertPrompts.values()) resolve(false);
+    pendingCertPrompts.clear();
     // null, not an empty answer set: a round nobody can answer must end the
     // attempt rather than hand the server blanks and spend a login try.
     for (const resolve of pendingAuthPrompts.values()) resolve(null);

@@ -103,6 +103,9 @@ function HostCard({
      */
     const label = kind === 'desktop'
         ? (host.desktop?.protocol === 'rdp' ? 'RDP' : 'VNC')
+        // `protocolLabel` only knows the stored protocols, and would call an
+        // IPMI host SSH, which is the one thing it is not.
+        : kind === 'ipmi' ? 'IPMI'
         : protocolLabel(kind);
 
     /**
@@ -116,6 +119,10 @@ function HostCard({
      */
     const detail = kind === 'serial'
         ? [host.serial?.path || 'No port', host.serial?.baudRate].filter(Boolean).join(' · ')
+        : kind === 'ipmi'
+        // The board's own account, which is not an account on the machine and is
+        // the thing that tells two service processors apart.
+        ? (host.bmc?.username || '')
         : (kind === 'ssh'
             ? host.username
             : (host.desktop?.protocol === 'rdp' ? host.desktop.username : ''));
