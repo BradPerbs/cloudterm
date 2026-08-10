@@ -40,7 +40,15 @@
             "!resources/README.md",
             "!resources/hello-helper.exe",
             "!**/node_modules/@openai/codex-*/vendor/**",
-            "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**"
+            "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+            "!**/node_modules/@hugeicons/**",
+            "!**/node_modules/hugeicons-react/**",
+            "!**/node_modules/@fontsource/**",
+            "!**/node_modules/@xterm/**",
+            "!**/node_modules/@novnc/**",
+            "!**/node_modules/react/**",
+            "!**/node_modules/react-dom/**",
+            "!**/node_modules/react-hot-toast/**"
         ],
         "asarUnpack": [
             "**/node_modules/@serialport/bindings-cpp/**",
@@ -69,7 +77,15 @@
                 "resources/**/*",
                 "!resources/README.md",
                 "!**/node_modules/@openai/codex-*/vendor/**",
-                "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**"
+                "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+                "!**/node_modules/@hugeicons/**",
+                "!**/node_modules/hugeicons-react/**",
+                "!**/node_modules/@fontsource/**",
+                "!**/node_modules/@xterm/**",
+                "!**/node_modules/@novnc/**",
+                "!**/node_modules/react/**",
+                "!**/node_modules/react-dom/**",
+                "!**/node_modules/react-hot-toast/**"
             ],
             "extraResources": [
                 {
