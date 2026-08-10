@@ -402,7 +402,13 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         This host is
                     </span>
-                    <div className="grid grid-cols-4 gap-1 p-1 bg-gray-100 dark:bg-surface-base rounded-xl">
+                    {/* One column per kind, so the row is the whole question and
+                        not the first four fifths of it. Counted by hand because
+                        Tailwind reads class names out of the source and cannot
+                        be handed a computed one: adding a kind to HOST_KINDS
+                        means changing this number, and forgetting to wraps the
+                        new one onto a line of its own. */}
+                    <div className="grid grid-cols-5 gap-1 p-1 bg-gray-100 dark:bg-surface-base rounded-xl">
                         {HOST_KINDS.map((entry) => (
                             <button
                                 key={entry.id}
