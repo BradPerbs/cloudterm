@@ -18,6 +18,7 @@ import { toastOptions } from '../../lib/toast';
 import logoPutty from '../../assets/icons/128_putty.png';
 import logoKitty from '../../assets/icons/48_kitty.png';
 import logoMobaxterm from '../../assets/icons/48_mobaxterm.png';
+import { useT } from '../../i18n';
 
 /**
  * Bring saved sessions in from the other terminals people migrate from:
@@ -41,17 +42,16 @@ const SOURCES = [
 const PROTOCOL_LABELS = { ssh: 'SSH', telnet: 'telnet', serial: 'serial', rdp: 'RDP', vnc: 'VNC' };
 
 const KEY_STATES = {
-    encrypted: 'passphrase-protected',
-    ppk: 'needs conversion',
-    unreadable: 'unreadable',
+    encrypted: 'appImport.keyEncrypted',
+    ppk: 'appImport.keyNeedsConversion',
+    unreadable: 'appImport.keyUnreadable',
 };
 
-function sourceSubtitle(id, info) {
-    if (info === undefined) return 'Checking…';
-    if (!info?.found) return 'Not found';
+function sourceSubtitle(t, id, info) {
+    if (info === undefined) return t('appImport.checking');
+    if (!info?.found) return t('appImport.notFound');
     if (id === 'mobaxterm') return info.path.split(/[\\/]/).pop();
-    const count = info.sessions || 0;
-    return `${count} saved session${count === 1 ? '' : 's'}`;
+    return t('appImport.sessionCount', { count: info.sessions || 0 });
 }
 
 /**
@@ -60,6 +60,7 @@ function sourceSubtitle(id, info) {
  * as information, a button reads as something to press.
  */
 function SourceCard({ source, info, active, scanning, onScan }) {
+    const t = useT();
     const found = Boolean(info?.found);
     const busy = active && scanning;
 
@@ -88,7 +89,7 @@ function SourceCard({ source, info, active, scanning, onScan }) {
                                 found ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-neutral-700'
                             }`}
                         />
-                        <span className="truncate">{sourceSubtitle(source.id, info)}</span>
+                        <span className="truncate">{sourceSubtitle(t, source.id, info)}</span>
                     </span>
                 </div>
             </div>
@@ -103,7 +104,7 @@ function SourceCard({ source, info, active, scanning, onScan }) {
                     flex items-center justify-center gap-1.5"
             >
                 {busy && <Loading03Icon size={12} strokeWidth={2.5} className="animate-spin" />}
-                {busy ? 'Scanning…' : 'Import'}
+                {busy ? t('import.scanning') : t('appImport.import')}
             </button>
         </div>
     );
@@ -111,13 +112,16 @@ function SourceCard({ source, info, active, scanning, onScan }) {
 
 /** A line of small facts under a row: folder, forwards, key state, warnings. */
 function CandidateNotes({ host }) {
+    const t = useT();
     const notes = [];
 
-    if (host.folder) notes.push(`in ${host.folder}`);
+    if (host.folder) notes.push(t('appImport.inFolder', { folder: host.folder }));
     if (host.tunnels?.length) notes.push(host.tunnels.map(describeTunnel).join(' · '));
     if (host.identityName) {
         const state = KEY_STATES[host.identityState];
-        notes.push(state ? `key ${host.identityName} (${state})` : `key ${host.identityName}`);
+        notes.push(state
+            ? t('import.keyNoteState', { name: host.identityName, state: t(state) })
+            : t('import.keyNote', { name: host.identityName }));
     }
     notes.push(...(host.notes || []));
 
@@ -140,6 +144,7 @@ function CandidateNotes({ host }) {
 }
 
 export default function AppImportSection({ onImported }) {
+    const t = useT();
     const [sources, setSources] = useState(null);
     const [active, setActive] = useState('');
     const [scan, setScan] = useState(null);
@@ -165,24 +170,27 @@ export default function AppImportSection({ onImported }) {
             setScan(result);
             setSelected(new Set(result.hosts.filter(h => h.status === 'new').map(h => h.key)));
         } catch (error) {
-            toast.error(`Could not read the ${source} sessions: ${error.message}`, toastOptions());
+            toast.error(
+                t('appImport.scanFailed', { source, reason: error.message }),
+                toastOptions(),
+            );
         } finally {
             setScanning(false);
         }
-    }, []);
+    }, [t]);
 
     const chooseFile = useCallback(async () => {
         const result = await window.api.dialog.open({
-            title: 'Choose a MobaXterm.ini or .mxtsessions file',
+            title: t('appImport.chooseFileTitle'),
             properties: ['openFile'],
             filters: [
-                { name: 'MobaXterm sessions', extensions: ['ini', 'mxtsessions'] },
-                { name: 'All files', extensions: ['*'] },
+                { name: t('appImport.fileKind'), extensions: ['ini', 'mxtsessions'] },
+                { name: t('common.allFiles'), extensions: ['*'] },
             ],
         });
         if (result.canceled || !result.filePaths?.[0]) return;
         runScan('mobaxterm', { path: result.filePaths[0] });
-    }, [runScan]);
+    }, [runScan, t]);
 
     const toggle = useCallback((key) => {
         setSelected((current) => {
@@ -216,29 +224,34 @@ export default function AppImportSection({ onImported }) {
             setReport(result);
 
             const parts = [];
-            if (result.hosts.imported) parts.push(`${result.hosts.imported} host${result.hosts.imported > 1 ? 's' : ''}`);
-            if (result.keys.imported) parts.push(`${result.keys.imported} key${result.keys.imported > 1 ? 's' : ''}`);
-            if (result.folders?.created) parts.push(`${result.folders.created} folder${result.folders.created > 1 ? 's' : ''}`);
+            if (result.hosts.imported) parts.push(t('hosts.count', { count: result.hosts.imported }));
+            if (result.keys.imported) parts.push(t('keychain.count', { count: result.keys.imported }));
+            if (result.folders?.created) {
+                parts.push(t('hosts.folderCount', { count: result.folders.created }));
+            }
 
-            toast.success(parts.length ? `Imported ${parts.join(', ')}` : 'Nothing new to import', toastOptions());
+            toast.success(
+                parts.length
+                    ? t('import.imported', { what: parts.join(', ') })
+                    : t('import.nothingNew'),
+                toastOptions(),
+            );
         } catch (error) {
-            toast.error(`Import failed: ${error.message}`, toastOptions());
+            toast.error(t('import.failed', { reason: error.message }), toastOptions());
         } finally {
             setImporting(false);
         }
-    }, [scan, active, selected, withIdentityFiles, onImported, runScan]);
+    }, [scan, active, selected, withIdentityFiles, onImported, runScan, t]);
 
     return (
         <SettingCard className="flex flex-col gap-5">
             <div className="min-w-0">
                 <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                     <Download01Icon size={18} strokeWidth={2} className="text-gray-400" />
-                    From other apps
+                    {t('appImport.title')}
                 </h4>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Hosts, port forwards, folders and serial or desktop settings come
-                    across. Passwords stay behind; each app keeps those encrypted with
-                    its own scheme.
+                    {t('appImport.desc')}
                 </p>
             </div>
 
@@ -261,12 +274,12 @@ export default function AppImportSection({ onImported }) {
                     onClick={chooseFile}
                     className="self-end flex items-center gap-1.5 text-[11px] font-medium text-gray-400
                         dark:text-neutral-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                    title="A portable MobaXterm.ini, or a .mxtsessions export"
+                    title={t('appImport.chooseFileHint')}
                 >
                     <FileImportIcon size={12} strokeWidth={2} />
                     {IS_WINDOWS
-                        ? 'Portable install? Choose a MobaXterm file…'
-                        : 'Choose a MobaXterm file…'}
+                        ? t('appImport.choosePortable')
+                        : t('appImport.chooseFile')}
                 </button>
             </div>
 
@@ -296,7 +309,7 @@ export default function AppImportSection({ onImported }) {
                         <div className="border border-gray-200 dark:border-surface-control rounded-xl overflow-hidden">
                             <GroupHeader
                                 icon={<ServerStack01Icon size={15} strokeWidth={2} />}
-                                title={`${scan.label} sessions`}
+                                title={t('appImport.sessionsOf', { app: scan.label })}
                                 count={hosts.length}
                                 selected={selected.size}
                                 onToggleAll={toggleAll}
@@ -334,7 +347,7 @@ export default function AppImportSection({ onImported }) {
                     {!scan.error && hosts.length === 0 && (
                         <div className="flex flex-col items-center gap-1.5 py-8 text-gray-400 dark:text-neutral-500">
                             <SearchRemoveIcon size={20} strokeWidth={1.5} />
-                            <p className="text-sm">Nothing importable in {scan.label}.</p>
+                            <p className="text-sm">{t('appImport.nothingIn', { app: scan.label })}</p>
                         </div>
                     )}
 
@@ -345,8 +358,8 @@ export default function AppImportSection({ onImported }) {
                             variant="card"
                             checked={withIdentityFiles}
                             onChange={(event) => setWithIdentityFiles(event.target.checked)}
-                            label="Copy the private keys these hosts reference"
-                            description="Each key file is read into the keychain and encrypted with the OS keystore. Without this, imported hosts are set to use your SSH agent instead."
+                            label={t('import.copyKeys')}
+                            description={t('appImport.copyKeysDesc')}
                         />
                     )}
 
@@ -355,12 +368,15 @@ export default function AppImportSection({ onImported }) {
                             {report && (
                                 <p className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
                                     <CheckmarkCircle02Icon size={14} strokeWidth={2} className="shrink-0" />
-                                    Imported {report.hosts.imported} host(s)
-                                    {report.keys.imported > 0 && `, ${report.keys.imported} key(s)`}
-                                    {report.folders?.created > 0 && `, ${report.folders.created} folder(s)`}.
-                                    {report.hosts.skipped > 0 && ` ${report.hosts.skipped} already present.`}
+                                    {t('appImport.report', { hosts: report.hosts.imported })}
+                                    {report.keys.imported > 0
+                                        && `, ${t('keychain.count', { count: report.keys.imported })}`}
+                                    {report.folders?.created > 0
+                                        && `, ${t('hosts.folderCount', { count: report.folders.created })}`}.
+                                    {report.hosts.skipped > 0
+                                        && ` ${t('import.reportSkipped', { count: report.hosts.skipped })}`}
                                     {report.hosts.relayed > 0
-                                        && ` ${report.hosts.relayed} set to connect through a jump host.`}
+                                        && ` ${t('import.reportRelayed', { count: report.hosts.relayed })}`}
                                 </p>
                             )}
                         </div>
@@ -370,8 +386,10 @@ export default function AppImportSection({ onImported }) {
                             className="shrink-0 px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             {importing
-                                ? 'Importing…'
-                                : selected.size > 0 ? `Import ${selected.size} selected` : 'Nothing selected'}
+                                ? t('import.importing')
+                                : selected.size > 0
+                                    ? t('import.importSelected', { count: selected.size })
+                                    : t('import.nothingSelected')}
                         </button>
                     </div>
                 </>

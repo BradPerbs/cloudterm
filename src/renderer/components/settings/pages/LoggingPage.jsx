@@ -1,14 +1,13 @@
 import SettingsPage from '../ui/SettingsPage';
 import SessionLogSection from '../SessionLogSection';
+import { useT } from '../../../i18n';
 
 /** Session transcripts: what gets recorded, where it goes, how long it stays. */
 export default function LoggingPage() {
+    const t = useT();
+
     return (
-        <SettingsPage
-            title="Logging"
-            description="Write what each session showed to a file, and decide which sessions
-                are recorded and how long the files are kept."
-        >
+        <SettingsPage title={t('settings.logging.title')} description={t('settings.logging.desc')}>
             <SessionLogSection />
         </SettingsPage>
     );

@@ -7,11 +7,17 @@
  * rather than a pile of sentences.
  */
 
+/**
+ * Catalog keys rather than words: the log page draws these as filter chips and
+ * has to name them in whatever language the app is set to. The entries
+ * themselves stay in English, being a record of what happened rather than
+ * chrome. See `describeEntry` below.
+ */
 export const CATEGORY_LABELS = {
-    connection: 'Connections',
-    data: 'Changes',
-    files: 'Files',
-    security: 'Security',
+    connection: 'logs.categoryConnection',
+    data: 'logs.categoryData',
+    files: 'logs.categoryFiles',
+    security: 'logs.categorySecurity',
 };
 
 /**

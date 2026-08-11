@@ -10,28 +10,25 @@ import Button, { IconButton } from '../ui/Button';
 import MenuButton from '../ui/MenuButton';
 import SegmentedControl from '../ui/SegmentedControl';
 import SearchField from '../ui/SearchField';
+import { useT } from '../../i18n';
 
 const VIEWS = [
-    { value: 'grid', title: 'Grid', icon: <GridViewIcon size={14} strokeWidth={2} /> },
-    { value: 'list', title: 'List', icon: <LeftToRightListBulletIcon size={14} strokeWidth={2} /> },
+    { value: 'grid', titleKey: 'hosts.viewGrid', icon: <GridViewIcon size={14} strokeWidth={2} /> },
+    { value: 'list', titleKey: 'hosts.viewList', icon: <LeftToRightListBulletIcon size={14} strokeWidth={2} /> },
 ];
 
-const KIND_LABELS = {
-    all: 'Everything',
-    command: 'Commands only',
-    package: 'Packages only',
-};
+const KINDS = ['all', 'command', 'package'];
 
 /**
  * The Snippets page's header, built to the same plan as the Hosts one: a search
  * field that takes the width, then the controls that change what you are
- * looking at, in the same order — a filter menu, the layout switch, then the
+ * looking at, in the same order: a filter menu, the layout switch, then the
  * two ways to add something.
  *
  * No title and no summary line, for the reason Hosts has none: the sidebar item
  * is already lit and the cards are plainly snippets, so both only spent the
  * widest part of the row saying what nothing contradicts. The counts they
- * carried are still reachable — the filter menu shows one per kind, and an
+ * carried are still reachable, since the filter menu shows one per kind, and an
  * empty result already says so in the body of the page.
  *
  * The kind filter is a menu rather than a segmented control for the reason sort
@@ -50,6 +47,8 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
     onNewPackage,
     onNewSnippet,
 }, searchRef) {
+    const t = useT();
+
     return (
         <div className="flex items-center gap-2 shrink-0">
             <SearchField
@@ -57,7 +56,7 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
                 value={query}
                 onChange={onQueryChange}
                 onKeyDown={onQueryKeyDown}
-                ariaLabel="Search snippets"
+                ariaLabel={t('snippets.search')}
             />
 
             {/* Grouped so the row's flexing is all spent on the search field:
@@ -65,20 +64,20 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
             <div className="flex items-center gap-2 shrink-0">
                 <MenuButton
                     icon={<FilterIcon size={16} strokeWidth={2} />}
-                    title={`Showing: ${KIND_LABELS[kind]}`}
+                    title={t('snippets.showing', { kind: t(`snippets.kind.${kind}`) })}
                     active={kind !== 'all'}
-                    items={Object.entries(KIND_LABELS).map(([value, label]) => ({
-                        label,
+                    items={KINDS.map(value => ({
+                        label: t(`snippets.kind.${value}`),
                         hint: value === kind ? '✓' : String(counts[value] ?? 0),
                         onSelect: () => onKindChange(value),
                     }))}
                 />
 
                 <SegmentedControl
-                    segments={VIEWS}
+                    segments={VIEWS.map(entry => ({ ...entry, title: t(entry.titleKey) }))}
                     value={view}
                     onChange={onViewChange}
-                    ariaLabel="Card layout"
+                    ariaLabel={t('hosts.layout')}
                 />
 
                 {/* A hairline between "how it is shown" and "what there is",
@@ -87,7 +86,7 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
 
                 <IconButton
                     onClick={onNewPackage}
-                    title="New package"
+                    title={t('snippets.newPackage')}
                     icon={<PackageAddIcon size={18} strokeWidth={1.75} />}
                 />
                 <Button
@@ -95,7 +94,7 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
                     onClick={onNewSnippet}
                     icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
                 >
-                    New Snippet
+                    {t('snippets.newSnippet')}
                 </Button>
             </div>
         </div>

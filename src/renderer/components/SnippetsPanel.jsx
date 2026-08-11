@@ -14,6 +14,7 @@ import {
     isPackage,
 } from '../lib/snippets';
 import { toastOptions } from '../lib/toast';
+import { useT } from '../i18n';
 import { CARD_GRID } from '../lib/layout';
 import { useFlipOrder } from '../hooks/useFlipOrder';
 
@@ -341,13 +342,15 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
 
 /** Three different nothings, and only one of them is a problem to solve. */
 function EmptyState({ empty, searching, query }) {
+    const t = useT();
+
     // Clearing is offered in the row above, beside the tags doing the hiding.
     if (!empty) {
         return (
             <EmptyFrame
                 icon={<SearchRemoveIcon size={28} strokeWidth={1.5} />}
-                title={searching ? 'No matches' : 'Nothing shown'}
-                note={searching ? `“${query.trim()}”` : 'Nothing matches those filters.'}
+                title={searching ? t('common.noMatchesTitle') : t('snippets.nothingShown')}
+                note={searching ? `“${query.trim()}”` : t('common.noFilterMatches')}
             />
         );
     }
@@ -355,8 +358,8 @@ function EmptyState({ empty, searching, query }) {
     return (
         <EmptyFrame
             icon={<FlashIcon size={28} strokeWidth={1.5} />}
-            title="No snippets yet"
-            note="Save the commands you retype on every box."
+            title={t('snippets.empty')}
+            note={t('snippets.emptyNote')}
         />
     );
 }

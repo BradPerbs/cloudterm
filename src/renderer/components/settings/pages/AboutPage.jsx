@@ -4,6 +4,7 @@ import SettingCard from '../ui/SettingCard';
 import SettingRow from '../ui/SettingRow';
 import useUpdate from '../../../hooks/useUpdate';
 import { formatDateTime } from '../../../lib/format';
+import { useT } from '../../../i18n';
 
 /**
  * What the update row says, in one line.
@@ -16,34 +17,34 @@ import { formatDateTime } from '../../../lib/format';
  * outranks one still arriving, which outranks one only known about, because
  * each is a step further along and the later step is the one worth reporting.
  */
-function describe(status, message) {
-    if (!status) return 'Checking for updates…';
-    if (status.disabled) return 'Update checks are turned off for this install.';
+function describe(t, status, message) {
+    if (!status) return t('settings.about.checking');
+    if (status.disabled) return t('settings.about.disabled');
     if (message) return message;
 
-    if (status.ready) {
-        return `Version ${status.readyVersion} is ready to install. Restart to finish.`;
-    }
+    if (status.ready) return t('settings.about.ready', { version: status.readyVersion });
 
     if (status.downloading) {
         return status.latest
-            ? `Downloading version ${status.latest.version}…`
-            : 'Downloading the update…';
+            ? t('settings.about.downloadingVersion', { version: status.latest.version })
+            : t('settings.about.downloading');
     }
 
-    if (status.checking) return 'Checking for updates…';
+    if (status.checking) return t('settings.about.checking');
 
     if (status.newer) {
         // Two different promises, and the difference is the whole point of the
         // mode. Only one of them ends with the app being replaced.
         return status.mode === 'install'
-            ? `Version ${status.latest.version} is available.`
-            : `Version ${status.latest.version} is available to download.`;
+            ? t('settings.about.available', { version: status.latest.version })
+            : t('settings.about.availableToDownload', { version: status.latest.version });
     }
 
-    if (status.checkedAt) return `Up to date. Last checked ${formatDateTime(status.checkedAt)}.`;
+    if (status.checkedAt) {
+        return t('settings.about.upToDate', { when: formatDateTime(status.checkedAt) });
+    }
 
-    return 'Not checked yet.';
+    return t('settings.about.neverChecked');
 }
 
 const PRIMARY = `flex items-center gap-1.5 px-4 h-9 rounded-xl text-sm font-medium
@@ -51,6 +52,7 @@ const PRIMARY = `flex items-center gap-1.5 px-4 h-9 rounded-xl text-sm font-medi
     hover:opacity-90 transition-opacity`;
 
 export default function AboutPage() {
+    const t = useT();
     const { status, check, open, download, install } = useUpdate();
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
@@ -88,12 +90,17 @@ export default function AboutPage() {
     // were never going to reach.
     const hint = status && !status.disabled && status.manualRemaining <= 3
         ? (spent
-            ? `No checks left this hour${status.manualResetAt ? `, until ${formatDateTime(status.manualResetAt)}` : ''}.`
-            : `${status.manualRemaining} of ${status.manualLimit} checks left this hour.`)
+            ? (status.manualResetAt
+                ? t('settings.about.noChecksUntil', { when: formatDateTime(status.manualResetAt) })
+                : t('settings.about.noChecksLeft'))
+            : t('settings.about.checksLeft', {
+                count: status.manualRemaining,
+                limit: status.manualLimit,
+            }))
         : '';
 
     return (
-        <SettingsPage title="About">
+        <SettingsPage title={t('settings.about.title')}>
             <div className="bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-white rounded-xl p-8 flex items-center justify-between">
                 <div>
                     <h4 className="text-2xl font-bold mb-1">CloudTerm</h4>
@@ -101,7 +108,11 @@ export default function AboutPage() {
                         a release cannot ship claiming to be the version before
                         it. Held back until it is known, since a wrong version
                         for one frame is worse than none. */}
-                    {status && <p className="opacity-80">Version {status.version}</p>}
+                    {status && (
+                        <p className="opacity-80">
+                            {t('settings.about.version', { version: status.version })}
+                        </p>
+                    )}
                 </div>
                 <div className="w-16 h-16 bg-white dark:bg-black/20 rounded-2xl flex items-center justify-center text-gray-900 dark:text-white">
                     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -114,8 +125,8 @@ export default function AboutPage() {
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Updates"
-                    description={describe(status, message)}
+                    title={t('settings.about.updates')}
+                    description={describe(t, status, message)}
                     control={status?.disabled ? null : (
                         <div className="flex items-center gap-2">
                             {/* One action button at most, and which one it is
@@ -124,7 +135,7 @@ export default function AboutPage() {
                                 on disk, so nothing else appears beside it. */}
                             {status?.ready ? (
                                 <button type="button" onClick={install} className={PRIMARY}>
-                                    Restart to update
+                                    {t('settings.about.restartToUpdate')}
                                 </button>
                             ) : stalled ? (
                                 <button
@@ -133,11 +144,11 @@ export default function AboutPage() {
                                     disabled={busy}
                                     className={`${PRIMARY} disabled:opacity-50 disabled:cursor-not-allowed`}
                                 >
-                                    Download {status.latest.version}
+                                    {t('settings.about.download', { version: status.latest.version })}
                                 </button>
                             ) : status?.newer && !installs ? (
                                 <button type="button" onClick={() => open()} className={PRIMARY}>
-                                    Download {status.latest.version}
+                                    {t('settings.about.download', { version: status.latest.version })}
                                 </button>
                             ) : null}
 
@@ -155,7 +166,7 @@ export default function AboutPage() {
                                     hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-50
                                     disabled:cursor-not-allowed transition-colors"
                             >
-                                {checking ? 'Checking…' : 'Check for updates'}
+                                {checking ? t('settings.about.checkingShort') : t('settings.about.checkNow')}
                             </button>
                         </div>
                     )}
@@ -168,7 +179,7 @@ export default function AboutPage() {
                     <div className="mt-4">
                         <div
                             role="progressbar"
-                            aria-label="Downloading the update"
+                            aria-label={t('settings.about.downloading')}
                             aria-valuenow={status.progress}
                             aria-valuemin={0}
                             aria-valuemax={100}
@@ -205,8 +216,8 @@ export default function AboutPage() {
                         check is a request to GitHub and nothing else, and it
                         carries no account and no machine name with it. */}
                     {installs
-                        ? 'Updates download in the background and install when you quit. Checking asks GitHub for the latest release and sends nothing about you or your machine.'
-                        : 'Updates are not installed automatically. The download opens in your browser, where your system can check it. Checking asks GitHub for the latest release and sends nothing about you or your machine.'}
+                        ? t('settings.about.noteInstall')
+                        : t('settings.about.noteNotify')}
                 </p>
             </SettingCard>
         </SettingsPage>

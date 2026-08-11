@@ -5,7 +5,14 @@
  * than shared because the renderer is sandboxed and cannot reach main-process
  * modules, and main stays the authority: every value sent from a control below
  * is clamped again before it reaches a timer or a socket.
+ *
+ * The strings here go through `translate` rather than `useT`: these are plain
+ * functions, not components. Everything that calls them is a component that
+ * also asks for `t`, so it redraws when the language changes and picks the new
+ * wording up on that pass.
  */
+
+import { translate } from '../i18n';
 
 /**
  * How often hosts are checked. Anything between 15 seconds and an hour is
@@ -13,17 +20,17 @@
  * the one almost everyone wants.
  */
 export const INTERVALS = [
-    { value: 30, label: '30s' },
-    { value: 60, label: '1 min' },
-    { value: 300, label: '5 min' },
-    { value: 900, label: '15 min' },
+    { value: 30, labelKey: 'monitor.every30s' },
+    { value: 60, labelKey: 'monitor.every1min' },
+    { value: 300, labelKey: 'monitor.every5min' },
+    { value: 900, labelKey: 'monitor.every15min' },
 ];
 
 export const TIMEOUTS = [
-    { value: 5, label: '5s' },
-    { value: 10, label: '10s' },
-    { value: 20, label: '20s' },
-    { value: 30, label: '30s' },
+    { value: 5, labelKey: 'monitor.wait5s' },
+    { value: 10, labelKey: 'monitor.wait10s' },
+    { value: 20, labelKey: 'monitor.wait20s' },
+    { value: 30, labelKey: 'monitor.wait30s' },
 ];
 
 /**
@@ -34,9 +41,9 @@ export const TIMEOUTS = [
  * watching something that matters, being told immediately is the point.
  */
 export const THRESHOLDS = [
-    { value: 1, label: 'Once' },
-    { value: 2, label: 'Twice' },
-    { value: 3, label: '3 times' },
+    { value: 1, labelKey: 'monitor.onceFailed' },
+    { value: 2, labelKey: 'monitor.twiceFailed' },
+    { value: 3, labelKey: 'monitor.thriceFailed' },
 ];
 
 /**
@@ -52,22 +59,22 @@ export const THRESHOLDS = [
  */
 export const STATE_STYLES = {
     online: {
-        label: 'Answering',
+        labelKey: 'monitor.stateOnline',
         dot: 'border-2 border-emerald-500 bg-white dark:bg-surface-control',
         text: 'text-emerald-600 dark:text-emerald-400',
     },
     offline: {
-        label: 'Not answering',
+        labelKey: 'monitor.stateOffline',
         dot: 'bg-rose-500',
         text: 'text-rose-600 dark:text-rose-400',
     },
     problem: {
-        label: 'Cannot check',
+        labelKey: 'monitor.stateProblem',
         dot: 'bg-amber-500',
         text: 'text-amber-600 dark:text-amber-500',
     },
     unknown: {
-        label: 'Not checked yet',
+        labelKey: 'monitor.stateUnknown',
         dot: 'bg-gray-300 dark:bg-neutral-600',
         text: 'text-gray-500 dark:text-neutral-400',
     },
@@ -105,15 +112,11 @@ export function monitorSupport(host) {
     if (!host) return { ok: false, reason: '' };
 
     if (host.protocol === 'serial') {
-        return { ok: false, reason: 'A serial console has no network address to check.' };
+        return { ok: false, reason: translate('monitor.unsupportedSerial') };
     }
 
     if (host.jumpHostId) {
-        return {
-            ok: false,
-            reason: 'This host is reached through a jump host, so there is no route to it from '
-                + 'this machine to check. Watch the jump host instead.',
-        };
+        return { ok: false, reason: translate('monitor.unsupportedJump') };
     }
 
     return { ok: true, reason: '' };
@@ -134,15 +137,15 @@ export function defaultCheckPort(host) {
 /** Ages here are seconds and minutes, not dates. */
 export function since(timestamp) {
     const age = Date.now() - (timestamp || 0);
-    if (!timestamp || age < 60_000) return 'just now';
+    if (!timestamp || age < 60_000) return translate('monitor.justNow');
 
     const minutes = Math.floor(age / 60_000);
-    if (minutes < 60) return `${minutes} min ago`;
+    if (minutes < 60) return translate('monitor.minutesAgo', { count: minutes });
 
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} h ago`;
+    if (hours < 24) return translate('monitor.hoursAgo', { count: hours });
 
-    return `${Math.floor(hours / 24)} d ago`;
+    return translate('monitor.daysAgo', { count: Math.floor(hours / 24) });
 }
 
 /**
@@ -162,13 +165,18 @@ export function describeStatus(status) {
     const where = status.address ? `${status.address}: ` : '';
 
     if (state === 'offline') {
-        return `${where}${status.message || 'not answering'}, since ${since(status.since)}`;
+        return where + translate('monitor.describeOffline', {
+            reason: status.message || translate('monitor.notAnswering'),
+            when: since(status.since),
+        });
     }
 
     if (state === 'online') {
-        const latency = status.latency ? ` in ${status.latency} ms` : '';
-        return `${where}answered${latency}, checked ${since(status.checkedAt)}`;
+        return where + translate(
+            status.latency ? 'monitor.describeOnlineLatency' : 'monitor.describeOnline',
+            { latency: status.latency, when: since(status.checkedAt) },
+        );
     }
 
-    return `${where}not checked yet`;
+    return where + translate('monitor.describeUnknown');
 }

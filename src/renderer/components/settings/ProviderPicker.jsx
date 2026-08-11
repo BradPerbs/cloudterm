@@ -1,6 +1,7 @@
 import { ChatGptIcon, Tick02Icon } from 'hugeicons-react';
 import openCodeLogoDark from '../../assets/icons/opencode-logo-dark-square.png';
 import openCodeLogoLight from '../../assets/icons/opencode-logo-light-square.png';
+import { useT } from '../../i18n';
 
 /**
  * Which agent runs behind the assistant.
@@ -65,19 +66,19 @@ const PROVIDERS = [
     {
         value: 'claude-code',
         name: 'Claude Code',
-        hint: 'Uses the Claude Code already installed and signed in on this machine.',
+        hintKey: 'settings.assistant.provider.claudeCode',
         mark: ClaudeCodeMark,
     },
     {
         value: 'codex',
         name: 'Codex',
-        hint: 'Uses the Codex CLI installed on this machine.',
+        hintKey: 'settings.assistant.provider.codex',
         mark: ({ size = 22 }) => <ChatGptIcon size={size} strokeWidth={1.5} />,
     },
     {
         value: 'opencode',
         name: 'OpenCode',
-        hint: 'Uses the OpenCode CLI and providers configured on this machine.',
+        hintKey: 'settings.assistant.provider.opencode',
         mark: OpenCodeMark,
     },
 ];
@@ -86,6 +87,8 @@ const CARD = `relative flex-1 min-w-0 p-3 rounded-xl border text-left transition
     focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25`;
 
 export default function ProviderPicker({ value, available = [], onChange }) {
+    const t = useT();
+
     return (
         <div className="flex gap-2">
             {PROVIDERS.map((provider) => {
@@ -121,7 +124,7 @@ export default function ProviderPicker({ value, available = [], onChange }) {
                         </span>
 
                         <span className="mt-1.5 block text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                            {ready ? provider.hint : 'Not available in this build yet.'}
+                            {ready ? t(provider.hintKey) : t('settings.assistant.provider.unavailable')}
                         </span>
                     </button>
                 );

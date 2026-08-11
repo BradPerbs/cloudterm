@@ -7,21 +7,22 @@ import SettingsPage from '../ui/SettingsPage';
 import SettingCard from '../ui/SettingCard';
 import SettingRow, { DIVIDED } from '../ui/SettingRow';
 import Toggle from '../ui/Toggle';
+import { useT } from '../../../i18n';
 
 /**
  * "5 minutes ago". Short enough to sit on one line next to a button, which a
  * full locale timestamp is not.
  */
-function ago(iso) {
+function ago(t, iso) {
     if (!iso) return '';
 
     const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
 
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 60) return t('settings.account.justNow');
+    if (seconds < 3600) return t('settings.account.minutesAgo', { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return t('settings.account.hoursAgo', { count: Math.floor(seconds / 3600) });
 
-    return `${Math.floor(seconds / 86400)}d ago`;
+    return t('settings.account.daysAgo', { count: Math.floor(seconds / 86400) });
 }
 
 const DOTS = {
@@ -65,42 +66,42 @@ function StatusLine({ tone, text, pulse = false }) {
  * A failure says so rather than showing a stale success: "synced 20 minutes
  * ago" next to a list that never arrived is worse than no line at all.
  */
-function syncState(sync, running) {
+function syncState(t, sync, running) {
     if (!sync) return { tone: 'off', text: '' };
-    if (!sync.enabled) return { tone: 'off', text: 'Off' };
-    if (running || sync.running) return { tone: 'busy', text: 'Syncing…', pulse: true };
+    if (!sync.enabled) return { tone: 'off', text: t('common.off') };
+    if (running || sync.running) return { tone: 'busy', text: t('settings.account.syncing'), pulse: true };
 
     const result = sync.lastResult;
 
     if (result?.error) return { tone: 'error', text: result.error };
     if (result?.skipped) return { tone: 'warn', text: result.skipped };
-    if (!sync.lastSyncAt) return { tone: 'on', text: 'Not synced yet' };
+    if (!sync.lastSyncAt) return { tone: 'on', text: t('settings.account.notSyncedYet') };
 
     if (result && typeof result.total === 'number') {
         return {
             tone: 'on',
-            text: `${result.total} server${result.total === 1 ? '' : 's'} · ${ago(sync.lastSyncAt)}`,
+            text: `${t('settings.account.serverCount', { count: result.total })} · ${ago(t, sync.lastSyncAt)}`,
         };
     }
 
-    return { tone: 'on', text: `Synced ${ago(sync.lastSyncAt)}` };
+    return { tone: 'on', text: t('settings.account.syncedAgo', { when: ago(t, sync.lastSyncAt) }) };
 }
 
 /** The state of the saved setup. */
-function snapshotState(snapshot, saving) {
+function snapshotState(t, snapshot, saving) {
     if (!snapshot) return { tone: 'off', text: '' };
 
     // Before `blocked`, which reports being switched off as a reason a sync
     // cannot run. Off is a choice, not a fault, and should not read as one.
-    if (!snapshot.enabled) return { tone: 'off', text: 'Off' };
+    if (!snapshot.enabled) return { tone: 'off', text: t('common.off') };
 
-    if (saving) return { tone: 'busy', text: 'Saving…', pulse: true };
+    if (saving) return { tone: 'busy', text: t('settings.account.saving'), pulse: true };
     if (snapshot.blocked) return { tone: 'warn', text: snapshot.blocked };
     if (snapshot.lastError) return { tone: 'error', text: snapshot.lastError };
-    if (snapshot.pending) return { tone: 'busy', text: 'Saving…', pulse: true };
-    if (!snapshot.lastPushAt) return { tone: 'on', text: 'Not saved yet' };
+    if (snapshot.pending) return { tone: 'busy', text: t('settings.account.saving'), pulse: true };
+    if (!snapshot.lastPushAt) return { tone: 'on', text: t('settings.account.notSavedYet') };
 
-    return { tone: 'on', text: `Saved ${ago(snapshot.lastPushAt)}` };
+    return { tone: 'on', text: t('settings.account.savedAgo', { when: ago(t, snapshot.lastPushAt) }) };
 }
 
 /**
@@ -111,6 +112,7 @@ function snapshotState(snapshot, saving) {
  * here is a report on state main owns.
  */
 export default function AccountPage() {
+    const t = useT();
     const [status, setStatus] = useState(null);
     const [busy, setBusy] = useState('');
     const [sync, setSync] = useState(null);
@@ -143,11 +145,13 @@ export default function AccountPage() {
             }
 
             setStatus(result.status);
-            notify('success', `Connected as ${result.status.account?.email || 'your CloudBlast account'}`);
+            notify('success', t('settings.account.connectedAs', {
+                account: result.status.account?.email || t('settings.account.yourAccount'),
+            }));
         } finally {
             setBusy('');
         }
-    }, [notify]);
+    }, [notify, t]);
 
     const handleCancel = useCallback(() => {
         window.api.account.cancelSignIn();
@@ -163,28 +167,28 @@ export default function AccountPage() {
             // A token the console never heard about being revoked is still live
             // there. Saying "disconnected" would be untrue.
             notify(result.revoked ? 'success' : 'error', result.revoked
-                ? 'Account disconnected'
-                : 'Signed out on this device, but the console could not be reached to revoke access. Remove the device from Settings → API.');
+                ? t('settings.account.disconnected')
+                : t('settings.account.disconnectedLocally'));
         } finally {
             setBusy('');
         }
-    }, [notify]);
+    }, [notify, t]);
 
     const handleToggleSync = useCallback(async (enabled) => {
         setSync(await window.api.serverSync.setEnabled(enabled));
 
         notify('success', enabled
-            ? 'Syncing your CloudBlast servers into Hosts'
-            : 'Sync turned off. Hosts already added stay where they are.');
-    }, [notify]);
+            ? t('settings.account.syncOn')
+            : t('settings.account.syncOff'));
+    }, [notify, t]);
 
     const handleToggleSnapshot = useCallback(async (enabled) => {
         setSnapshot(await window.api.cloudSnapshot.setEnabled(enabled));
 
         notify('success', enabled
-            ? 'Cloud backup is on'
-            : 'Cloud backup is off. What is already saved stays until you replace it.');
-    }, [notify]);
+            ? t('settings.account.backupOn')
+            : t('settings.account.backupOff'));
+    }, [notify, t]);
 
     const handleSnapshotPush = useCallback(async () => {
         setBusy('snapshot');
@@ -195,11 +199,11 @@ export default function AccountPage() {
 
             if (result?.error) notify('error', result.error);
             else if (result?.skipped) notify('error', result.skipped);
-            else notify('success', 'Backed up to your CloudBlast account');
+            else notify('success', t('settings.account.backedUp'));
         } finally {
             setBusy('');
         }
-    }, [notify]);
+    }, [notify, t]);
 
     const handleSyncNow = useCallback(async () => {
         setBusy('sync');
@@ -214,15 +218,15 @@ export default function AccountPage() {
                 notify('error', report.skipped);
             } else {
                 notify('success', report.total === 0
-                    ? 'No servers on this account yet'
-                    : `${report.total} server${report.total === 1 ? '' : 's'} synced`);
+                    ? t('settings.account.noServers')
+                    : t('settings.account.serversSynced', { count: report.total }));
             }
         } finally {
             setBusy('');
         }
-    }, [notify]);
+    }, [notify, t]);
 
-    if (!status) return <SettingsPage title="Account" />;
+    if (!status) return <SettingsPage title={t('settings.account.title')} />;
 
     const host = (() => {
         try {
@@ -233,7 +237,7 @@ export default function AccountPage() {
     })();
 
     return (
-        <SettingsPage title="Account">
+        <SettingsPage title={t('settings.account.title')}>
             <SettingCard>
                 {status.connected ? (
                     <>
@@ -249,7 +253,7 @@ export default function AccountPage() {
 
                             <div className="min-w-0 flex-1">
                                 <p className="text-base font-semibold text-gray-900 dark:text-white truncate">
-                                    {status.account?.name || 'CloudBlast account'}
+                                    {status.account?.name || t('settings.account.fallbackName')}
                                 </p>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                                     {status.account?.email || host}
@@ -266,26 +270,28 @@ export default function AccountPage() {
                                     transition-colors"
                             >
                                 <Logout01Icon size={16} strokeWidth={1.8} />
-                                {busy === 'signout' ? 'Disconnecting…' : 'Disconnect'}
+                                {busy === 'signout'
+                                    ? t('settings.account.disconnecting')
+                                    : t('settings.account.disconnect')}
                             </button>
                         </div>
 
                         <SettingRow
                             className={DIVIDED}
-                            title="Sync my servers"
-                            description="Your CloudBlast servers appear in Hosts, ready to connect."
+                            title={t('settings.account.syncServers')}
+                            description={t('settings.account.syncServersDesc')}
                             align="center"
                             control={
                                 <Toggle
                                     checked={Boolean(sync?.enabled)}
                                     onChange={handleToggleSync}
                                     disabled={Boolean(busy) || !sync}
-                                    ariaLabel="Sync my servers"
+                                    ariaLabel={t('settings.account.syncServers')}
                                 />
                             }
                         >
                             <div className="flex items-center justify-between gap-4">
-                                <StatusLine {...syncState(sync, busy === 'sync')} />
+                                <StatusLine {...syncState(t, sync, busy === 'sync')} />
 
                                 <button
                                     type="button"
@@ -297,27 +303,29 @@ export default function AccountPage() {
                                         transition-colors"
                                 >
                                     <RefreshIcon size={16} strokeWidth={1.8} />
-                                    {busy === 'sync' || sync?.running ? 'Syncing…' : 'Sync now'}
+                                    {busy === 'sync' || sync?.running
+                                        ? t('settings.account.syncing')
+                                        : t('settings.account.syncNow')}
                                 </button>
                             </div>
                         </SettingRow>
 
                         <SettingRow
                             className={DIVIDED}
-                            title="Cloud backup"
-                            description="Your hosts, folders, keys and settings, saved to your account for your other devices."
+                            title={t('settings.account.cloudBackup')}
+                            description={t('settings.account.cloudBackupDesc')}
                             align="center"
                             control={
                                 <Toggle
                                     checked={Boolean(snapshot?.enabled)}
                                     onChange={handleToggleSnapshot}
                                     disabled={Boolean(busy) || !snapshot}
-                                    ariaLabel="Cloud backup"
+                                    ariaLabel={t('settings.account.cloudBackup')}
                                 />
                             }
                         >
                             <div className="flex items-center justify-between gap-4">
-                                <StatusLine {...snapshotState(snapshot, busy === 'snapshot')} />
+                                <StatusLine {...snapshotState(t, snapshot, busy === 'snapshot')} />
 
                                 <button
                                     type="button"
@@ -329,17 +337,19 @@ export default function AccountPage() {
                                         transition-colors"
                                 >
                                     <RefreshIcon size={16} strokeWidth={1.8} />
-                                    {busy === 'snapshot' ? 'Saving…' : 'Save now'}
+                                    {busy === 'snapshot'
+                                        ? t('settings.account.saving')
+                                        : t('settings.account.saveNow')}
                                 </button>
                             </div>
                         </SettingRow>
                     </>
                 ) : (
                     <SettingRow
-                        title="Connect your account"
+                        title={t('settings.account.connect')}
                         description={status.locked
-                            ? 'Unlock the app first.'
-                            : 'Sync your servers and back up your setup.'}
+                            ? t('settings.account.unlockFirst')
+                            : t('settings.account.connectDesc')}
                         align="center"
                         control={
                             <div className="flex items-center gap-2">
@@ -351,7 +361,7 @@ export default function AccountPage() {
                                             text-gray-500 dark:text-gray-400
                                             hover:text-gray-900 dark:hover:text-white transition-colors"
                                     >
-                                        Cancel
+                                        {t('common.cancel')}
                                     </button>
                                 )}
                                 <button
@@ -362,9 +372,9 @@ export default function AccountPage() {
                                         bg-gray-900 dark:bg-white text-white dark:text-gray-900
                                         hover:opacity-90 disabled:opacity-50 transition-opacity"
                                 >
-                                    {busy === 'signin' ? 'Waiting for browser…' : (
+                                    {busy === 'signin' ? t('settings.account.waitingForBrowser') : (
                                         <>
-                                            Connect
+                                            {t('settings.account.connectAction')}
                                             {/* The mark from the title bar, so the button names the
                                                 product the same way the rest of the app does. */}
                                             <img src={logoUrl} alt="" className="w-4 h-4" />

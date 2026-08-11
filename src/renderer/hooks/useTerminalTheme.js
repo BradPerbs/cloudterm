@@ -567,18 +567,18 @@ export const TERMINAL_THEME_PRESETS = [
  * any of them; the translation into what xterm wants happens on the way out.
  */
 export const TERMINAL_COLOR_FIELDS = [
-    { key: 'background', label: 'Background', group: 'base' },
-    { key: 'foreground', label: 'Text', group: 'base' },
-    { key: 'cursor', label: 'Cursor', group: 'base' },
-    { key: 'selectionBackground', label: 'Selection', group: 'base' },
-    { key: 'black', label: 'Black', group: 'ansi' },
-    { key: 'red', label: 'Red', group: 'ansi' },
-    { key: 'green', label: 'Green', group: 'ansi' },
-    { key: 'yellow', label: 'Yellow', group: 'ansi' },
-    { key: 'blue', label: 'Blue', group: 'ansi' },
-    { key: 'magenta', label: 'Magenta', group: 'ansi' },
-    { key: 'cyan', label: 'Cyan', group: 'ansi' },
-    { key: 'white', label: 'White', group: 'ansi' },
+    { key: 'background', labelKey: 'termColors.background', group: 'base' },
+    { key: 'foreground', labelKey: 'termColors.foreground', group: 'base' },
+    { key: 'cursor', labelKey: 'termColors.cursor', group: 'base' },
+    { key: 'selectionBackground', labelKey: 'termColors.selection', group: 'base' },
+    { key: 'black', labelKey: 'termColors.black', group: 'ansi' },
+    { key: 'red', labelKey: 'termColors.red', group: 'ansi' },
+    { key: 'green', labelKey: 'termColors.green', group: 'ansi' },
+    { key: 'yellow', labelKey: 'termColors.yellow', group: 'ansi' },
+    { key: 'blue', labelKey: 'termColors.blue', group: 'ansi' },
+    { key: 'magenta', labelKey: 'termColors.magenta', group: 'ansi' },
+    { key: 'cyan', labelKey: 'termColors.cyan', group: 'ansi' },
+    { key: 'white', labelKey: 'termColors.white', group: 'ansi' },
 ];
 
 export const DEFAULT_CUSTOM_THEME = {

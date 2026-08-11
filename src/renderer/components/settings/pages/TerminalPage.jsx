@@ -22,6 +22,7 @@ import {
 } from '../../../hooks/useTerminalSettings';
 import { MODIFIER_KEY } from '../../../lib/platform';
 import { toastOptions } from '../../../lib/toast';
+import { useT } from '../../../i18n';
 
 const TERMINAL_THEME_OPTIONS = TERMINAL_THEME_PRESETS.map(option => ({
     ...option,
@@ -84,6 +85,7 @@ export default function TerminalPage({
     onTerminalSettingsChange,
     onTerminalSettingsReset,
 }) {
+    const t = useT();
     const [editorOpen, setEditorOpen] = useState(false);
 
     const customColors = sanitizeCustomTheme(customTerminalTheme);
@@ -105,21 +107,21 @@ export default function TerminalPage({
         onCustomTerminalThemeChange(colors);
         setEditorOpen(false);
         if (!customSelected) onTerminalThemeChange(CUSTOM_THEME_ID);
-        toast.success('Custom terminal theme applied', toastOptions());
+        toast.success(t('settings.terminal.customApplied'), toastOptions());
     };
 
     return (
         <SettingsPage
-            title="Terminal"
-            description="How the shell looks inside a session, and what is kept of it."
+            title={t('settings.terminal.title')}
+            description={t('settings.terminal.desc')}
         >
             {/* ---------------- Type ---------------- */}
             <SettingCard>
                 <SettingRow
-                    title="Font"
+                    title={t('settings.terminal.font')}
                     description={chosenFont?.available === false
-                        ? 'This font is no longer installed on this machine, so the terminal has fallen back to JetBrains Mono.'
-                        : 'Only faces this machine actually has are listed. JetBrains Mono ships with the app.'}
+                        ? t('settings.terminal.fontMissing')
+                        : t('settings.terminal.fontDesc')}
                 >
                     {/* The sample sits above the picker rather than beside it:
                         every control in this card changes how this line renders,
@@ -148,7 +150,7 @@ export default function TerminalPage({
 
                         <select
                             id="terminal-font-family"
-                            aria-label="Terminal font"
+                            aria-label={t('settings.terminal.fontAria')}
                             className="w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutral-800
                                 border border-gray-300 dark:border-neutral-700
                                 text-gray-900 dark:text-gray-100 outline-none
@@ -159,8 +161,10 @@ export default function TerminalPage({
                             {terminalFonts.map(font => (
                                 <option key={font.id} value={font.id}>
                                     {font.label}
-                                    {font.bundled ? ' (bundled)' : ''}
-                                    {font.available === false ? ' (not installed)' : ''}
+                                    {font.bundled ? ` (${t('settings.terminal.fontBundled')})` : ''}
+                                    {font.available === false
+                                        ? ` (${t('settings.terminal.fontNotInstalled')})`
+                                        : ''}
                                 </option>
                             ))}
                         </select>
@@ -170,12 +174,12 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Size"
-                    description="Applies to every open session. Each one refits and tells the remote its new window size."
+                    title={t('settings.terminal.size')}
+                    description={t('settings.terminal.sizeDesc')}
                     control={
                         <Slider
                             id="terminal-font-size"
-                            ariaLabel="Font size"
+                            ariaLabel={t('settings.terminal.sizeAria')}
                             value={terminalSettings.fontSize}
                             {...LIMITS.fontSize}
                             onChange={(fontSize) => set({ fontSize })}
@@ -187,11 +191,11 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Weight"
-                    description="Bold keeps its contrast: it is drawn 300 heavier than whatever is set here."
+                    title={t('settings.terminal.weight')}
+                    description={t('settings.terminal.weightDesc')}
                     control={
                         <Slider
-                            ariaLabel="Font weight"
+                            ariaLabel={t('settings.terminal.weightAria')}
                             value={terminalSettings.fontWeight}
                             {...LIMITS.fontWeight}
                             onChange={(fontWeight) => set({ fontWeight })}
@@ -202,11 +206,11 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Line height"
-                    description="A multiple of the font size. Taller lines cost rows, which the remote is told about."
+                    title={t('settings.terminal.lineHeight')}
+                    description={t('settings.terminal.lineHeightDesc')}
                     control={
                         <Slider
-                            ariaLabel="Line height"
+                            ariaLabel={t('settings.terminal.lineHeightAria')}
                             value={terminalSettings.lineHeight}
                             {...LIMITS.lineHeight}
                             onChange={(lineHeight) => set({ lineHeight })}
@@ -218,11 +222,11 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Letter spacing"
-                    description="Added to every cell. Negative tightens a face that sets too loose for a terminal."
+                    title={t('settings.terminal.letterSpacing')}
+                    description={t('settings.terminal.letterSpacingDesc')}
                     control={
                         <Slider
-                            ariaLabel="Letter spacing"
+                            ariaLabel={t('settings.terminal.letterSpacingAria')}
                             value={terminalSettings.letterSpacing}
                             {...LIMITS.letterSpacing}
                             onChange={(letterSpacing) => set({ letterSpacing })}
@@ -234,15 +238,17 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Ligatures"
+                    title={t('settings.terminal.ligatures')}
                     description={chosenFont?.ligatures
-                        ? 'Draws pairs like -> and != as one glyph. Turns off GPU rendering, which cannot draw them, so a very busy session may scroll less smoothly.'
-                        : `${chosenFont?.label || 'This font'} has no ligatures, so this will not change anything. JetBrains Mono, Cascadia Code and Fira Code have them.`}
+                        ? t('settings.terminal.ligaturesDesc')
+                        : t('settings.terminal.ligaturesNone', {
+                            font: chosenFont?.label || t('settings.terminal.thisFont'),
+                        })}
                     control={
                         <Toggle
                             checked={terminalSettings.ligatures}
                             onChange={(ligatures) => set({ ligatures })}
-                            ariaLabel="Ligatures"
+                            ariaLabel={t('settings.terminal.ligatures')}
                         />
                     }
                 />
@@ -252,14 +258,17 @@ export default function TerminalPage({
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Cursor"
-                    description="What the caret looks like where the shell is waiting."
+                    title={t('settings.terminal.cursor')}
+                    description={t('settings.terminal.cursorDesc')}
                     control={
                         <SegmentedControl
-                            ariaLabel="Cursor style"
+                            ariaLabel={t('settings.terminal.cursorAria')}
                             value={terminalSettings.cursorStyle}
                             onChange={(cursorStyle) => set({ cursorStyle })}
-                            segments={CURSOR_STYLES.map(style => ({ value: style.id, label: style.label }))}
+                            segments={CURSOR_STYLES.map(style => ({
+                                value: style.id,
+                                label: t(`settings.terminal.cursor.${style.id}`),
+                            }))}
                         />
                     }
                 />
@@ -267,12 +276,12 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Blink the cursor"
+                    title={t('settings.terminal.blink')}
                     control={
                         <Toggle
                             checked={terminalSettings.cursorBlink}
                             onChange={(cursorBlink) => set({ cursorBlink })}
-                            ariaLabel="Blink the cursor"
+                            ariaLabel={t('settings.terminal.blink')}
                         />
                     }
                 />
@@ -280,12 +289,11 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Scrollback"
-                    description="Lines kept above the top of the window, per session. Find-in-scrollback searches all of
-                        them, and every line costs memory in this window rather than on the server."
+                    title={t('settings.terminal.scrollback')}
+                    description={t('settings.terminal.scrollbackDesc')}
                     control={
                         <Slider
-                            ariaLabel="Scrollback lines"
+                            ariaLabel={t('settings.terminal.scrollbackAria')}
                             value={terminalSettings.scrollback}
                             {...LIMITS.scrollback}
                             onChange={(scrollback) => set({ scrollback })}
@@ -297,15 +305,17 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Smooth scrolling"
-                    description="How long wheel and trackpad movements take to settle. Turn it off to follow input immediately."
+                    title={t('settings.terminal.smoothScroll')}
+                    description={t('settings.terminal.smoothScrollDesc')}
                     control={
                         <Slider
-                            ariaLabel="Smooth scroll duration"
+                            ariaLabel={t('settings.terminal.smoothScrollAria')}
                             value={terminalSettings.smoothScrollDuration}
                             {...LIMITS.smoothScrollDuration}
                             onChange={(smoothScrollDuration) => set({ smoothScrollDuration })}
-                            format={(value) => (value === 0 ? 'Off' : `${value} ms`)}
+                            format={(value) => (value === 0
+                                ? t('common.off')
+                                : t('settings.terminal.smoothScrollMs', { value }))}
                         />
                     }
                 />
@@ -313,16 +323,17 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Opening links"
-                    description={`A URL printed in the session is clickable and opens in your browser.
-                        Asking for ${MODIFIER_KEY} as well is what editors do: it stops a click meant for the
-                        text under a URL from throwing a browser at the screen mid-session.`}
+                    title={t('settings.terminal.links')}
+                    description={t('settings.terminal.linksDesc', { modifier: MODIFIER_KEY })}
                     control={
                         <SegmentedControl
-                            ariaLabel="Opening links"
+                            ariaLabel={t('settings.terminal.links')}
                             value={terminalSettings.linkActivation}
                             onChange={(linkActivation) => set({ linkActivation })}
-                            segments={LINK_ACTIVATIONS.map(mode => ({ value: mode.id, label: mode.label }))}
+                            segments={LINK_ACTIVATIONS.map(mode => ({
+                                value: mode.id,
+                                label: t(`settings.terminal.link.${mode.id}`, { modifier: MODIFIER_KEY }),
+                            }))}
                         />
                     }
                 />
@@ -330,10 +341,10 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Back to the defaults"
+                    title={t('settings.terminal.reset')}
                     description={isDefault
-                        ? 'Everything above is already at its default.'
-                        : 'Resets the font, spacing, cursor, scrollback, scrolling and link clicking. Leaves the colour scheme alone.'}
+                        ? t('settings.terminal.resetAlready')
+                        : t('settings.terminal.resetDesc')}
                     control={
                         <button
                             className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300
@@ -343,10 +354,10 @@ export default function TerminalPage({
                             disabled={isDefault}
                             onClick={() => {
                                 onTerminalSettingsReset?.();
-                                toast.success('Terminal type reset', toastOptions());
+                                toast.success(t('settings.terminal.resetDone'), toastOptions());
                             }}
                         >
-                            Reset
+                            {t('common.reset')}
                         </button>
                     }
                 />
@@ -355,8 +366,8 @@ export default function TerminalPage({
             {/* ---------------- Colour ---------------- */}
             <SettingCard>
                 <SettingRow
-                    title="Terminal Colors"
-                    description="Choose a color scheme for your terminal, or build your own"
+                    title={t('settings.terminal.colors')}
+                    description={t('settings.terminal.colorsDesc')}
                 >
                     {/* Reflows on the column's own width rather than a fixed
                         count: at the 900px minimum window the content pane is
@@ -374,7 +385,10 @@ export default function TerminalPage({
                                 data-terminal-theme={option.id}
                                 onClick={() => {
                                     onTerminalThemeChange(option.id);
-                                    toast.success(`Terminal theme changed to ${option.label}`, toastOptions());
+                                    toast.success(
+                                        t('settings.terminal.themeChanged', { theme: option.label }),
+                                        toastOptions(),
+                                    );
                                 }}
                             >
                                 <ThemeSwatch
@@ -395,7 +409,12 @@ export default function TerminalPage({
                             data-terminal-theme={CUSTOM_THEME_ID}
                             onClick={() => {
                                 onTerminalThemeChange(CUSTOM_THEME_ID);
-                                toast.success('Terminal theme changed to Custom', toastOptions());
+                                toast.success(
+                                    t('settings.terminal.themeChanged', {
+                                        theme: t('settings.terminal.custom'),
+                                    }),
+                                    toastOptions(),
+                                );
                             }}
                         >
                             <ThemeSwatch
@@ -416,15 +435,17 @@ export default function TerminalPage({
                                     ))}
                                 </div>
                             </ThemeSwatch>
-                            <span className={labelClass(customSelected)}>Custom</span>
+                            <span className={labelClass(customSelected)}>
+                                {t('settings.terminal.custom')}
+                            </span>
                         </button>
                     </div>
                 </SettingRow>
 
                 <SettingRow
                     className={DIVIDED}
-                    title="Custom Theme"
-                    description="Set your own background, text, cursor and ANSI colors"
+                    title={t('settings.terminal.customTheme')}
+                    description={t('settings.terminal.customThemeDesc')}
                     align="center"
                     control={
                         <button
@@ -433,7 +454,7 @@ export default function TerminalPage({
                                 active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800"
                             onClick={() => setEditorOpen(true)}
                         >
-                            Edit colors
+                            {t('settings.appearance.editColors')}
                         </button>
                     }
                 />

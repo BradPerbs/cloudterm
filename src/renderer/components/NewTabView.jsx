@@ -3,6 +3,7 @@ import { Search01Icon, PlusSignIcon, CloudServerIcon, SearchRemoveIcon, Plug01Ic
 import EmptyFrame from './ui/EmptyFrame';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { parseAddress, formatAddress } from '../lib/address';
+import { useT } from '../i18n';
 
 const RECENT_LIMIT = 5;
 
@@ -75,6 +76,7 @@ function HostRow({ host, folderName, selected, onSelect, onConnect }) {
  * saved one; when nothing matches, this is the only row and Enter lands here.
  */
 function AddressRow({ address, selected, onSelect, onConnect }) {
+    const t = useT();
     const ref = useRef(null);
 
     useEffect(() => {
@@ -100,10 +102,10 @@ function AddressRow({ address, selected, onSelect, onConnect }) {
 
             <span className="flex flex-col min-w-0 flex-1">
                 <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                    Connect to <span className="font-mono">{formatAddress(address)}</span>
+                    {t('newTab.connectTo')} <span className="font-mono">{formatAddress(address)}</span>
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    Not saved. It asks for the login as it connects.
+                    {t('newTab.notSavedNote')}
                 </span>
             </span>
 
@@ -133,6 +135,7 @@ function SectionLabel({ children }) {
  * answer the login on the pane. See `onQuickConnect` and lib/address.js.
  */
 function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNewHost, onClose }) {
+    const t = useT();
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
     const searchRef = useRef(null);
@@ -156,7 +159,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                 [host.name, host.host, host.username, host.distro, host.os]
                     .some(field => field && String(field).toLowerCase().includes(q))
             );
-            return { sections: [{ label: null, items: matches }], flat: matches };
+            return { sections: [{ labelKey: null, items: matches }], flat: matches };
         }
 
         const recent = hosts
@@ -168,8 +171,8 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
         const rest = hosts.filter(h => !recentIds.has(h.id));
 
         const sections = [];
-        if (recent.length) sections.push({ label: 'Recent', items: recent });
-        if (rest.length) sections.push({ label: recent.length ? 'All hosts' : null, items: rest });
+        if (recent.length) sections.push({ labelKey: 'newTab.recent', items: recent });
+        if (rest.length) sections.push({ labelKey: recent.length ? 'newTab.allHosts' : null, items: rest });
 
         return { sections, flat: [...recent, ...rest] };
     }, [hosts, query]);
@@ -222,9 +225,11 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4 mb-6 shrink-0">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">New Session</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {t('newTab.title')}
+                        </h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Pick a host, or type an address to connect straight to it.
+                            {t('newTab.subtitle')}
                         </p>
                     </div>
                     <button
@@ -233,7 +238,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                         onClick={onNewHost}
                     >
                         <PlusSignIcon className="w-4 h-4" size={16} strokeWidth={2.5} />
-                        <span>New Host</span>
+                        <span>{t('hosts.newHost')}</span>
                     </button>
                 </div>
 
@@ -248,12 +253,12 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                         type="text"
                         value={query}
                         onChange={(e) => { setQuery(e.target.value); setSelected(0); }}
-                        placeholder="Search hosts, or type an address…"
+                        placeholder={t('newTab.searchPlaceholder')}
                         spellCheck={false}
                         className="w-full h-12 pl-12 pr-24 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/70 text-gray-900 dark:text-white text-[15px] outline-none transition-colors focus:border-gray-300 dark:focus:border-neutral-700 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-neutral-500 pointer-events-none tabular-nums">
-                        {flat.length} {flat.length === 1 ? 'host' : 'hosts'}
+                        {t('hosts.count', { count: flat.length })}
                     </span>
                 </div>
 
@@ -263,21 +268,21 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                         hosts.length === 0 ? (
                             <EmptyFrame
                                 icon={<CloudServerIcon size={28} strokeWidth={1.5} />}
-                                title="No hosts yet"
-                                note="Add a server to get started."
+                                title={t('hosts.empty')}
+                                note={t('hosts.emptyNote')}
                             />
                         ) : (
                             <EmptyFrame
                                 icon={<SearchRemoveIcon size={28} strokeWidth={1.5} />}
-                                title="No matches"
+                                title={t('common.noMatchesTitle')}
                                 note={`“${query.trim()}”`}
                             />
                         )
                     ) : (
                         <>
                             {sections.map((section, index) => (
-                                <div key={section.label || index}>
-                                    {section.label && <SectionLabel>{section.label}</SectionLabel>}
+                                <div key={section.labelKey || index}>
+                                    {section.labelKey && <SectionLabel>{t(section.labelKey)}</SectionLabel>}
                                     <div className="flex flex-col gap-0.5">
                                         {section.items.map((host) => {
                                             cursor += 1;
@@ -302,7 +307,7 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
                                     {/* Labelled only when it is sitting under
                                         matches, where it would otherwise read
                                         as one more of them. */}
-                                    {flat.length > 0 && <SectionLabel>Not saved</SectionLabel>}
+                                    {flat.length > 0 && <SectionLabel>{t('newTab.notSaved')}</SectionLabel>}
                                     <AddressRow
                                         address={address}
                                         selected={addressIndex === selected}
@@ -317,9 +322,15 @@ function NewTabView({ hosts, folders, isActive, onConnect, onQuickConnect, onNew
 
                 {/* Keyboard hints */}
                 <div className="shrink-0 flex items-center gap-4 pt-3 mt-1 border-t border-gray-100 dark:border-neutral-800/80 text-[11px] text-gray-400 dark:text-neutral-500">
-                    <span className="flex items-center gap-1.5"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-                    <span className="flex items-center gap-1.5"><Kbd>↵</Kbd> connect</span>
-                    <span className="flex items-center gap-1.5"><Kbd>esc</Kbd> close tab</span>
+                    <span className="flex items-center gap-1.5">
+                        <Kbd>↑</Kbd><Kbd>↓</Kbd> {t('newTab.hintNavigate')}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                        <Kbd>↵</Kbd> {t('newTab.hintConnect')}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                        <Kbd>esc</Kbd> {t('newTab.hintClose')}
+                    </span>
                 </div>
             </div>
         </div>

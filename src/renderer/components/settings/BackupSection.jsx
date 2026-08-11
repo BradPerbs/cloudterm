@@ -9,6 +9,8 @@ import {
 import SettingCard from './ui/SettingCard';
 import Checkbox from '../ui/Checkbox';
 import { toastOptions } from '../../lib/toast';
+import { formatDateTime } from '../../lib/format';
+import { useT } from '../../i18n';
 
 const MIN_PASSPHRASE = 8;
 
@@ -57,6 +59,7 @@ function CardHeader({ icon, title, children }) {
  * ------------------------------------------------------------------ */
 
 function ExportCard() {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const [passphrase, setPassphrase] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -77,11 +80,11 @@ function ExportCard() {
         if (busy) return;
 
         if (passphrase.length < MIN_PASSPHRASE) {
-            setError(`Use at least ${MIN_PASSPHRASE} characters`);
+            setError(t('settings.backup.tooShort', { count: MIN_PASSPHRASE }));
             return;
         }
         if (passphrase !== confirm) {
-            setError('The two passphrases do not match');
+            setError(t('settings.backup.mismatch'));
             return;
         }
 
@@ -94,44 +97,45 @@ function ExportCard() {
             if (result?.canceled) return;
 
             if (!result?.success) {
-                setError(result?.message || 'The backup could not be written');
+                setError(result?.message || t('settings.backup.exportFailed'));
                 return;
             }
 
             const { hosts, keys, snippets } = result.counts;
             toast.success(
-                `Backup saved: ${hosts} host${hosts === 1 ? '' : 's'}, `
-                + `${keys} key${keys === 1 ? '' : 's'}, ${snippets} snippet${snippets === 1 ? '' : 's'}`,
+                t('settings.backup.exported', {
+                    hosts: t('hosts.count', { count: hosts }),
+                    keys: t('keychain.count', { count: keys }),
+                    snippets: t('snippets.count', { count: snippets }),
+                }),
                 toastOptions()
             );
             reset();
         } catch (caught) {
-            setError(caught?.message || 'The backup could not be written');
+            setError(caught?.message || t('settings.backup.exportFailed'));
         } finally {
             setBusy(false);
         }
-    }, [busy, passphrase, confirm, reset]);
+    }, [busy, passphrase, confirm, reset, t]);
 
     return (
         <SettingCard>
             <div className="flex items-start justify-between gap-4">
                 <CardHeader
                     icon={<Download04Icon size={18} strokeWidth={2} className="text-gray-400" />}
-                    title="Export a backup"
+                    title={t('settings.backup.exportTitle')}
                 >
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Writes every host, folder, SSH key, snippet, port forward and trusted host
-                        key to a single encrypted file, protected by a passphrase you choose here.
+                        {t('settings.backup.exportDesc')}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        The passphrase is independent of your opening password, so the file opens on
-                        a machine that has never seen this one.
+                        {t('settings.backup.exportNote')}
                     </p>
                 </CardHeader>
 
                 {!open && (
                     <button onClick={() => setOpen(true)} className={`${PRIMARY_BUTTON} shrink-0`}>
-                        Create backup
+                        {t('settings.backup.create')}
                     </button>
                 )}
             </div>
@@ -142,14 +146,14 @@ function ExportCard() {
                     className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-700 flex flex-col gap-3"
                 >
                     <Field
-                        label="Backup passphrase"
+                        label={t('settings.backup.passphrase')}
                         value={passphrase}
                         onChange={setPassphrase}
                         autoFocus
                         autoComplete="new-password"
                     />
                     <Field
-                        label="Confirm passphrase"
+                        label={t('settings.backup.confirmPassphrase')}
                         value={confirm}
                         onChange={setConfirm}
                         autoComplete="new-password"
@@ -159,18 +163,18 @@ function ExportCard() {
                         variant="card"
                         checked={acknowledged}
                         onChange={(event) => setAcknowledged(event.target.checked)}
-                        label="I understand this file contains my saved credentials"
-                        description="Anyone who has both the file and this passphrase can read every stored password, private key and passphrase in it. Keep it somewhere you would keep the credentials themselves."
+                        label={t('settings.backup.acknowledge')}
+                        description={t('settings.backup.acknowledgeDesc')}
                     />
 
                     {error && <p className="text-xs text-red-500">{error}</p>}
 
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button type="button" onClick={reset} className={SECONDARY_BUTTON}>
-                            Cancel
+                            {t('common.cancel')}
                         </button>
                         <button type="submit" disabled={busy || !acknowledged} className={PRIMARY_BUTTON}>
-                            {busy ? 'Working…' : 'Choose location…'}
+                            {busy ? t('common.working') : t('settings.backup.chooseLocation')}
                         </button>
                     </div>
                 </form>
@@ -184,33 +188,35 @@ function ExportCard() {
  * ------------------------------------------------------------------ */
 
 const CATEGORY_LABELS = [
-    ['hosts', 'Hosts'],
-    ['folders', 'Folders'],
-    ['keys', 'SSH keys'],
-    ['snippets', 'Snippets'],
-    ['proxies', 'Proxies'],
+    ['hosts', 'nav.hosts'],
+    ['folders', 'settings.backup.folders'],
+    ['keys', 'settings.backup.keys'],
+    ['snippets', 'nav.snippets'],
+    ['proxies', 'nav.proxies'],
 ];
 
 /** What the chosen file holds, and how much of it this machine already has. */
 function RestoreSummary({ report, overwrite }) {
+    const t = useT();
+
     const rows = CATEGORY_LABELS
-        .map(([key, label]) => [label, report.summary?.[key]])
-        .filter(([, counts]) => counts?.total > 0);
+        .map(([key, labelKey]) => [key, t(labelKey), report.summary?.[key]])
+        .filter(([, , counts]) => counts?.total > 0);
 
     const created = report.createdAt
-        ? new Date(report.createdAt).toLocaleString()
-        : 'an unknown date';
+        ? formatDateTime(report.createdAt)
+        : t('settings.backup.unknownDate');
 
     return (
         <div className="rounded-xl border border-gray-200 dark:border-surface-control overflow-hidden">
             <div className="px-3 h-10 flex items-center gap-2 border-b border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base/60">
                 <ArchiveIcon size={15} strokeWidth={2} className="text-gray-400" />
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                    Backup from {created}
+                    {t('settings.backup.from', { when: created })}
                 </span>
                 {report.appVersion && (
                     <span className="text-[11px] text-gray-400 dark:text-neutral-500">
-                        app {report.appVersion}
+                        {t('settings.backup.appVersion', { version: report.appVersion })}
                     </span>
                 )}
             </div>
@@ -218,29 +224,33 @@ function RestoreSummary({ report, overwrite }) {
             <div className="divide-y divide-gray-100 dark:divide-surface-control">
                 {rows.length === 0 && (
                     <p className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400">
-                        This backup is empty.
+                        {t('settings.backup.emptyFile')}
                     </p>
                 )}
-                {rows.map(([label, counts]) => (
-                    <div key={label} className="px-3 py-2 flex items-center gap-3 text-sm">
+                {rows.map(([key, label, counts]) => (
+                    <div key={key} className="px-3 py-2 flex items-center gap-3 text-sm">
                         <span className="text-gray-700 dark:text-gray-300 w-24 shrink-0">{label}</span>
                         <span className="text-gray-900 dark:text-white font-medium">
                             {counts.total}
                         </span>
                         <span className="text-[11px] text-gray-400 dark:text-neutral-500">
-                            {counts.new} new
+                            {t('settings.backup.newCount', { count: counts.new })}
                             {counts.existing > 0 && (
-                                <> · {counts.existing} already here, {overwrite ? 'will be replaced' : 'will be skipped'}</>
+                                <> · {overwrite
+                                    ? t('settings.backup.existingReplaced', { count: counts.existing })
+                                    : t('settings.backup.existingSkipped', { count: counts.existing })}</>
                             )}
                         </span>
                     </div>
                 ))}
                 {report.knownHosts > 0 && (
                     <div className="px-3 py-2 flex items-center gap-3 text-sm">
-                        <span className="text-gray-700 dark:text-gray-300 w-24 shrink-0">Trusted keys</span>
+                        <span className="text-gray-700 dark:text-gray-300 w-24 shrink-0">
+                            {t('settings.backup.trustedKeys')}
+                        </span>
                         <span className="text-gray-900 dark:text-white font-medium">{report.knownHosts}</span>
                         <span className="text-[11px] text-gray-400 dark:text-neutral-500">
-                            host{report.knownHosts === 1 ? '' : 's'}
+                            {t('settings.backup.hostWord', { count: report.knownHosts })}
                         </span>
                     </div>
                 )}
@@ -250,6 +260,7 @@ function RestoreSummary({ report, overwrite }) {
 }
 
 function RestoreCard({ onRestored }) {
+    const t = useT();
     const [filePath, setFilePath] = useState('');
     const [passphrase, setPassphrase] = useState('');
     const [report, setReport] = useState(null);
@@ -272,11 +283,11 @@ function RestoreCard({ onRestored }) {
         setError('');
         try {
             const result = await window.api.dialog.open({
-                title: 'Open encrypted backup',
+                title: t('settings.backup.openTitle'),
                 properties: ['openFile'],
                 filters: [
-                    { name: 'CloudBlast backup', extensions: ['cbbackup'] },
-                    { name: 'All Files', extensions: ['*'] },
+                    { name: t('settings.backup.fileKind'), extensions: ['cbbackup'] },
+                    { name: t('common.allFiles'), extensions: ['*'] },
                 ],
             });
             if (result?.canceled || !result?.filePaths?.length) return;
@@ -284,9 +295,9 @@ function RestoreCard({ onRestored }) {
             setReport(null);
             setPassphrase('');
         } catch {
-            setError('Could not open the file picker');
+            setError(t('settings.backup.pickerFailed'));
         }
-    }, []);
+    }, [t]);
 
     const unlock = useCallback(async (event) => {
         event.preventDefault();
@@ -298,18 +309,18 @@ function RestoreCard({ onRestored }) {
             const result = await window.api.backup.inspect(passphrase, filePath);
             if (result?.canceled) return;
             if (!result?.success) {
-                setError(result?.message || 'That backup could not be opened');
+                setError(result?.message || t('settings.backup.openFailed'));
                 return;
             }
             setReport(result);
             // Held only as long as it takes to decrypt; the payload lives in main.
             setPassphrase('');
         } catch (caught) {
-            setError(caught?.message || 'That backup could not be opened');
+            setError(caught?.message || t('settings.backup.openFailed'));
         } finally {
             setBusy(false);
         }
-    }, [busy, filePath, passphrase]);
+    }, [busy, filePath, passphrase, t]);
 
     const apply = useCallback(async () => {
         if (busy || !report?.token) return;
@@ -319,7 +330,7 @@ function RestoreCard({ onRestored }) {
         try {
             const result = await window.api.backup.restore(report.token, overwrite);
             if (!result?.success) {
-                setError(result?.message || 'The restore did not finish');
+                setError(result?.message || t('settings.backup.restoreFailed'));
                 return;
             }
 
@@ -332,15 +343,15 @@ function RestoreCard({ onRestored }) {
             const replaced = total('replaced');
 
             toast.success(
-                `Restored ${added} new item${added === 1 ? '' : 's'}`
-                + (replaced > 0 ? `, replaced ${replaced}` : ''),
+                replaced > 0
+                    ? t('settings.backup.restoredAndReplaced', { count: added, replaced })
+                    : t('settings.backup.restored', { count: added }),
                 toastOptions()
             );
 
             if (result.knownHosts?.duplicateTypes > 0) {
                 toast(
-                    `${result.knownHosts.duplicateTypes} host${result.knownHosts.duplicateTypes === 1 ? '' : 's'} `
-                    + 'now trust more than one key of the same type. Check Security → Known hosts.',
+                    t('settings.backup.duplicateKeys', { count: result.knownHosts.duplicateTypes }),
                     toastOptions()
                 );
             }
@@ -351,31 +362,30 @@ function RestoreCard({ onRestored }) {
             setOverwrite(false);
             onRestored?.();
         } catch (caught) {
-            setError(caught?.message || 'The restore did not finish');
+            setError(caught?.message || t('settings.backup.restoreFailed'));
         } finally {
             setBusy(false);
         }
-    }, [busy, report, overwrite, onRestored]);
+    }, [busy, report, overwrite, onRestored, t]);
 
     return (
         <SettingCard>
             <div className="flex items-start justify-between gap-4">
                 <CardHeader
                     icon={<Upload04Icon size={18} strokeWidth={2} className="text-gray-400" />}
-                    title="Restore a backup"
+                    title={t('settings.backup.restoreTitle')}
                 >
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Reads a `.cbbackup` file and adds what it holds. You are shown what is in it
-                        before anything changes.
+                        {t('settings.backup.restoreDesc')}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Anything already here is left alone by default, so restoring twice is safe.
+                        {t('settings.backup.restoreNote')}
                     </p>
                 </CardHeader>
 
                 {!filePath && (
                     <button onClick={choose} className={`${SECONDARY_BUTTON} shrink-0`}>
-                        Choose file…
+                        {t('settings.backup.chooseFile')}
                     </button>
                 )}
             </div>
@@ -383,7 +393,9 @@ function RestoreCard({ onRestored }) {
             {filePath && (
                 <div className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-700 flex flex-col gap-3">
                     <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-gray-400 dark:text-neutral-500 shrink-0">File</span>
+                        <span className="text-xs text-gray-400 dark:text-neutral-500 shrink-0">
+                            {t('settings.backup.file')}
+                        </span>
                         <span className="text-xs font-mono text-gray-600 dark:text-gray-300 truncate">
                             {filePath}
                         </span>
@@ -391,14 +403,14 @@ function RestoreCard({ onRestored }) {
                             onClick={choose}
                             className="ml-auto shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
-                            Change
+                            {t('common.change')}
                         </button>
                     </div>
 
                     {!report ? (
                         <form onSubmit={unlock} className="flex flex-col gap-3">
                             <Field
-                                label="Backup passphrase"
+                                label={t('settings.backup.passphrase')}
                                 value={passphrase}
                                 onChange={setPassphrase}
                                 autoFocus
@@ -407,10 +419,10 @@ function RestoreCard({ onRestored }) {
                             {error && <p className="text-xs text-red-500">{error}</p>}
                             <div className="flex items-center justify-end gap-2 pt-1">
                                 <button type="button" onClick={reset} className={SECONDARY_BUTTON}>
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
-                                    {busy ? 'Opening…' : 'Open backup'}
+                                    {busy ? t('settings.backup.opening') : t('settings.backup.open')}
                                 </button>
                             </div>
                         </form>
@@ -422,14 +434,14 @@ function RestoreCard({ onRestored }) {
                                 variant="card"
                                 checked={overwrite}
                                 onChange={(event) => setOverwrite(event.target.checked)}
-                                label="Replace items that are already here"
-                                description="Matches on the record's id, not its name. Leave this off to add only what is missing; turn it on to make this machine match the backup, discarding local edits to those records."
+                                label={t('settings.backup.overwrite')}
+                                description={t('settings.backup.overwriteDesc')}
                             />
 
                             {overwrite && (
                                 <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5">
                                     <Alert02Icon size={14} strokeWidth={2} className="shrink-0 mt-px" />
-                                    Local changes to the matching records will be lost.
+                                    {t('settings.backup.overwriteWarning')}
                                 </p>
                             )}
 
@@ -437,10 +449,10 @@ function RestoreCard({ onRestored }) {
 
                             <div className="flex items-center justify-end gap-2 pt-1">
                                 <button type="button" onClick={reset} className={SECONDARY_BUTTON}>
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button onClick={apply} disabled={busy} className={PRIMARY_BUTTON}>
-                                    {busy ? 'Restoring…' : 'Restore'}
+                                    {busy ? t('settings.backup.restoring') : t('settings.backup.restore')}
                                 </button>
                             </div>
                         </>

@@ -22,6 +22,7 @@ import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
 import { TAB_COLORS, segmentStrip, tabColor, withAlpha } from '../lib/tabs';
 import logoUrl from '../logoterminal.svg';
+import { useT } from '../i18n';
 
 // Ripple effect hook
 function useRippleEffect() {
@@ -63,6 +64,7 @@ function useRippleEffect() {
 }
 
 function AppMenu() {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const menuRef = useRef(null);
     const btnRef = useRef(null);
@@ -86,15 +88,18 @@ function AppMenu() {
     }, [open, close]);
 
     const menuItems = [
-        { label: 'New Session', shortcut: 'Ctrl+N', action: () => { close(); document.querySelector('[title="New Session"]')?.click(); } },
+        // Reaches the plus button by its class rather than by its tooltip: the
+        // tooltip is translated, and a selector built from it would find
+        // nothing the moment the app is set to anything but English.
+        { label: t('newTab.title'), shortcut: 'Ctrl+N', action: () => { close(); document.querySelector('.tab-add')?.click(); } },
         { type: 'separator' },
-        { label: 'Reload', shortcut: 'Ctrl+R', action: () => { close(); window.api.window.reload(); } },
-        { label: 'Developer Tools', shortcut: 'Ctrl+Shift+I', action: () => { close(); window.api.window.toggleDevTools(); } },
+        { label: t('titleBar.reload'), shortcut: 'Ctrl+R', action: () => { close(); window.api.window.reload(); } },
+        { label: t('titleBar.devTools'), shortcut: 'Ctrl+Shift+I', action: () => { close(); window.api.window.toggleDevTools(); } },
         { type: 'separator' },
-        { label: 'Minimize', action: () => { close(); window.api.window.minimize(); } },
-        { label: 'Maximize', action: () => { close(); window.api.window.maximize(); } },
+        { label: t('titleBar.minimize'), action: () => { close(); window.api.window.minimize(); } },
+        { label: t('titleBar.maximize'), action: () => { close(); window.api.window.maximize(); } },
         { type: 'separator' },
-        { label: 'Exit', shortcut: 'Alt+F4', action: () => { close(); window.api.window.quit(); }, danger: true },
+        { label: t('titleBar.exit'), shortcut: 'Alt+F4', action: () => { close(); window.api.window.quit(); }, danger: true },
     ];
 
     // Compute dropdown position from button rect
@@ -174,6 +179,7 @@ function SessionTab({
     onRenameCommit,
     onRenameCancel,
 }) {
+    const t = useT();
     const isLauncher = tab.type === 'launcher';
     const color = tabColor(tab.color);
 
@@ -208,7 +214,7 @@ function SessionTab({
                 )}
                 <input
                     autoFocus
-                    aria-label={`Rename ${tab.title}`}
+                    aria-label={t('titleBar.renameAria', { name: tab.title })}
                     defaultValue={tab.renamed ? tab.title : ''}
                     placeholder={tab.title}
                     maxLength={60}
@@ -303,7 +309,7 @@ function SessionTab({
                         opacity-0 pointer-events-none transition-opacity
                         group-hover:opacity-100 group-hover:pointer-events-auto
                         hover:bg-gray-900/10 dark:hover:bg-white/15"
-                    title="Close tab"
+                    title={t('titleBar.closeTab')}
                     onClick={(e) => {
                         e.stopPropagation();
                         onClose(tab.id);
@@ -392,6 +398,7 @@ function ColorSwatches({ selected, onSelect }) {
  * tabs themselves already use right-click for their own.
  */
 function TabGroup({ group, children, onMenu, renaming, onRenameCommit, onRenameCancel }) {
+    const t = useT();
     const color = tabColor(group.color) || TAB_COLORS[0];
 
     // Matches a tab exactly apart from the colour: same padding, radius, text
@@ -425,7 +432,7 @@ function TabGroup({ group, children, onMenu, renaming, onRenameCommit, onRenameC
                     />
                     <input
                         autoFocus
-                        aria-label={`Rename group ${group.name}`}
+                        aria-label={t('titleBar.renameGroupAria', { name: group.name })}
                         defaultValue={group.name}
                         maxLength={40}
                         className="w-20 bg-transparent outline-none text-xs font-semibold"
@@ -516,6 +523,8 @@ function TitleBar({
     onNewSession,
 }) {
     useRippleEffect();
+
+    const t = useT();
 
     const handleMinimize = () => window.api.window.minimize();
     const handleMaximize = () => window.api.window.maximize();
@@ -688,18 +697,18 @@ function TitleBar({
 
         return [
             {
-                label: tab.renamed ? 'Rename…' : 'Rename…',
+                label: t('titleBar.rename'),
                 icon: <PencilEdit02Icon size={size} />,
                 // Deferred past the menu's own dismissal: it closes on mousedown,
                 // and focusing an input in the same tick loses the focus to it.
                 onClick: () => setTimeout(() => startRename('tab', tab.id), 0),
             },
             tab.renamed && {
-                label: 'Use the host name again',
+                label: t('titleBar.useHostName'),
                 icon: <Refresh01Icon size={size} />,
                 onClick: () => onTabRename?.(tab.id, ''),
             },
-            { type: 'heading', label: 'Colour' },
+            { type: 'heading', label: t('titleBar.colour') },
             {
                 type: 'custom',
                 key: 'tab-colors',
@@ -713,17 +722,17 @@ function TitleBar({
             { type: 'separator' },
             ...(tab.groupId
                 ? [{
-                    label: 'Remove from group',
+                    label: t('titleBar.removeFromGroup'),
                     icon: <FolderRemoveIcon size={size} />,
                     onClick: () => onTabUngroup?.(tab.id),
                 }]
                 : [{
-                    label: 'New group from this tab',
+                    label: t('titleBar.newGroup'),
                     icon: <Tag01Icon size={size} />,
                     onClick: () => onTabNewGroup?.(tab.id),
                 }]),
             ...otherGroups.map(group => ({
-                label: `Move to “${group.name}”`,
+                label: t('titleBar.moveToGroup', { group: group.name }),
                 icon: (
                     <span
                         className="w-2.5 h-2.5 rounded-full"
@@ -734,36 +743,36 @@ function TitleBar({
             })),
             { type: 'separator' },
             isTerminal && {
-                label: 'Duplicate',
+                label: t('titleBar.duplicate'),
                 icon: <Copy01Icon size={size} />,
                 onClick: () => onTabDuplicate(tab.id),
             },
             isTerminal && {
-                label: split ? 'Reconnect all' : 'Reconnect',
+                label: split ? t('titleBar.reconnectAll') : t('titleBar.reconnect'),
                 icon: <Refresh01Icon size={size} />,
                 onClick: () => onTabReconnect(tab.id),
                 disabled: tab.sessionCount === 0 || tab.liveCount === tab.sessionCount,
             },
             isTerminal && {
-                label: split ? 'Disconnect all' : 'Disconnect',
+                label: split ? t('titleBar.disconnectAll') : t('titleBar.disconnect'),
                 icon: <Unlink01Icon size={size} />,
                 onClick: () => onTabDisconnect(tab.id),
                 disabled: tab.liveCount === 0,
             },
             isTerminal && { type: 'separator' },
             {
-                label: 'Close',
+                label: t('common.close'),
                 icon: <Cancel01Icon size={size} />,
                 onClick: () => handleTabClose(tab.id),
             },
             {
-                label: 'Close others',
+                label: t('titleBar.closeOthers'),
                 icon: <CancelCircleIcon size={size} />,
                 onClick: () => handleCloseOthers(tab.id),
                 disabled: sessionTabs.length < 2,
             },
             {
-                label: 'Close to the right',
+                label: t('titleBar.closeRight'),
                 icon: <ArrowRight01Icon size={size} />,
                 onClick: () => handleCloseRight(tab.id),
                 disabled: at === sessionTabs.length - 1,
@@ -772,7 +781,7 @@ function TitleBar({
     }, [
         menu, sessionTabs, groups, onTabDuplicate, onTabReconnect, onTabDisconnect,
         onTabRename, onTabColor, onTabGroup, onTabUngroup, onTabNewGroup,
-        handleTabClose, handleCloseOthers, handleCloseRight, startRename,
+        handleTabClose, handleCloseOthers, handleCloseRight, startRename, t,
     ]);
 
     /** A group's own menu, opened from its name. */
@@ -786,11 +795,11 @@ function TitleBar({
 
         return [
             {
-                label: 'Rename group…',
+                label: t('titleBar.renameGroup'),
                 icon: <PencilEdit02Icon size={15} />,
                 onClick: () => setTimeout(() => startRename('group', group.id), 0),
             },
-            { type: 'heading', label: 'Colour' },
+            { type: 'heading', label: t('titleBar.colour') },
             {
                 type: 'custom',
                 key: 'group-colors',
@@ -807,12 +816,12 @@ function TitleBar({
             {
                 // The tabs stay open. Dissolving an outline must not be a way to
                 // close nine sessions by accident.
-                label: 'Ungroup',
+                label: t('titleBar.ungroup'),
                 icon: <FolderRemoveIcon size={15} />,
                 onClick: () => onGroupDelete?.(group.id),
             },
             {
-                label: members.length === 1 ? 'Close the tab' : `Close all ${members.length} tabs`,
+                label: t('titleBar.closeGroupTabs', { count: members.length }),
                 icon: <Cancel01Icon size={15} />,
                 danger: true,
                 disabled: members.length === 0,
@@ -822,7 +831,7 @@ function TitleBar({
                 },
             },
         ];
-    }, [menu, groups, sessionTabs, onGroupColor, onGroupDelete, onTabClose, markClosing, startRename]);
+    }, [menu, groups, sessionTabs, onGroupColor, onGroupDelete, onTabClose, markClosing, startRename, t]);
 
     const menuItems = menu?.kind === 'group' ? groupMenuItems : tabMenuItems;
 
@@ -935,7 +944,7 @@ function TitleBar({
                     <button
                         className="tab-add flex items-center justify-center w-8 h-8 rounded-xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-900/[0.06] dark:hover:bg-surface-control transition-colors app-no-drag shrink-0"
                         onClick={onNewSession}
-                        title="New Session"
+                        title={t('newTab.title')}
                     >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <path d="M12 5v14M5 12h14" />

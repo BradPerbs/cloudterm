@@ -8,6 +8,7 @@ import SegmentedControl from '../ui/SegmentedControl';
 import Checkbox from '../ui/Checkbox';
 import { toastOptions } from '../../lib/toast';
 import { formatSize } from '../../lib/format';
+import { useT } from '../../i18n';
 
 /**
  * Recording what the terminal showed.
@@ -19,6 +20,7 @@ import { formatSize } from '../../lib/format';
  * than holding its own copy.
  */
 export default function SessionLogSection() {
+    const t = useT();
     const [config, setConfig] = useState(null);
     const [logs, setLogs] = useState({ files: [], directory: '' });
 
@@ -44,21 +46,21 @@ export default function SessionLogSection() {
             setConfig(await window.api.sessionLog.configure(patch));
             load();
         } catch (error) {
-            toast.error(error?.message || 'Could not save that setting', toastOptions());
+            toast.error(error?.message || t('settings.logging.saveFailed'), toastOptions());
         }
-    }, [load]);
+    }, [load, t]);
 
     const chooseFolder = useCallback(async () => {
         const result = await window.api.sessionLog.chooseDirectory();
         if (result?.canceled) return;
         if (!result?.success) {
-            toast.error(result?.message || 'Could not use that folder', toastOptions());
+            toast.error(result?.message || t('settings.logging.folderFailed'), toastOptions());
             return;
         }
         setConfig(result.config);
         load();
-        toast.success('Session logs will go there from now on', toastOptions());
-    }, [load]);
+        toast.success(t('settings.logging.folderChanged'), toastOptions());
+    }, [load, t]);
 
     const resetFolder = useCallback(async () => {
         const result = await window.api.sessionLog.resetDirectory();
@@ -71,17 +73,17 @@ export default function SessionLogSection() {
     const openFolder = useCallback(async () => {
         const result = await window.api.sessionLog.openFolder();
         if (!result?.success) {
-            toast.error(result?.message || 'Could not open that folder', toastOptions());
+            toast.error(result?.message || t('settings.logging.openFailed'), toastOptions());
         }
-    }, []);
+    }, [t]);
 
     const reveal = useCallback(async (filePath) => {
         const result = await window.api.sessionLog.reveal(filePath);
         if (!result?.success) {
-            toast.error(result?.message || 'Could not find that log', toastOptions());
+            toast.error(result?.message || t('settings.logging.revealFailed'), toastOptions());
             load();
         }
-    }, [load]);
+    }, [load, t]);
 
     if (!config) return null;
 
@@ -89,15 +91,13 @@ export default function SessionLogSection() {
         <SettingCard>
             <SettingRow
                 align="center"
-                title="Record every session"
-                description="Write what the server prints to a file, for every session as it opens.
-                    A single session can always be recorded on its own from its header,
-                    without turning this on."
+                title={t('settings.logging.recordAll')}
+                description={t('settings.logging.recordAllDesc')}
                 control={
                     <Toggle
                         checked={config.enabled}
                         onChange={(next) => update({ enabled: next })}
-                        ariaLabel="Record every session"
+                        ariaLabel={t('settings.logging.recordAll')}
                     />
                 }
             />
@@ -105,9 +105,8 @@ export default function SessionLogSection() {
             <SettingRow
                 className={DIVIDED}
                 align="center"
-                title="Which sessions"
-                description="What kinds of session the switch above records. Recording one
-                    session from its own header ignores this list."
+                title={t('settings.logging.whichSessions')}
+                description={t('settings.logging.whichSessionsDesc')}
                 control={
                     <div className="flex items-center gap-4">
                         {[
@@ -131,18 +130,17 @@ export default function SessionLogSection() {
 
             <SettingRow
                 className={DIVIDED}
-                title="What to write"
-                description="Readable strips the colour and cursor codes, which is what makes a log
-                    greppable. Verbatim keeps every byte, for replaying it through a terminal later."
+                title={t('settings.logging.format')}
+                description={t('settings.logging.formatDesc')}
                 align="center"
                 control={
                     <SegmentedControl
-                        ariaLabel="Log format"
+                        ariaLabel={t('settings.logging.format')}
                         value={config.format}
                         onChange={(next) => update({ format: next })}
                         segments={[
-                            { value: 'plain', label: 'Readable' },
-                            { value: 'raw', label: 'Verbatim' },
+                            { value: 'plain', label: t('settings.logging.formatPlain') },
+                            { value: 'raw', label: t('settings.logging.formatRaw') },
                         ]}
                     />
                 }
@@ -151,16 +149,16 @@ export default function SessionLogSection() {
             <SettingRow
                 className={DIVIDED}
                 align="center"
-                title="Stamp each line with the time"
+                title={t('settings.logging.timestamps')}
                 description={config.format === 'raw'
-                    ? 'Not available for verbatim logs: a timestamp in the middle of an escape sequence would corrupt it.'
-                    : 'Prefixes every line with the local time it arrived.'}
+                    ? t('settings.logging.timestampsUnavailable')
+                    : t('settings.logging.timestampsDesc')}
                 control={
                     <Toggle
                         checked={config.timestamps}
                         disabled={config.format === 'raw'}
                         onChange={(next) => update({ timestamps: next })}
-                        ariaLabel="Stamp each line with the time"
+                        ariaLabel={t('settings.logging.timestamps')}
                     />
                 }
             />
@@ -168,19 +166,18 @@ export default function SessionLogSection() {
             <SettingRow
                 className={DIVIDED}
                 align="center"
-                title="How long to keep them"
-                description="Older transcripts are deleted, at launch and as sessions open.
-                    One still being written is never touched, whatever its age."
+                title={t('settings.logging.retention')}
+                description={t('settings.logging.retentionDesc')}
                 control={
                     <SegmentedControl
-                        ariaLabel="How long to keep transcripts"
+                        ariaLabel={t('settings.logging.retention')}
                         value={config.retentionDays}
                         onChange={(next) => update({ retentionDays: next })}
                         segments={[
-                            { value: 0, label: 'Forever' },
-                            { value: 7, label: '7 days' },
-                            { value: 30, label: '30 days' },
-                            { value: 90, label: '90 days' },
+                            { value: 0, label: t('settings.logging.forever') },
+                            { value: 7, label: t('settings.logging.days', { count: 7 }) },
+                            { value: 30, label: t('settings.logging.days', { count: 30 }) },
+                            { value: 90, label: t('settings.logging.days', { count: 90 }) },
                         ]}
                     />
                 }
@@ -189,16 +186,15 @@ export default function SessionLogSection() {
             <SettingRow
                 className={DIVIDED}
                 align="center"
-                title="Cap the folder size"
-                description="Once the folder grows past this, the oldest transcripts are
-                    deleted first until it fits again."
+                title={t('settings.logging.cap')}
+                description={t('settings.logging.capDesc')}
                 control={
                     <SegmentedControl
-                        ariaLabel="Cap the log folder size"
+                        ariaLabel={t('settings.logging.cap')}
                         value={config.maxTotalMB}
                         onChange={(next) => update({ maxTotalMB: next })}
                         segments={[
-                            { value: 0, label: 'No cap' },
+                            { value: 0, label: t('settings.logging.noCap') },
                             { value: 100, label: '100 MB' },
                             { value: 500, label: '500 MB' },
                             { value: 2048, label: '2 GB' },
@@ -209,10 +205,8 @@ export default function SessionLogSection() {
 
             <SettingRow
                 className={DIVIDED}
-                title="Where they go"
-                description="Logs hold whatever was on screen, which for a session that ran
-                    a password manager or printed a token is as sensitive as the credentials
-                    themselves. Keep them somewhere you would keep those."
+                title={t('settings.logging.folder')}
+                description={t('settings.logging.folderDesc')}
             >
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
@@ -231,7 +225,7 @@ export default function SessionLogSection() {
                                 active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800 shrink-0"
                             onClick={chooseFolder}
                         >
-                            Change…
+                            {t('common.changeEllipsis')}
                         </button>
 
                         <button
@@ -239,7 +233,7 @@ export default function SessionLogSection() {
                                 dark:border-neutral-700 text-gray-600 dark:text-gray-400 transition-all
                                 active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800 shrink-0"
                             onClick={openFolder}
-                            title="Open the folder"
+                            title={t('settings.logging.openFolder')}
                         >
                             <Folder01Icon size={15} strokeWidth={2} />
                         </button>
@@ -250,7 +244,7 @@ export default function SessionLogSection() {
                                     dark:border-neutral-700 text-gray-600 dark:text-gray-400 transition-all
                                     active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800 shrink-0"
                                 onClick={resetFolder}
-                                title="Back to the default folder"
+                                title={t('settings.logging.defaultFolder')}
                             >
                                 <Refresh01Icon size={15} strokeWidth={2} />
                             </button>
@@ -266,7 +260,7 @@ export default function SessionLogSection() {
                                     className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors
                                         hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                                     onClick={() => reveal(file.path)}
-                                    title="Show in folder"
+                                    title={t('settings.logging.showInFolder')}
                                 >
                                     <span className="flex-1 min-w-0 truncate text-xs font-mono text-gray-700 dark:text-gray-300">
                                         {file.name}
