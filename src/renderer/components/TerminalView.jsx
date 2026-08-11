@@ -86,6 +86,7 @@ function terminalOptions(settings) {
         cursorStyle: settings.cursorStyle,
         cursorBlink: settings.cursorBlink,
         scrollback: settings.scrollback,
+        smoothScrollDuration: settings.smoothScrollDuration,
     };
 }
 
@@ -532,7 +533,6 @@ function TerminalView({
                 theme: themeConfig,
                 allowProposedApi: true,
                 fastScrollModifier: 'alt',
-                smoothScrollDuration: 120,
                 rescaleOverlappingGlyphs: false,
             });
 

@@ -71,6 +71,7 @@ export const DEFAULT_TERMINAL_SETTINGS = {
     cursorStyle: 'bar',
     cursorBlink: true,
     scrollback: 10000,
+    smoothScrollDuration: 0,
     linkActivation: 'click',
 };
 
@@ -93,6 +94,9 @@ export const LIMITS = {
     // 200k lines of an 80-column buffer is on the order of 100 MB per session,
     // which is the point past which the tab is the problem rather than the fix.
     scrollback: { min: 500, max: 200000, step: 500 },
+    // Long enough to make the easing visible without letting one wheel gesture
+    // leave the viewport chasing input for a noticeable fraction of a second.
+    smoothScrollDuration: { min: 0, max: 300, step: 10 },
 };
 
 export const CURSOR_STYLES = [
@@ -146,6 +150,16 @@ export function sanitizeTerminalSettings(raw) {
     );
     next.scrollback = Math.round(
         quantize(clamp(source.scrollback, LIMITS.scrollback, next.scrollback), LIMITS.scrollback)
+    );
+    next.smoothScrollDuration = Math.round(
+        quantize(
+            clamp(
+                source.smoothScrollDuration,
+                LIMITS.smoothScrollDuration,
+                next.smoothScrollDuration
+            ),
+            LIMITS.smoothScrollDuration
+        )
     );
 
     if (typeof source.ligatures === 'boolean') next.ligatures = source.ligatures;

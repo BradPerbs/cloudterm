@@ -297,6 +297,22 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
+                    title="Smooth scrolling"
+                    description="How long wheel and trackpad movements take to settle. Turn it off to follow input immediately."
+                    control={
+                        <Slider
+                            ariaLabel="Smooth scroll duration"
+                            value={terminalSettings.smoothScrollDuration}
+                            {...LIMITS.smoothScrollDuration}
+                            onChange={(smoothScrollDuration) => set({ smoothScrollDuration })}
+                            format={(value) => (value === 0 ? 'Off' : `${value} ms`)}
+                        />
+                    }
+                />
+
+                <SettingRow
+                    className={DIVIDED}
+                    align="center"
                     title="Opening links"
                     description={`A URL printed in the session is clickable and opens in your browser.
                         Asking for ${MODIFIER_KEY} as well is what editors do: it stops a click meant for the
@@ -317,7 +333,7 @@ export default function TerminalPage({
                     title="Back to the defaults"
                     description={isDefault
                         ? 'Everything above is already at its default.'
-                        : 'Resets the font, spacing, cursor, scrollback and link clicking. Leaves the colour scheme alone.'}
+                        : 'Resets the font, spacing, cursor, scrollback, scrolling and link clicking. Leaves the colour scheme alone.'}
                     control={
                         <button
                             className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300
