@@ -5,6 +5,7 @@ import SettingCard from './ui/SettingCard';
 import Checkbox from '../ui/Checkbox';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { toastOptions } from '../../lib/toast';
+import { useT } from '../../i18n';
 
 function Field({ label, value, onChange, autoFocus = false, ...rest }) {
     return (
@@ -29,6 +30,7 @@ function Field({ label, value, onChange, autoFocus = false, ...rest }) {
  * one, and removing one each ask for a different set of things.
  */
 function LockForm({ mode, onCancel, onDone }) {
+    const t = useT();
     const [current, setCurrent] = useState('');
     const [next, setNext] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -47,7 +49,7 @@ function LockForm({ mode, onCancel, onDone }) {
         if (busy) return;
 
         if (needsNext && next !== confirm) {
-            setError('The two passwords do not match');
+            setError(t('settings.lock.mismatch'));
             return;
         }
 
@@ -59,31 +61,33 @@ function LockForm({ mode, onCancel, onDone }) {
                 : await window.api.appLock.disable(current);
 
             if (!result?.success) {
-                setError(result?.message || 'That did not work');
+                setError(result?.message || t('settings.lock.failed'));
                 return;
             }
 
             toast.success(
-                mode === 'set' ? 'Opening password set'
-                    : mode === 'change' ? 'Password changed'
-                    : 'Opening password removed',
+                mode === 'set' ? t('settings.lock.passwordSet')
+                    : mode === 'change' ? t('settings.lock.passwordChanged')
+                    : t('settings.lock.passwordRemoved'),
                 toastOptions()
             );
             onDone();
         } catch {
-            setError('That did not work');
+            setError(t('settings.lock.failed'));
         } finally {
             setBusy(false);
         }
-    }, [busy, mode, current, next, confirm, needsNext, onDone]);
+    }, [busy, mode, current, next, confirm, needsNext, onDone, t]);
 
-    const label = mode === 'set' ? 'Set password' : mode === 'change' ? 'Change password' : 'Remove password';
+    const label = mode === 'set' ? t('settings.lock.setPassword')
+        : mode === 'change' ? t('settings.lock.changePassword')
+        : t('settings.lock.removePassword');
 
     return (
         <form onSubmit={submit} className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-700 flex flex-col gap-3">
             {needsCurrent && (
                 <Field
-                    label="Current password"
+                    label={t('settings.lock.currentPassword')}
                     value={current}
                     onChange={setCurrent}
                     autoFocus
@@ -93,14 +97,14 @@ function LockForm({ mode, onCancel, onDone }) {
             {needsNext && (
                 <>
                     <Field
-                        label={mode === 'set' ? 'Password' : 'New password'}
+                        label={mode === 'set' ? t('settings.lock.password') : t('settings.lock.newPassword')}
                         value={next}
                         onChange={setNext}
                         autoFocus={!needsCurrent}
                         autoComplete="new-password"
                     />
                     <Field
-                        label="Confirm password"
+                        label={t('settings.lock.confirmPassword')}
                         value={confirm}
                         onChange={setConfirm}
                         autoComplete="new-password"
@@ -113,8 +117,8 @@ function LockForm({ mode, onCancel, onDone }) {
                     variant="card"
                     checked={acknowledged}
                     onChange={(event) => setAcknowledged(event.target.checked)}
-                    label="I understand this password cannot be recovered"
-                    description="Your saved passwords, keys and passphrases are encrypted with it. Forget it and they cannot be read back, by this app or anything else."
+                    label={t('settings.lock.acknowledge')}
+                    description={t('settings.lock.acknowledgeDesc')}
                 />
             )}
 
@@ -126,7 +130,7 @@ function LockForm({ mode, onCancel, onDone }) {
                     onClick={onCancel}
                     className="px-3 h-9 rounded-xl border border-gray-300 dark:border-surface-control text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                 >
-                    Cancel
+                    {t('common.cancel')}
                 </button>
                 <button
                     type="submit"
@@ -137,7 +141,7 @@ function LockForm({ mode, onCancel, onDone }) {
                             : 'bg-gray-900 dark:bg-white text-white dark:text-black hover:opacity-90'
                     }`}
                 >
-                    {busy ? 'Working…' : label}
+                    {busy ? t('common.working') : label}
                 </button>
             </div>
         </form>
@@ -150,6 +154,7 @@ function LockForm({ mode, onCancel, onDone }) {
  * in front of an app that is already holding the data.
  */
 export default function AppLockSection() {
+    const t = useT();
     const [enabled, setEnabled] = useState(null);
     const [mode, setMode] = useState(null); // 'set' | 'change' | 'disable'
     const [confirmLock, setConfirmLock] = useState(false);
@@ -177,24 +182,20 @@ export default function AppLockSection() {
                     <div className="min-w-0">
                         <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <LockPasswordIcon size={18} strokeWidth={2} className="text-gray-400" />
-                            Opening password
+                            {t('settings.lock.title')}
                             {enabled && (
                                 <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400">
-                                    on
+                                    {t('settings.lock.badgeOn')}
                                 </span>
                             )}
                         </h4>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            {enabled
-                                ? 'Asked for every time the app opens. Your saved passwords, keys and passphrases are encrypted with it, so the stored file is unreadable without it.'
-                                : 'Require a password to open the app, and encrypt your saved passwords, keys and passphrases with it.'}
+                            {enabled ? t('settings.lock.descOn') : t('settings.lock.descOff')}
                         </p>
                         <p className={`text-xs mt-2 ${enabled
                             ? 'text-gray-500 dark:text-gray-400'
                             : 'text-amber-600 dark:text-amber-500'}`}>
-                            {enabled
-                                ? 'There is no recovery. If you forget this password the saved credentials cannot be read back.'
-                                : 'Without it, credentials are protected only by the OS keystore, which means anyone signed in as you can read them.'}
+                            {enabled ? t('settings.lock.warnOn') : t('settings.lock.warnOff')}
                         </p>
                     </div>
 
@@ -206,19 +207,19 @@ export default function AppLockSection() {
                                         onClick={() => setConfirmLock(true)}
                                         className="px-3 h-9 rounded-xl border border-gray-300 dark:border-surface-control text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                                     >
-                                        Lock now
+                                        {t('settings.lock.lockNow')}
                                     </button>
                                     <button
                                         onClick={() => setMode('disable')}
                                         className="px-3 h-9 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                     >
-                                        Remove
+                                        {t('common.remove')}
                                     </button>
                                     <button
                                         onClick={() => setMode('change')}
                                         className="px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md"
                                     >
-                                        Change
+                                        {t('common.change')}
                                     </button>
                                 </>
                             ) : (
@@ -227,7 +228,7 @@ export default function AppLockSection() {
                                     disabled={enabled === null}
                                     className="px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-40"
                                 >
-                                    Set password
+                                    {t('settings.lock.setPassword')}
                                 </button>
                             )}
                         </div>
@@ -239,9 +240,9 @@ export default function AppLockSection() {
 
             {confirmLock && (
                 <ConfirmDialog
-                    title="Lock the app now?"
-                    message="Every open session will be disconnected, and the password will be needed to get back in."
-                    confirmLabel="Lock"
+                    title={t('settings.lock.confirmTitle')}
+                    message={t('settings.lock.confirmMessage')}
+                    confirmLabel={t('settings.lock.confirmAction')}
                     onCancel={() => setConfirmLock(false)}
                     onConfirm={() => {
                         setConfirmLock(false);

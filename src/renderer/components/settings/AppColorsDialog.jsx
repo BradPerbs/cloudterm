@@ -8,6 +8,7 @@ import {
     derivePalette,
     sanitizeAppColors,
 } from '../../lib/app-colors';
+import { useT } from '../../i18n';
 
 /**
  * The app in miniature, in the colours being edited.
@@ -79,6 +80,7 @@ function AppPreview({ colors }) {
  * costs nothing, and saving is what applies it.
  */
 export default function AppColorsDialog({ colors, onSave, onClose }) {
+    const t = useT();
     const [draft, setDraft] = useState(() => sanitizeAppColors(colors));
     const [preset, setPreset] = useState('');
 
@@ -97,19 +99,18 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
 
     return (
         <Dialog
-            title="App Colors"
-            subtitle="The six surfaces the app is built from. Pick the window colour and the rest
-                follows, or set every step yourself."
+            title={t('settings.appearance.appColors')}
+            subtitle={t('appColors.subtitle')}
             width="34rem"
             onClose={onClose}
             footer={
                 <>
                     <DialogButton onClick={() => { setPreset(''); setDraft({ ...DEFAULT_APP_COLORS }); }}>
-                        Reset
+                        {t('common.reset')}
                     </DialogButton>
-                    <DialogButton onClick={onClose}>Cancel</DialogButton>
+                    <DialogButton onClick={onClose}>{t('common.cancel')}</DialogButton>
                     <DialogButton variant="primary" onClick={() => onSave(draft)}>
-                        {dirty ? 'Save & Apply' : 'Apply'}
+                        {dirty ? t('common.saveAndApply') : t('common.apply')}
                     </DialogButton>
                 </>
             }
@@ -119,7 +120,7 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
 
                 <label className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 shrink-0">
-                        Start from
+                        {t('common.startFrom')}
                     </span>
                     <select
                         value={preset}
@@ -128,7 +129,7 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
                             dark:border-surface-control bg-white dark:bg-neutral-800 text-gray-900 dark:text-white
                             outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                     >
-                        <option value="">Nothing (keep current colors)</option>
+                        <option value="">{t('common.keepCurrentColors')}</option>
                         {APP_COLOR_PRESETS.map(option => (
                             <option key={option.id} value={option.id}>{option.label}</option>
                         ))}
@@ -140,8 +141,8 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
                     darks by hand. Every step below stays editable afterwards. */}
                 <div className="rounded-xl p-3 bg-gray-50 dark:bg-surface-base/60 border border-gray-200 dark:border-surface-control">
                     <ColorField
-                        label="Build from one colour"
-                        hint="Rewrites all six steps, keeping the app's spacing between them"
+                        label={t('appColors.derive')}
+                        hint={t('appColors.deriveHint')}
                         value={draft.base}
                         onChange={(value) => { setPreset(''); setDraft(derivePalette(value)); }}
                     />
@@ -149,14 +150,14 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
 
                 <div className="pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-3">
-                        Surfaces
+                        {t('appColors.surfaces')}
                     </h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         {APP_COLOR_FIELDS.map(field => (
                             <ColorField
                                 key={field.key}
-                                label={field.label}
-                                hint={field.hint}
+                                label={t(field.labelKey)}
+                                hint={t(field.hintKey)}
                                 value={draft[field.key]}
                                 onChange={(value) => { setPreset(''); setColor(field.key, value); }}
                             />

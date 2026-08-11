@@ -7,6 +7,7 @@ import Toggle from './ui/Toggle';
 import Slider from './ui/Slider';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
+import { useT } from '../../i18n';
 
 /**
  * How the assistant is set up.
@@ -29,33 +30,9 @@ const FIELD_CLASS = `w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutra
     text-gray-900 dark:text-gray-100 outline-none
     focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25`;
 
-const APPROVALS = [
-    { value: 'always', label: 'Every action' },
-    { value: 'writes', label: 'Changes only' },
-    { value: 'never', label: 'Never' },
-];
+const APPROVALS = ['always', 'writes', 'never'];
 
-const COMMAND_MODES = [
-    { value: 'terminal', label: 'In my terminal' },
-    { value: 'background', label: 'Out of sight' },
-];
-
-const COMMAND_MODE_NOTES = {
-    terminal: 'Commands are typed into the session you are looking at, so you watch them run and the '
-        + 'output stays in your scrollback. They go into that shell\'s history, and the assistant reads '
-        + 'the result off the screen rather than getting an exit code.',
-    background: 'Commands run on a separate channel you cannot see. Tidier, and the assistant gets a real '
-        + 'exit code and clean output, but you are taking its word for what happened.',
-};
-
-const APPROVAL_NOTES = {
-    always: 'Every tool call waits for you, including reading a file or the terminal. Thorough, but a long '
-        + 'investigation becomes a lot of clicking.',
-    writes: 'Reading runs freely. Anything that changes a system stops and shows you the exact command and the '
-        + 'host it would run on.',
-    never: 'Nothing stops for approval, including commands that delete data or restart services. Only sensible '
-        + 'for hosts you can afford to break.',
-};
+const COMMAND_MODES = ['terminal', 'background'];
 
 /**
  * How the assistant is authenticating, said plainly.
@@ -64,32 +41,24 @@ const APPROVAL_NOTES = {
  * nothing to report and the page says as much. Guessing here is how someone on
  * a subscription ends up reading that they are being charged per token.
  */
-function describeAccount(account, hasApiKey, provider) {
-    const agent = PROVIDER_NAMES[provider] || 'the agent';
-    if (provider === 'opencode') {
-        return 'OpenCode uses the providers and credentials already configured in its CLI. '
-            + 'Manage them with "opencode auth login"; keys stored in CloudBlast are not passed to OpenCode.';
-    }
+function describeAccount(t, account, hasApiKey, provider) {
+    const agent = PROVIDER_NAMES[provider] || t('settings.assistant.theAgent');
+    if (provider === 'opencode') return t('settings.assistant.accountOpencode');
     if (account?.subscriptionType) {
-        return `Signed in through ${agent} on this machine, on a ${account.subscriptionType} plan. `
-            + 'Usage comes out of that plan, so no key is needed here.';
+        return t('settings.assistant.accountPlan', { agent, plan: account.subscriptionType });
     }
     if (account?.apiProvider && account.apiProvider !== 'firstParty') {
-        return `${agent} on this machine is set up against ${account.apiProvider}, `
-            + 'which handles its own credentials. Nothing is needed here.';
+        return t('settings.assistant.accountProvider', { agent, provider: account.apiProvider });
     }
     if (account?.apiKeySource && account.apiKeySource !== 'none') {
-        return `${agent} on this machine is using an API key, so usage is charged per token.`;
+        return t('settings.assistant.accountAgentKey', { agent });
     }
-    if (hasApiKey) {
-        return 'A key is stored here and will be used. Clear the box and save to remove it and fall back '
-            + `to the ${agent} login.`;
-    }
-    return `Nothing to do if you are already signed in to ${agent} on this machine, which is the usual `
-        + 'case. A key is only needed when you are not.';
+    if (hasApiKey) return t('settings.assistant.accountStoredKey', { agent });
+    return t('settings.assistant.accountNone', { agent });
 }
 
 export default function AssistantSection() {
+    const t = useT();
     const [settings, setSettings] = useState(null);
     const [account, setAccount] = useState(null);
     // Which agents the main process actually has, so the picker offers what
@@ -134,13 +103,15 @@ export default function AssistantSection() {
         const result = await window.api.ai.setApiKey(keyValue);
         if (result?.success) {
             setKeyValue('');
-            setKeyState(keyValue ? 'Key saved.' : 'Key removed.');
+            setKeyState(keyValue
+                ? t('settings.assistant.keySaved')
+                : t('settings.assistant.keyRemoved'));
             const status = await window.api.ai.status();
             setSettings(status.settings);
         } else {
-            setKeyState(result?.message || 'That key could not be saved.');
+            setKeyState(result?.message || t('settings.assistant.keyFailed'));
         }
-    }, [keyValue]);
+    }, [keyValue, t]);
 
     const saveCommands = useCallback(async () => {
         const list = commands.split('\n').map(line => line.trim()).filter(Boolean);
@@ -181,7 +152,9 @@ export default function AssistantSection() {
     if (!settings) {
         return (
             <SettingCard>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Loading the assistant settings...</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('settings.assistant.loading')}
+                </p>
             </SettingCard>
         );
     }
@@ -205,9 +178,8 @@ export default function AssistantSection() {
                 belong to whichever agent is running. */}
             <SettingCard>
                 <SettingRow
-                    title="Agent"
-                    description="Which coding agent answers, using the copy already installed on this machine.
-                        Switching starts a fresh conversation."
+                    title={t('settings.assistant.agent')}
+                    description={t('settings.assistant.agentDesc')}
                 >
                     <ProviderPicker
                         value={settings.provider}
@@ -219,12 +191,15 @@ export default function AssistantSection() {
 
             <SettingCard>
                 <SettingRow
-                    title="Where commands run"
-                    description={COMMAND_MODE_NOTES[settings.commandMode]}
+                    title={t('settings.assistant.commandMode')}
+                    description={t(`settings.assistant.commandMode.${settings.commandMode}.note`)}
                 >
                     <SegmentedControl
-                        ariaLabel="Where commands run"
-                        segments={COMMAND_MODES}
+                        ariaLabel={t('settings.assistant.commandMode')}
+                        segments={COMMAND_MODES.map(value => ({
+                            value,
+                            label: t(`settings.assistant.commandMode.${value}`),
+                        }))}
                         value={settings.commandMode}
                         onChange={(value) => update({ commandMode: value })}
                     />
@@ -232,12 +207,15 @@ export default function AssistantSection() {
 
                 <SettingRow
                     className={DIVIDED}
-                    title="Ask before running"
-                    description={APPROVAL_NOTES[settings.approval]}
+                    title={t('settings.assistant.approval')}
+                    description={t(`settings.assistant.approval.${settings.approval}.note`)}
                 >
                     <SegmentedControl
-                        ariaLabel="When to ask for approval"
-                        segments={APPROVALS}
+                        ariaLabel={t('settings.assistant.approval')}
+                        segments={APPROVALS.map(value => ({
+                            value,
+                            label: t(`settings.assistant.approval.${value}`),
+                        }))}
                         value={settings.approval}
                         onChange={(value) => update({ approval: value })}
                     />
@@ -246,13 +224,11 @@ export default function AssistantSection() {
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Allow tools on this computer"
-                    description="Lets the assistant read and write local files and run local commands. Off by
-                        default: the panel is for managing servers, and your own machine is a far wider surface
-                        than that needs."
+                    title={t('settings.assistant.localTools')}
+                    description={t('settings.assistant.localToolsDesc')}
                     control={
                         <Toggle
-                            ariaLabel="Allow tools on this computer"
+                            ariaLabel={t('settings.assistant.localTools')}
                             checked={settings.allowLocalTools}
                             onChange={(value) => update({ allowLocalTools: value })}
                         />
@@ -261,14 +237,12 @@ export default function AssistantSection() {
 
                 <SettingRow
                     className={DIVIDED}
-                    title="Commands that never need approval"
-                    description="One per line, matched on the whole first words. A command containing a pipe,
-                        a redirect, a semicolon, a substitution or a second line is always asked about,
-                        whatever it starts with."
+                    title={t('settings.assistant.allowList')}
+                    description={t('settings.assistant.allowListDesc')}
                 >
                     <div className="space-y-3">
                         <textarea
-                            aria-label="Commands that never need approval"
+                            aria-label={t('settings.assistant.allowList')}
                             rows={6}
                             spellCheck={false}
                             className={`${FIELD_CLASS} font-jetbrains text-xs leading-relaxed resize-y`}
@@ -277,15 +251,17 @@ export default function AssistantSection() {
                         />
                         <div className="flex items-center gap-3">
                             <Button size="sm" variant="secondary" onClick={saveCommands}>
-                                Save list
+                                {t('settings.assistant.saveList')}
                             </Button>
                             {canRestoreCommands && (
                                 <Button size="sm" variant="ghost" onClick={restoreCommands}>
-                                    Restore defaults
+                                    {t('settings.assistant.restoreDefaults')}
                                 </Button>
                             )}
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                Only applies while approvals are set to "Changes only".
+                                {t('settings.assistant.allowListNote', {
+                                    mode: t('settings.assistant.approval.writes'),
+                                })}
                             </span>
                         </div>
                     </div>
@@ -293,15 +269,12 @@ export default function AssistantSection() {
 
                 <SettingRow
                     className={DIVIDED}
-                    title="Commands it may never run"
-                    description={'One per line. These are refused outright rather than asked about, in every '
-                        + 'approval mode including "Never ask", and whether the assistant runs them on their '
-                        + 'own channel or types them into your terminal. Flags count: "rm -rf" also stops '
-                        + '"rm -fr", "rm -r -f" and "sudo /bin/rm --recursive --force".'}
+                    title={t('settings.assistant.blockList')}
+                    description={t('settings.assistant.blockListDesc')}
                 >
                     <div className="space-y-3">
                         <textarea
-                            aria-label="Commands it may never run"
+                            aria-label={t('settings.assistant.blockList')}
                             rows={4}
                             spellCheck={false}
                             placeholder={'rm -rf\nshutdown\nmkfs'}
@@ -312,15 +285,15 @@ export default function AssistantSection() {
                         />
                         <div className="flex items-center gap-3">
                             <Button size="sm" variant="secondary" onClick={saveBlocked}>
-                                Save list
+                                {t('settings.assistant.saveList')}
                             </Button>
                             {canRestoreBlocked && (
                                 <Button size="sm" variant="ghost" onClick={restoreBlocked}>
-                                    Restore defaults
+                                    {t('settings.assistant.restoreDefaults')}
                                 </Button>
                             )}
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                Clear the box to block nothing.
+                                {t('settings.assistant.blockListEmpty')}
                             </span>
                         </div>
                         {/* Said plainly, because a list like this invites the
@@ -330,9 +303,7 @@ export default function AssistantSection() {
                             recognised, and nothing here should be relied on as
                             though it could. */}
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            A guardrail against mistakes, not a security control. A shell has too many ways to
-                            spell the same command for any list to catch them all, so keep approvals on for
-                            anything that matters.
+                            {t('settings.assistant.blockListWarning')}
                         </p>
                     </div>
                 </SettingRow>
@@ -340,17 +311,15 @@ export default function AssistantSection() {
 
             <SettingCard>
                 <SettingRow
-                    title="Quick prompts"
-                    description="Questions the panel offers as one-click buttons when a conversation is empty.
-                        One per line. Nothing is set up to begin with, because the ones worth having are the
-                        ones you find yourself asking your own machines every week."
+                    title={t('settings.assistant.quickPrompts')}
+                    description={t('settings.assistant.quickPromptsDesc')}
                 >
                     <div className="space-y-3">
                         <textarea
-                            aria-label="Quick prompts"
+                            aria-label={t('settings.assistant.quickPrompts')}
                             rows={5}
                             spellCheck={false}
-                            placeholder={'What is filling up the disk?\nWhy did the last deploy fail?'}
+                            placeholder={t('settings.assistant.quickPromptsPlaceholder')}
                             className={`${FIELD_CLASS} text-xs leading-relaxed resize-y
                                 placeholder:text-gray-500 dark:placeholder:text-neutral-400`}
                             value={prompts}
@@ -358,11 +327,10 @@ export default function AssistantSection() {
                         />
                         <div className="flex items-center gap-3">
                             <Button size="sm" variant="secondary" onClick={savePrompts}>
-                                Save prompts
+                                {t('settings.assistant.savePrompts')}
                             </Button>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                Up to 12. Clicking one puts it in the box rather than sending it, so you can
-                                add to it first.
+                                {t('settings.assistant.quickPromptsNote')}
                             </span>
                         </div>
                     </div>
@@ -372,12 +340,11 @@ export default function AssistantSection() {
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Steps per turn"
-                    description="How many tool calls one question may take before the assistant stops and
-                        reports back. A run that is not converging ends on its own rather than when you notice."
+                    title={t('settings.assistant.steps')}
+                    description={t('settings.assistant.stepsDesc')}
                     control={
                         <Slider
-                            ariaLabel="Steps per turn"
+                            ariaLabel={t('settings.assistant.steps')}
                             value={settings.maxTurns}
                             min={5}
                             max={100}
@@ -390,12 +357,11 @@ export default function AssistantSection() {
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Terminal lines it can read"
-                    description="How much of a session's recent output one read returns. Higher gives it more
-                        context to work from and uses more of the conversation's budget."
+                    title={t('settings.assistant.lines')}
+                    description={t('settings.assistant.linesDesc')}
                     control={
                         <Slider
-                            ariaLabel="Terminal lines it can read"
+                            ariaLabel={t('settings.assistant.lines')}
                             value={settings.transcriptLines}
                             min={40}
                             max={1000}
@@ -408,8 +374,9 @@ export default function AssistantSection() {
 
             <SettingCard>
                 <SettingRow
-                    title="Signing in"
+                    title={t('settings.assistant.signIn')}
                     description={describeAccount(
+                        t,
                         account,
                         settings.hasApiKey,
                         settings.provider
@@ -425,24 +392,26 @@ export default function AssistantSection() {
                             <div className="flex gap-3">
                                 <input
                                     type="password"
-                                    aria-label="API key"
+                                    aria-label={t('settings.assistant.apiKey')}
                                     autoComplete="off"
                                     spellCheck={false}
                                     placeholder={settings.hasApiKey
-                                        ? 'A key is stored'
+                                        ? t('settings.assistant.keyStored')
                                         : settings.provider === 'codex' ? 'sk-proj-...' : 'sk-ant-...'}
                                     className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
                                     value={keyValue}
                                     onChange={(event) => { setKeyValue(event.target.value); setKeyState(''); }}
                                 />
-                                <Button size="md" variant="secondary" onClick={saveKey}>Save</Button>
+                                <Button size="md" variant="secondary" onClick={saveKey}>
+                                    {t('common.save')}
+                                </Button>
                             </div>
                             {keyState && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400">{keyState}</p>
                             )}
                             {!settings.encryptionAvailable && (
                                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                                    This system has no secure store available, so a key cannot be saved here.
+                                    {t('settings.assistant.noSecureStore')}
                                 </p>
                             )}
                         </div>
@@ -452,9 +421,11 @@ export default function AssistantSection() {
 
             <SettingCard>
                 <SettingRow
-                    title="What it can do"
-                    description={`${tools.length} tools, of which ${readOnlyTools} only read. The rest are
-                        subject to the approval setting above.`}
+                    title={t('settings.assistant.tools')}
+                    description={t('settings.assistant.toolsDesc', {
+                        count: tools.length,
+                        readOnly: readOnlyTools,
+                    })}
                 >
                     <ul className="grid grid-cols-2 gap-x-6 gap-y-2">
                         {tools.map(tool => (

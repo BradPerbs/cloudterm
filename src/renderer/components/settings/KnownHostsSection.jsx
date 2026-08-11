@@ -12,12 +12,15 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import SettingCard from './ui/SettingCard';
 import { formatDateTime } from '../../lib/format';
 import { toastOptions } from '../../lib/toast';
+import { useT } from '../../i18n';
 
 function KeyRow({ entry, onForget }) {
+    const t = useT();
+
     return (
         <div className="flex items-center gap-3 py-2 pl-8 pr-3 border-t border-gray-100 dark:border-surface-control/60">
             <span className="shrink-0 w-36 font-mono text-[11px] truncate text-gray-500 dark:text-gray-400">
-                {entry.keyType || 'unknown'}
+                {entry.keyType || t('settings.knownHosts.unknownType')}
             </span>
 
             <span className="flex-1 min-w-0 font-mono text-[11px] text-gray-600 dark:text-gray-400 truncate selectable">
@@ -33,9 +36,9 @@ function KeyRow({ entry, onForget }) {
             <button
                 onClick={() => {
                     navigator.clipboard.writeText(entry.fingerprint);
-                    toast.success('Fingerprint copied', toastOptions({ duration: 1500 }));
+                    toast.success(t('settings.knownHosts.copied'), toastOptions({ duration: 1500 }));
                 }}
-                title="Copy fingerprint"
+                title={t('settings.knownHosts.copy')}
                 className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
             >
                 <Copy01Icon size={12} strokeWidth={2} />
@@ -43,7 +46,7 @@ function KeyRow({ entry, onForget }) {
 
             <button
                 onClick={onForget}
-                title="Forget this key"
+                title={t('settings.knownHosts.forgetKey')}
                 className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
                 <Delete02Icon size={12} strokeWidth={2} />
@@ -53,6 +56,8 @@ function KeyRow({ entry, onForget }) {
 }
 
 function HostRow({ record, expanded, onToggle, onForgetHost, onForgetKey }) {
+    const t = useT();
+
     return (
         <div className="border border-gray-200 dark:border-surface-control rounded-xl overflow-hidden">
             {/* The row itself is the control, so the whole strip highlights and
@@ -83,7 +88,7 @@ function HostRow({ record, expanded, onToggle, onForgetHost, onForgetKey }) {
                         </span>
                     )}
                     <span className="shrink-0 text-[11px] text-gray-400 dark:text-neutral-500">
-                        {record.entries.length} key{record.entries.length === 1 ? '' : 's'}
+                        {t('settings.knownHosts.keyCount', { count: record.entries.length })}
                     </span>
                 </button>
 
@@ -92,7 +97,7 @@ function HostRow({ record, expanded, onToggle, onForgetHost, onForgetKey }) {
                         onClick={onForgetHost}
                         className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all"
                     >
-                        Forget
+                        {t('settings.knownHosts.forget')}
                     </button>
                 </div>
             </div>
@@ -114,6 +119,7 @@ function HostRow({ record, expanded, onToggle, onForgetHost, onForgetKey }) {
  * changed and the hard warning is now blocking the connection.
  */
 export default function KnownHostsSection() {
+    const t = useT();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
@@ -151,23 +157,31 @@ export default function KnownHostsSection() {
 
     const forgetHost = useCallback((record) => {
         setConfirmState({
-            title: 'Forget this host key?',
-            message: `${record.host}${record.port === 22 ? '' : `:${record.port}`} will be treated as a new host the next time you connect, and you will be asked to confirm its key again.`,
-            confirmLabel: 'Forget',
+            title: t('settings.knownHosts.confirmTitle'),
+            message: t('settings.knownHosts.confirmMessage', {
+                host: `${record.host}${record.port === 22 ? '' : `:${record.port}`}`,
+            }),
+            confirmLabel: t('settings.knownHosts.forget'),
             onConfirm: async () => {
                 setConfirmState(null);
                 await window.api.hostKeys.forgetById(record.id);
-                toast.success(`Forgot ${record.host}`, toastOptions({ duration: 2000 }));
+                toast.success(
+                    t('settings.knownHosts.forgotHost', { host: record.host }),
+                    toastOptions({ duration: 2000 }),
+                );
                 load();
             },
         });
-    }, [load]);
+    }, [load, t]);
 
     const forgetKey = useCallback(async (record, entry) => {
         await window.api.hostKeys.forgetKey(record.id, entry.fingerprint);
-        toast.success(`Forgot the ${entry.keyType} key for ${record.host}`, toastOptions({ duration: 2000 }));
+        toast.success(
+            t('settings.knownHosts.forgotKey', { type: entry.keyType, host: record.host }),
+            toastOptions({ duration: 2000 }),
+        );
         load();
-    }, [load]);
+    }, [load, t]);
 
     return (
         <>
@@ -176,11 +190,10 @@ export default function KnownHostsSection() {
                     <div className="min-w-0">
                         <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <ShieldKeyIcon size={18} strokeWidth={2} className="text-gray-400" />
-                            Known hosts
+                            {t('settings.knownHosts.title')}
                         </h4>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Server keys you have trusted. Forget one to be asked about it again,
-                            which you need if a server was legitimately rebuilt.
+                            {t('settings.knownHosts.desc')}
                         </p>
                     </div>
 
@@ -194,7 +207,7 @@ export default function KnownHostsSection() {
                             <input
                                 value={filter}
                                 onChange={(event) => setFilter(event.target.value)}
-                                placeholder="Filter"
+                                placeholder={t('common.filter')}
                                 spellCheck={false}
                                 className="w-40 h-8 pl-8 pr-7 rounded-lg border border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base text-gray-900 dark:text-white text-xs outline-none focus:border-gray-300 dark:focus:border-neutral-700 placeholder:text-gray-400"
                             />
@@ -211,20 +224,22 @@ export default function KnownHostsSection() {
                 </div>
 
                 {loading ? (
-                    <p className="text-sm text-gray-400 dark:text-neutral-500 py-6 text-center">Loading…</p>
+                    <p className="text-sm text-gray-400 dark:text-neutral-500 py-6 text-center">
+                        {t('common.loading')}
+                    </p>
                 ) : records.length === 0 ? (
                     <div className="py-8 text-center">
                         <ShieldKeyIcon size={32} strokeWidth={1.5} className="mx-auto text-gray-300 dark:text-neutral-700 mb-2" />
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                            No host keys trusted yet
+                            {t('settings.knownHosts.empty')}
                         </p>
                         <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
-                            The first time you connect to a server, its key will be recorded here.
+                            {t('settings.knownHosts.emptyNote')}
                         </p>
                     </div>
                 ) : visible.length === 0 ? (
                     <p className="text-sm text-gray-400 dark:text-neutral-500 py-6 text-center">
-                        Nothing matches “{filter.trim()}”
+                        {t('common.noMatches', { query: filter.trim() })}
                     </p>
                 ) : (
                     <div className="flex flex-col gap-2">

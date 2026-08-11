@@ -9,6 +9,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
 import SearchField from './ui/SearchField';
 import { CARD_GRID } from '../lib/layout';
+import { useT } from '../i18n';
 import { useFlipOrder } from '../hooks/useFlipOrder';
 
 /**
@@ -16,8 +17,8 @@ import { useFlipOrder } from '../hooks/useFlipOrder';
  *
  * A sibling of Hosts and Snippets, laid out the way they are: a header led by
  * the search field with the actions at its right, then a list that scrolls on
- * its own. There is no page title for the same reason those two dropped theirs
- * — the sidebar item is already lit and the cards are plainly keys.
+ * its own. There is no page title for the same reason those two dropped theirs:
+ * the sidebar item is already lit and the cards are plainly keys.
  *
  * The count of what is in use went with it. It was the one thing here the cards
  * could not say, but it was saying it in the widest part of the row while the
@@ -40,6 +41,7 @@ function KeychainPanel({
     onDeleteKey,
     onGenerateKey,
 }) {
+    const t = useT();
     const [modalOpen, setModalOpen] = useState(false);
     const [editingKey, setEditingKey] = useState(null);
     const [initialMode, setInitialMode] = useState('generate');
@@ -90,7 +92,7 @@ function KeychainPanel({
      *
      * Worked out once per render rather than per card, and it is the answer to
      * two questions: the count a card shows, and who breaks if the key is
-     * deleted. A host only counts when it is actually set to use the keychain —
+     * deleted. A host only counts when it is actually set to use the keychain:
      * a stale `keychainKeyId` left behind by a switch to password auth is not a
      * dependency, and counting it would overstate what a delete costs.
      */
@@ -204,8 +206,8 @@ function KeychainPanel({
     /**
      * Ask before deleting, and say who is relying on it.
      *
-     * A private key is the one record in the app that nothing can bring back —
-     * not a re-import, not a sync — and a host set to keychain auth does not
+     * A private key is the one record in the app that nothing can bring back,
+     * not a re-import and not a sync, and a host set to keychain auth does not
      * fail here when its key goes. It fails the next time someone tries to
      * connect, with a message about a key that is no longer in the list.
      */
@@ -294,13 +296,13 @@ function KeychainPanel({
                     value={query}
                     onChange={setQuery}
                     onKeyDown={handleSearchKeyDown}
-                    ariaLabel="Search keys"
+                    ariaLabel={t('keychain.search')}
                 />
 
                 <div className="flex items-center gap-2 shrink-0">
                     <IconButton
                         onClick={() => handleNewKey('import')}
-                        title="Import an existing key, from a file or pasted"
+                        title={t('keychain.import')}
                         icon={<FileImportIcon size={18} strokeWidth={1.75} />}
                     />
                     {/* Only where there is a Hello to enrol into. Offering it on
@@ -311,8 +313,8 @@ function KeychainPanel({
                             onClick={handleNewHelloKey}
                             disabled={enrolling}
                             title={enrolling
-                                ? 'Waiting for Windows Hello…'
-                                : 'Add a Windows Hello key, held in this PC’s TPM'}
+                                ? t('keychain.helloWaiting')
+                                : t('keychain.helloAdd')}
                             icon={<FingerPrintIcon size={18} strokeWidth={1.75} />}
                         />
                     )}
@@ -321,7 +323,7 @@ function KeychainPanel({
                         onClick={() => handleNewKey('generate')}
                         icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
                     >
-                        New Key
+                        {t('keychain.newKey')}
                     </Button>
                 </div>
             </div>
@@ -334,10 +336,10 @@ function KeychainPanel({
                         icon={searching
                             ? <SearchRemoveIcon size={28} strokeWidth={1.5} />
                             : <Key01Icon size={28} strokeWidth={1.5} />}
-                        title={searching ? 'No matches' : 'No keys yet'}
+                        title={searching ? t('common.noMatchesTitle') : t('keychain.empty')}
                         note={searching
                             ? `“${query.trim()}”`
-                            : 'Generate or import one to get started.'}
+                            : t('keychain.emptyNote')}
                     />
                 ) : (
                     <div ref={gridRef} className={CARD_GRID}>

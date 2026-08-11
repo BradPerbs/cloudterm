@@ -15,12 +15,13 @@ import {
     sanitizeAppColors,
 } from '../../../lib/app-colors';
 import { toastOptions } from '../../../lib/toast';
+import { useT } from '../../../i18n';
 
 const THEME_OPTIONS = [
-    { id: 'light', label: 'Light', icon: 'sun' },
-    { id: 'dark', label: 'Dark', icon: 'moon' },
-    { id: 'system', label: 'System', icon: 'monitor' },
-    { id: CUSTOM_THEME, label: 'Custom', icon: 'palette' },
+    { id: 'light', icon: 'sun' },
+    { id: 'dark', icon: 'moon' },
+    { id: 'system', icon: 'monitor' },
+    { id: CUSTOM_THEME, icon: 'palette' },
 ];
 
 function ThemeIcon({ type, colors }) {
@@ -112,6 +113,7 @@ export default function AppearancePage({
     onLogoImageChange,
     onLogoSideChange,
 }) {
+    const t = useT();
     const [editorOpen, setEditorOpen] = useState(false);
     const [picking, setPicking] = useState(false);
 
@@ -131,7 +133,7 @@ export default function AppearancePage({
             if (result?.canceled) return;
 
             if (!result?.success) {
-                toast.error(result?.message || 'That image could not be read', toastOptions());
+                toast.error(result?.message || t('settings.appearance.logoUnreadable'), toastOptions());
                 return;
             }
 
@@ -139,30 +141,33 @@ export default function AppearancePage({
             // A logo that has been chosen but not shown is a setting that looks
             // broken, so picking one turns the mark back on.
             if (!showLogo) onShowLogoChange?.(true);
-            toast.success(`Logo set to ${result.name}`, toastOptions());
+            toast.success(t('settings.appearance.logoSet', { name: result.name }), toastOptions());
         } catch (error) {
-            toast.error(error.message || 'That image could not be read', toastOptions());
+            toast.error(error.message || t('settings.appearance.logoUnreadable'), toastOptions());
         } finally {
             setPicking(false);
         }
     };
 
-    const applyColors = (next, label) => {
+    const applyColors = (next, message) => {
         onAppColorsChange?.(next);
         // Setting colours is also how you choose them: leaving the app on Dark
         // after editing a palette would look like nothing had happened.
         if (!customSelected) onThemeChange?.(CUSTOM_THEME);
-        toast.success(label, toastOptions());
+        toast.success(message, toastOptions());
     };
 
     return (
-        <SettingsPage title="Appearance" description="How the app itself looks.">
+        <SettingsPage
+            title={t('settings.appearance.title')}
+            description={t('settings.appearance.desc')}
+        >
             <SettingCard>
                 <SettingRow
-                    title="Theme"
+                    title={t('settings.appearance.theme')}
                     description={customSelected
-                        ? 'The app is using your own palette. Pick one to start from below, or set every color yourself.'
-                        : 'Select your preferred interface theme'}
+                        ? t('settings.appearance.themeCustomDesc')
+                        : t('settings.appearance.themeDesc')}
                 >
                     {/* Reflows on the column's own width rather than a fixed
                         count: at the narrow end of the window four fixed
@@ -181,14 +186,18 @@ export default function AppearancePage({
                                 data-theme={option.id}
                                 onClick={() => {
                                     onThemeChange(option.id);
-                                    const label = option.id === 'system' || option.id === CUSTOM_THEME
-                                        ? option.label
-                                        : `${option.label} Mode`;
-                                    toast.success(`Theme changed to ${label}`, toastOptions());
+                                    toast.success(
+                                        t('settings.appearance.themeChanged', {
+                                            theme: t(`settings.appearance.themeToast.${option.id}`),
+                                        }),
+                                        toastOptions(),
+                                    );
                                 }}
                             >
                                 <ThemeIcon type={option.icon} colors={colors} />
-                                <span className="text-sm font-medium">{option.label}</span>
+                                <span className="text-sm font-medium">
+                                    {t(`settings.appearance.theme.${option.id}`)}
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -200,8 +209,8 @@ export default function AppearancePage({
                 {customSelected && (
                     <SettingRow
                         className={DIVIDED}
-                        title="App Colors"
-                        description="A palette to start from. Every surface in the app is drawn from it."
+                        title={t('settings.appearance.appColors')}
+                        description={t('settings.appearance.appColorsDesc')}
                     >
                         <div
                             className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(104px,1fr))]
@@ -215,7 +224,7 @@ export default function AppearancePage({
                                     data-app-palette={option.id}
                                     onClick={() => applyColors(
                                         option.colors,
-                                        `App colors changed to ${option.label}`
+                                        t('settings.appearance.appColorsChanged', { palette: option.label }),
                                     )}
                                 >
                                     <PaletteSwatch colors={option.colors} />
@@ -231,7 +240,9 @@ export default function AppearancePage({
                             {!activePreset && (
                                 <div className={`${tileClass(true)} cursor-default`} data-app-palette="custom">
                                     <PaletteSwatch colors={colors} />
-                                    <span className={labelClass(true)}>Yours</span>
+                                    <span className={labelClass(true)}>
+                                        {t('settings.appearance.yours')}
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -242,8 +253,8 @@ export default function AppearancePage({
                     <SettingRow
                         className={DIVIDED}
                         align="center"
-                        title="Custom Colors"
-                        description="Set the window, panel, control and text colors yourself"
+                        title={t('settings.appearance.customColors')}
+                        description={t('settings.appearance.customColorsDesc')}
                         control={
                             <button
                                 className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300
@@ -251,7 +262,7 @@ export default function AppearancePage({
                                     active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800"
                                 onClick={() => setEditorOpen(true)}
                             >
-                                Edit colors
+                                {t('settings.appearance.editColors')}
                             </button>
                         }
                     />
@@ -261,17 +272,21 @@ export default function AppearancePage({
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Show the logo"
-                    description="The mark in the title bar. Turning it off gives the tab strip the
-                        space instead."
+                    title={t('settings.appearance.showLogo')}
+                    description={t('settings.appearance.showLogoDesc')}
                     control={
                         <Toggle
                             checked={showLogo}
                             onChange={(next) => {
                                 onShowLogoChange?.(next);
-                                toast.success(next ? 'Logo shown' : 'Logo hidden', toastOptions());
+                                toast.success(
+                                    next
+                                        ? t('settings.appearance.logoShown')
+                                        : t('settings.appearance.logoHidden'),
+                                    toastOptions(),
+                                );
                             }}
-                            ariaLabel="Show the logo in the title bar"
+                            ariaLabel={t('settings.appearance.showLogoAria')}
                         />
                     }
                 />
@@ -279,11 +294,10 @@ export default function AppearancePage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Custom logo"
+                    title={t('settings.appearance.customLogo')}
                     description={logoImage
-                        ? 'Your own image, in place of the CloudBlast mark.'
-                        : 'Use your own image instead of the CloudBlast mark. PNG, JPG, GIF, WebP, '
-                            + 'SVG, BMP or ICO, up to 512 KB.'}
+                        ? t('settings.appearance.customLogoSet')
+                        : t('settings.appearance.customLogoDesc')}
                     control={
                         <div className="flex items-center gap-3">
                             {/* On a chequerboard, so a mark with a transparent
@@ -317,7 +331,9 @@ export default function AppearancePage({
                                 disabled={picking}
                                 onClick={chooseLogo}
                             >
-                                {picking ? 'Choosing…' : 'Choose image'}
+                                {picking
+                                    ? t('settings.appearance.choosing')
+                                    : t('settings.appearance.chooseImage')}
                             </button>
 
                             {logoImage && (
@@ -327,10 +343,10 @@ export default function AppearancePage({
                                         active:scale-95 hover:bg-gray-50 dark:hover:bg-neutral-800"
                                     onClick={() => {
                                         onLogoImageChange?.(null);
-                                        toast.success('Back to the CloudBlast mark', toastOptions());
+                                        toast.success(t('settings.appearance.logoCleared'), toastOptions());
                                     }}
                                 >
-                                    Remove
+                                    {t('common.remove')}
                                 </button>
                             )}
                         </div>
@@ -340,20 +356,24 @@ export default function AppearancePage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="Position"
-                    description="Which end of the title bar the mark sits at: beside the menu button,
-                        or over by the window buttons."
+                    title={t('settings.appearance.position')}
+                    description={t('settings.appearance.positionDesc')}
                     control={
                         <SegmentedControl
-                            ariaLabel="Logo position"
+                            ariaLabel={t('settings.appearance.positionAria')}
                             value={logoSide}
                             onChange={(side) => {
                                 onLogoSideChange?.(side);
-                                toast.success(`Logo moved ${side === 'left' ? 'left' : 'right'}`, toastOptions());
+                                toast.success(
+                                    side === 'left'
+                                        ? t('settings.appearance.logoMovedLeft')
+                                        : t('settings.appearance.logoMovedRight'),
+                                    toastOptions(),
+                                );
                             }}
                             segments={[
-                                { value: 'left', label: 'Left' },
-                                { value: 'right', label: 'Right' },
+                                { value: 'left', label: t('common.left') },
+                                { value: 'right', label: t('common.right') },
                             ]}
                         />
                     }
@@ -365,7 +385,7 @@ export default function AppearancePage({
                     colors={colors}
                     onSave={(next) => {
                         setEditorOpen(false);
-                        applyColors(next, 'App colors applied');
+                        applyColors(next, t('settings.appearance.colorsApplied'));
                     }}
                     onClose={() => setEditorOpen(false)}
                 />

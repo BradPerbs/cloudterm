@@ -11,27 +11,30 @@ import {
     AiMagicIcon,
     PulseRectangle01Icon,
 } from 'hugeicons-react';
+import { useT } from '../../i18n';
 
 /**
  * The categories, in the order they are shown. Adding a page means adding an
- * entry here and a matching component in the panel's page map. The nav and the
- * router read from the same list, so the two cannot drift apart.
+ * entry here, a matching component in the panel's page map, and a
+ * `settings.nav.<id>` string in the catalogs. The nav and the router read from
+ * the same list, so the two cannot drift apart.
  */
 export const SETTINGS_CATEGORIES = [
-    { id: 'general', label: 'General', icon: SlidersHorizontalIcon },
-    { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon },
-    { id: 'terminal', label: 'Terminal', icon: CommandLineIcon },
-    { id: 'assistant', label: 'Assistant', icon: AiMagicIcon },
-    { id: 'monitoring', label: 'Monitoring', icon: PulseRectangle01Icon },
-    { id: 'logging', label: 'Logging', icon: FileEditIcon },
-    { id: 'security', label: 'Security', icon: ShieldKeyIcon },
-    { id: 'account', label: 'Account', icon: UserCircleIcon },
-    { id: 'backup', label: 'Backup', icon: Archive01Icon },
-    { id: 'about', label: 'About', icon: InformationCircleIcon },
+    { id: 'general', icon: SlidersHorizontalIcon },
+    { id: 'appearance', icon: PaintBoardIcon },
+    { id: 'terminal', icon: CommandLineIcon },
+    { id: 'assistant', icon: AiMagicIcon },
+    { id: 'monitoring', icon: PulseRectangle01Icon },
+    { id: 'logging', icon: FileEditIcon },
+    { id: 'security', icon: ShieldKeyIcon },
+    { id: 'account', icon: UserCircleIcon },
+    { id: 'backup', icon: Archive01Icon },
+    { id: 'about', icon: InformationCircleIcon },
 ];
 
 function SettingsNav({ active, onChange }) {
     const listRef = useRef(null);
+    const t = useT();
 
     /**
      * Arrow keys walk the list and wrap, with only the active item in the tab
@@ -55,11 +58,11 @@ function SettingsNav({ active, onChange }) {
     return (
         <nav
             ref={listRef}
-            aria-label="Settings categories"
+            aria-label={t('settings.nav.aria')}
             onKeyDown={handleKeyDown}
             className="sticky top-0 shrink-0 w-40 flex flex-col gap-0.5"
         >
-            {SETTINGS_CATEGORIES.map(({ id, label, icon: Icon }) => {
+            {SETTINGS_CATEGORIES.map(({ id, icon: Icon }) => {
                 const isActive = id === active;
 
                 return (
@@ -78,7 +81,7 @@ function SettingsNav({ active, onChange }) {
                             }`}
                     >
                         <Icon size={17} strokeWidth={isActive ? 2 : 1.5} className="shrink-0" />
-                        {label}
+                        {t(`settings.nav.${id}`)}
                     </button>
                 );
             })}

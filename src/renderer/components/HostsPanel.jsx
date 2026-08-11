@@ -29,6 +29,7 @@ import EmptyFrame from './ui/EmptyFrame';
 import ConfirmDialog from './ui/ConfirmDialog';
 import Tag from './ui/Tag';
 import { toastOptions } from '../lib/toast';
+import { useT } from '../i18n';
 import { hostOs } from '../lib/os-icons';
 import { hostKind, protocolLabel } from '../lib/protocols';
 import { hostHasTags, tagCounts, toggleTag } from '../lib/tags';
@@ -1233,6 +1234,8 @@ function HostsPanel({
 
 /** Three different nothings, and only one of them is a problem to solve. */
 function EmptyState({ nothingAtAll, filtering, query, tags = [] }) {
+    const t = useT();
+
     if (filtering) {
         // What was asked, so an empty page is a readable answer rather than a
         // shrug: with both a query and a tag row live, either one could be the
@@ -1245,7 +1248,7 @@ function EmptyState({ nothingAtAll, filtering, query, tags = [] }) {
         return (
             <EmptyFrame
                 icon={<SearchRemoveIcon size={28} strokeWidth={1.5} />}
-                title="No matches"
+                title={t('common.noMatchesTitle')}
                 note={asked}
             />
         );
@@ -1255,14 +1258,19 @@ function EmptyState({ nothingAtAll, filtering, query, tags = [] }) {
     // breadcrumb above and the folder you clicked to get here. It only has to
     // say that it is empty.
     if (!nothingAtAll) {
-        return <EmptyFrame icon={<FolderOpenIcon size={28} strokeWidth={1.5} />} title="Nothing here yet" />;
+        return (
+            <EmptyFrame
+                icon={<FolderOpenIcon size={28} strokeWidth={1.5} />}
+                title={t('hosts.emptyFolder')}
+            />
+        );
     }
 
     return (
         <EmptyFrame
             icon={<CloudServerIcon size={28} strokeWidth={1.5} />}
-            title="No hosts yet"
-            note="Add a server to get started."
+            title={t('hosts.empty')}
+            note={t('hosts.emptyNote')}
         />
     );
 }

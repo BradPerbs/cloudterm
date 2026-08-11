@@ -9,6 +9,7 @@ import {
     themeToCustomColors,
 } from '../../hooks/useTerminalTheme';
 import { TERMINAL_FONT_FAMILY } from '../../hooks/useTerminalSettings';
+import { useT, translate } from '../../i18n';
 
 const BASE_FIELDS = TERMINAL_COLOR_FIELDS.filter(field => field.group === 'base');
 const ANSI_FIELDS = TERMINAL_COLOR_FIELDS.filter(field => field.group === 'ansi');
@@ -62,7 +63,7 @@ function ThemePreview({ colors }) {
                         key={field.key}
                         className="h-2 flex-1"
                         style={{ backgroundColor: colors[field.key] }}
-                        title={field.label}
+                        title={translate(field.labelKey)}
                     />
                 ))}
             </div>
@@ -75,6 +76,7 @@ function ThemePreview({ colors }) {
  * palette you don't like costs nothing, and saving is what selects it.
  */
 export default function CustomThemeDialog({ colors, onSave, onClose }) {
+    const t = useT();
     const [draft, setDraft] = useState(() => sanitizeCustomTheme(colors));
     const [preset, setPreset] = useState('');
 
@@ -92,18 +94,18 @@ export default function CustomThemeDialog({ colors, onSave, onClose }) {
 
     return (
         <Dialog
-            title="Custom Terminal Theme"
-            subtitle="Pick every color yourself, or start from a built-in theme and change what you want."
+            title={t('termColors.title')}
+            subtitle={t('termColors.subtitle')}
             width="34rem"
             onClose={onClose}
             footer={
                 <>
                     <DialogButton onClick={() => { setPreset(''); setDraft({ ...DEFAULT_CUSTOM_THEME }); }}>
-                        Reset
+                        {t('common.reset')}
                     </DialogButton>
-                    <DialogButton onClick={onClose}>Cancel</DialogButton>
+                    <DialogButton onClick={onClose}>{t('common.cancel')}</DialogButton>
                     <DialogButton variant="primary" onClick={() => onSave(draft)}>
-                        {dirty ? 'Save & Apply' : 'Apply'}
+                        {dirty ? t('common.saveAndApply') : t('common.apply')}
                     </DialogButton>
                 </>
             }
@@ -113,7 +115,7 @@ export default function CustomThemeDialog({ colors, onSave, onClose }) {
 
                 <label className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 shrink-0">
-                        Start from
+                        {t('common.startFrom')}
                     </span>
                     <select
                         value={preset}
@@ -122,7 +124,7 @@ export default function CustomThemeDialog({ colors, onSave, onClose }) {
                             dark:border-surface-control bg-white dark:bg-neutral-800 text-gray-900 dark:text-white
                             outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                     >
-                        <option value="">Nothing (keep current colors)</option>
+                        <option value="">{t('common.keepCurrentColors')}</option>
                         {TERMINAL_THEME_PRESETS.map(option => (
                             <option key={option.id} value={option.id}>{option.label}</option>
                         ))}
@@ -131,13 +133,13 @@ export default function CustomThemeDialog({ colors, onSave, onClose }) {
 
                 <div>
                     <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-3">
-                        Base
+                        {t('termColors.groupBase')}
                     </h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         {BASE_FIELDS.map(field => (
                             <ColorField
                                 key={field.key}
-                                label={field.label}
+                                label={t(field.labelKey)}
                                 value={draft[field.key]}
                                 onChange={(value) => setColor(field.key, value)}
                             />
@@ -147,13 +149,13 @@ export default function CustomThemeDialog({ colors, onSave, onClose }) {
 
                 <div className="pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-3">
-                        ANSI Colors
+                        {t('termColors.groupAnsi')}
                     </h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         {ANSI_FIELDS.map(field => (
                             <ColorField
                                 key={field.key}
-                                label={field.label}
+                                label={t(field.labelKey)}
                                 value={draft[field.key]}
                                 onChange={(value) => setColor(field.key, value)}
                             />

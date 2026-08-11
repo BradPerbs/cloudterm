@@ -11,6 +11,7 @@ import { useProxies } from '../hooks/useProxies';
 import { nameProxy, proxyLabel, proxyRoute } from '../lib/proxies';
 import { toastOptions } from '../lib/toast';
 import { CARD_GRID } from '../lib/layout';
+import { useT } from '../i18n';
 import { useFlipOrder } from '../hooks/useFlipOrder';
 
 /**
@@ -31,6 +32,7 @@ import { useFlipOrder } from '../hooks/useFlipOrder';
  * connecting if the proxy is deleted.
  */
 function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
+    const t = useT();
     const { proxies, save, remove, duplicate, test } = useProxies();
     const [editing, setEditing] = useState(null);
     const [confirming, setConfirming] = useState(null);
@@ -239,7 +241,7 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                     value={query}
                     onChange={setQuery}
                     onKeyDown={handleSearchKeyDown}
-                    ariaLabel="Search proxies"
+                    ariaLabel={t('proxies.search')}
                 />
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -248,7 +250,7 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                         onClick={() => setEditing({})}
                         icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
                     >
-                        New Proxy
+                        {t('proxies.newProxy')}
                     </Button>
                 </div>
             </div>
@@ -259,13 +261,13 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                 two for the sake of a line that is usually not there. */}
             {searching && (
                 <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">
-                    Filtered.{' '}
+                    {t('common.filtered')}{' '}
                     <button
                         type="button"
                         onClick={() => setQuery('')}
                         className="font-medium text-gray-900 dark:text-white hover:underline"
                     >
-                        Clear
+                        {t('common.clear')}
                     </button>
                 </p>
             )}
@@ -278,11 +280,10 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                         icon={searching
                             ? <SearchRemoveIcon size={28} strokeWidth={1.5} />
                             : <Route02Icon size={28} strokeWidth={1.5} />}
-                        title={searching ? 'No matches' : 'No proxies yet'}
+                        title={searching ? t('common.noMatchesTitle') : t('proxies.empty')}
                         note={searching
                             ? `“${query.trim()}”`
-                            : 'Add a SOCKS or HTTP proxy and any host can be dialled through it: '
-                                + 'terminal sessions, SFTP, port forwards and remote desktops alike.'}
+                            : t('proxies.emptyNote')}
                     />
                 ) : (
                     <div ref={gridRef} className={CARD_GRID}>

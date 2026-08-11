@@ -10,6 +10,7 @@ import { OsIcon, hostOs } from '../../lib/os-icons';
 import useMonitor from '../../hooks/useMonitor';
 import { INTERVALS, TIMEOUTS, THRESHOLDS, STATE_STYLES, stateOf, since, describeStatus } from '../../lib/monitor';
 import { toastOptions } from '../../lib/toast';
+import { useT } from '../../i18n';
 
 /**
  * Watching hosts, and being told when one stops answering.
@@ -50,6 +51,7 @@ const SEVERITY = { offline: 0, problem: 1, unknown: 2, online: 3 };
  * icon wherever it appears.
  */
 function StatusRow({ status, host }) {
+    const t = useT();
     const style = STATE_STYLES[stateOf(status)] || STATE_STYLES.unknown;
 
     return (
@@ -65,13 +67,14 @@ function StatusRow({ status, host }) {
             </span>
 
             <span className={`shrink-0 text-[11px] font-medium ${style.text}`}>
-                {style.label}
+                {t(style.labelKey)}
             </span>
         </div>
     );
 }
 
 export default function MonitoringSection() {
+    const t = useT();
     const { settings, ready, state, hosts, suspectReason, configure, checkNow } = useMonitor();
     const [checking, setChecking] = useState(false);
     const [records, setRecords] = useState(() => new Map());
@@ -106,20 +109,20 @@ export default function MonitoringSection() {
         try {
             await configure(patch);
         } catch (error) {
-            toast.error(error?.message || 'Could not save that setting', toastOptions());
+            toast.error(error?.message || t('settings.monitoring.saveFailed'), toastOptions());
         }
-    }, [configure]);
+    }, [configure, t]);
 
     const runCheck = useCallback(async () => {
         setChecking(true);
         try {
             await checkNow();
         } catch (error) {
-            toast.error(error?.message || 'Could not check the hosts', toastOptions());
+            toast.error(error?.message || t('settings.monitoring.checkFailed'), toastOptions());
         } finally {
             setChecking(false);
         }
-    }, [checkNow]);
+    }, [checkNow, t]);
 
     // Still being read. Distinct from monitoring being off, and the card would
     // otherwise flash "off" on its way to saying the opposite.
@@ -138,15 +141,13 @@ export default function MonitoringSection() {
         return (
             <SettingCard>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Monitoring could not be read from the app. Restart CloudTerm and open this page
-                    again.
+                    {t('settings.monitoring.unreadable')}
                 </p>
             </SettingCard>
         );
     }
 
     const offline = hosts.filter(entry => stateOf(entry) === 'offline').length;
-    const plural = (count) => `${count} host${count === 1 ? '' : 's'}`;
 
     // Trouble first, the collection's own order within each group. `sort` is
     // stable in every engine this runs on, so hosts that share a state keep the
@@ -159,14 +160,11 @@ export default function MonitoringSection() {
      * write, would be describing something that did not happen.
      */
     const footnote = suspectReason === 'offline'
-        ? `This machine has no network connection, so nothing is being checked and nothing
-           has been reported offline.`
+        ? t('settings.monitoring.noNetwork')
         : suspectReason === 'all-failed'
-            ? `Every host failed the last check at the same moment, which is usually this
-               machine rather than all of them. Those results were discarded and nothing
-               was reported.`
+            ? t('settings.monitoring.allFailed')
             : state?.lastSweepAt > 0
-                ? `Last checked ${since(state.lastSweepAt)}.`
+                ? t('settings.monitoring.lastChecked', { when: since(state.lastSweepAt) })
                 : '';
 
     /**
@@ -175,27 +173,25 @@ export default function MonitoringSection() {
      * with nothing running, and hosts running with nothing checked yet.
      */
     const listSummary = hosts.length === 0
-        ? 'Watching is switched on per host, in the host editor.'
+        ? t('settings.monitoring.noneWatched')
         : !settings.enabled
-            ? `${plural(hosts.length)} set up, and nothing checking them while the switch above is off.`
+            ? t('settings.monitoring.watchedButOff', { count: hosts.length })
             : offline
-                ? `${plural(hosts.length)}, ${offline} not answering.`
-                : `${plural(hosts.length)}.`;
+                ? t('settings.monitoring.watchedWithOffline', { count: hosts.length, offline })
+                : t('settings.monitoring.watched', { count: hosts.length });
 
     return (
         <>
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Watch hosts for outages"
-                    description="The master switch. Hosts are watched one at a time rather than all at
-                        once, so this on its own checks nothing: each host you want watched is switched
-                        on in its own editor, under Monitoring."
+                    title={t('settings.monitoring.master')}
+                    description={t('settings.monitoring.masterDesc')}
                     control={
                         <Toggle
                             checked={settings.enabled}
                             onChange={(next) => update({ enabled: next })}
-                            ariaLabel="Watch hosts for outages"
+                            ariaLabel={t('settings.monitoring.master')}
                         />
                     }
                 />
@@ -211,18 +207,16 @@ export default function MonitoringSection() {
                     <SettingRow
                         className={DIVIDED}
                         align="center"
-                        title="How often"
-                        description="Every watched host is checked on this interval. A check is a single
-                            connection that is closed the moment it opens, so this is cheap even on a
-                            long host list."
+                        title={t('settings.monitoring.interval')}
+                        description={t('settings.monitoring.intervalDesc')}
                         control={
                             <SegmentedControl
-                                ariaLabel="How often to check"
+                                ariaLabel={t('settings.monitoring.interval')}
                                 value={settings.intervalSeconds}
                                 onChange={(next) => update({ intervalSeconds: next })}
                                 segments={INTERVALS.map(entry => ({
                                     value: entry.value,
-                                    label: entry.label,
+                                    label: t(entry.labelKey),
                                 }))}
                             />
                         }
@@ -231,17 +225,16 @@ export default function MonitoringSection() {
                     <SettingRow
                         className={DIVIDED}
                         align="center"
-                        title="How long to wait"
-                        description="A host that has not accepted the connection within this has failed
-                            the check. Worth raising for something on the far side of a VPN."
+                        title={t('settings.monitoring.timeout')}
+                        description={t('settings.monitoring.timeoutDesc')}
                         control={
                             <SegmentedControl
-                                ariaLabel="How long to wait for an answer"
+                                ariaLabel={t('settings.monitoring.timeout')}
                                 value={settings.timeoutSeconds}
                                 onChange={(next) => update({ timeoutSeconds: next })}
                                 segments={TIMEOUTS.map(entry => ({
                                     value: entry.value,
-                                    label: entry.label,
+                                    label: t(entry.labelKey),
                                 }))}
                             />
                         }
@@ -250,18 +243,16 @@ export default function MonitoringSection() {
                     <SettingRow
                         className={DIVIDED}
                         align="center"
-                        title="Before calling it offline"
-                        description="How many checks in a row have to fail. On wifi, leave this at two or
-                            more: a single dropped packet is not a server going down, and being told that
-                            it is, once a minute, is how a notification stops being read."
+                        title={t('settings.monitoring.failures')}
+                        description={t('settings.monitoring.failuresDesc')}
                         control={
                             <SegmentedControl
-                                ariaLabel="Failed checks before a host is called offline"
+                                ariaLabel={t('settings.monitoring.failures')}
                                 value={settings.failures}
                                 onChange={(next) => update({ failures: next })}
                                 segments={THRESHOLDS.map(entry => ({
                                     value: entry.value,
-                                    label: entry.label,
+                                    label: t(entry.labelKey),
                                 }))}
                             />
                         }
@@ -272,16 +263,14 @@ export default function MonitoringSection() {
             <SettingCard>
                 <SettingRow
                     align="center"
-                    title="Notify me when a host goes offline"
-                    description="A desktop notification, once, when a host crosses from answering to not.
-                        Turn this off to keep the states on the host cards and the bell without being
-                        interrupted by them."
+                    title={t('settings.monitoring.notify')}
+                    description={t('settings.monitoring.notifyDesc')}
                     control={
                         <Toggle
                             checked={settings.notify}
                             disabled={!settings.enabled}
                             onChange={(next) => update({ notify: next })}
-                            ariaLabel="Notify me when a host goes offline"
+                            ariaLabel={t('settings.monitoring.notify')}
                         />
                     }
                 />
@@ -289,15 +278,14 @@ export default function MonitoringSection() {
                 <SettingRow
                     className={DIVIDED}
                     align="center"
-                    title="And when it comes back"
-                    description="A second notification when a host that was down starts answering again,
-                        saying how long it was gone for."
+                    title={t('settings.monitoring.notifyBack')}
+                    description={t('settings.monitoring.notifyBackDesc')}
                     control={
                         <Toggle
                             checked={settings.notifyOnRecovery}
                             disabled={!settings.enabled || !settings.notify}
                             onChange={(next) => update({ notifyOnRecovery: next })}
-                            ariaLabel="Notify me when a host comes back"
+                            ariaLabel={t('settings.monitoring.notifyBack')}
                         />
                     }
                 />
@@ -305,7 +293,7 @@ export default function MonitoringSection() {
 
             <SettingCard>
                 <SettingRow
-                    title="What is being watched"
+                    title={t('settings.monitoring.list')}
                     description={listSummary}
                     control={
                         <Button
@@ -315,7 +303,9 @@ export default function MonitoringSection() {
                             disabled={checking || !settings.enabled || hosts.length === 0}
                             icon={<Refresh01Icon size={14} strokeWidth={2} />}
                         >
-                            {checking ? 'Checking…' : 'Check now'}
+                            {checking
+                                ? t('settings.monitoring.checking')
+                                : t('settings.monitoring.checkNow')}
                         </Button>
                     }
                 >
@@ -335,10 +325,9 @@ export default function MonitoringSection() {
                                 // for you, in the place you look for the answer.
                                 <p className="px-4 py-6 text-center text-[11px] leading-relaxed
                                     text-gray-400 dark:text-neutral-500">
-                                    No hosts are being watched yet.
+                                    {t('settings.monitoring.emptyList')}
                                     <br />
-                                    Open a host from the Hosts page, find Monitoring under Optional,
-                                    and switch on “Watch this host”.
+                                    {t('settings.monitoring.emptyListHow')}
                                 </p>
                             )}
                         </div>

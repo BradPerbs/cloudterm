@@ -13,6 +13,7 @@ import { useEffect } from 'react';
  * across every hook that happens to persist something.
  */
 const SYNCED_KEYS = [
+    'language',              // i18n, which language the app's own text is in
     'terminal.appearance',   // useTerminalSettings
     'terminalTheme',         // useTerminalTheme
     'terminalCustomTheme',   // useTerminalTheme, the user's own palette

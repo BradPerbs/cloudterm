@@ -9,10 +9,11 @@ import Button, { IconButton } from '../ui/Button';
 import SegmentedControl from '../ui/SegmentedControl';
 import SearchField from '../ui/SearchField';
 import SortMenu from './SortMenu';
+import { useT } from '../../i18n';
 
 const VIEWS = [
-    { value: 'grid', title: 'Grid', icon: <GridViewIcon size={14} strokeWidth={2} /> },
-    { value: 'list', title: 'List', icon: <LeftToRightListBulletIcon size={14} strokeWidth={2} /> },
+    { value: 'grid', titleKey: 'hosts.viewGrid', icon: <GridViewIcon size={14} strokeWidth={2} /> },
+    { value: 'list', titleKey: 'hosts.viewList', icon: <LeftToRightListBulletIcon size={14} strokeWidth={2} /> },
 ];
 
 /**
@@ -31,8 +32,8 @@ const VIEWS = [
  * the mouse is exactly what the shortcut exists to avoid.
  *
  * Narrowing by tag is inside the sort menu rather than in a row of its own. The
- * two are the same question asked twice — what am I looking at, and in what
- * order — and the row it used to have was a row of thirty chips that only
+ * two are the same question asked twice (what am I looking at, and in what
+ * order), and the row it used to have was a row of thirty chips that only
  * appeared once you had already discovered the feature it was advertising.
  */
 const HostsToolbar = forwardRef(function HostsToolbar({
@@ -52,6 +53,8 @@ const HostsToolbar = forwardRef(function HostsToolbar({
     onNewFolder,
     onNewHost,
 }, searchRef) {
+    const t = useT();
+
     return (
         <div className="flex items-center gap-2 shrink-0">
             {/* The field takes the row's slack: this header has one thing in it
@@ -62,7 +65,7 @@ const HostsToolbar = forwardRef(function HostsToolbar({
                 value={query}
                 onChange={onQueryChange}
                 onKeyDown={onQueryKeyDown}
-                ariaLabel="Search hosts"
+                ariaLabel={t('hosts.search')}
             />
 
             {/* Grouped so the row's flexing is all spent on the search field:
@@ -81,10 +84,10 @@ const HostsToolbar = forwardRef(function HostsToolbar({
                 />
 
                 <SegmentedControl
-                    segments={VIEWS}
+                    segments={VIEWS.map(entry => ({ ...entry, title: t(entry.titleKey) }))}
                     value={view}
                     onChange={onViewChange}
-                    ariaLabel="Card layout"
+                    ariaLabel={t('hosts.layout')}
                 />
 
                 {/* A hairline between "how it is shown" and "what there is",
@@ -93,7 +96,7 @@ const HostsToolbar = forwardRef(function HostsToolbar({
 
                 <IconButton
                     onClick={onNewFolder}
-                    title="New folder"
+                    title={t('hosts.newFolder')}
                     icon={<FolderAddIcon size={18} strokeWidth={1.75} />}
                 />
                 <Button
@@ -101,7 +104,7 @@ const HostsToolbar = forwardRef(function HostsToolbar({
                     onClick={onNewHost}
                     icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
                 >
-                    New Host
+                    {t('hosts.newHost')}
                 </Button>
             </div>
         </div>

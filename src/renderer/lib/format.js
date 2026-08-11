@@ -1,3 +1,5 @@
+import { localeTag } from '../i18n';
+
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
 export function formatSize(bytes) {
@@ -40,7 +42,7 @@ export function formatDate(timestamp) {
 
     const age = Date.now() - timestamp;
     if (age >= 0 && age < 180 * DAY) {
-        return date.toLocaleDateString(undefined, {
+        return date.toLocaleDateString(localeTag(), {
             month: 'short',
             day: '2-digit',
             hour: '2-digit',
@@ -48,14 +50,14 @@ export function formatDate(timestamp) {
         });
     }
 
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+    return date.toLocaleDateString(localeTag(), { year: 'numeric', month: 'short', day: '2-digit' });
 }
 
 export function formatDateTime(timestamp) {
     if (!timestamp) return '-';
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString();
+    return date.toLocaleString(localeTag());
 }
 
 const RWX = ['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx'];

@@ -13,14 +13,17 @@
  * work as both would be neither.
  */
 
-/** The steps, in the order the editor lists them. */
+/**
+ * The steps, in the order the editor lists them. The words are catalog keys, so
+ * the editor can name them in whatever language the app is set to.
+ */
 export const APP_COLOR_FIELDS = [
-    { key: 'base', label: 'Window', hint: 'What the whole shell sits on' },
-    { key: 'raised', label: 'Panels', hint: 'Cards, dialogs, the sidebar' },
-    { key: 'control', label: 'Controls', hint: 'Buttons, inputs and their borders' },
-    { key: 'hover', label: 'Hover', hint: 'A control under the pointer' },
-    { key: 'active', label: 'Pressed', hint: 'A control being used, and rules' },
-    { key: 'muted', label: 'Muted text', hint: 'Secondary labels and placeholders' },
+    { key: 'base', labelKey: 'appColors.base', hintKey: 'appColors.baseHint' },
+    { key: 'raised', labelKey: 'appColors.raised', hintKey: 'appColors.raisedHint' },
+    { key: 'control', labelKey: 'appColors.control', hintKey: 'appColors.controlHint' },
+    { key: 'hover', labelKey: 'appColors.hover', hintKey: 'appColors.hoverHint' },
+    { key: 'active', labelKey: 'appColors.active', hintKey: 'appColors.activeHint' },
+    { key: 'muted', labelKey: 'appColors.muted', hintKey: 'appColors.mutedHint' },
 ];
 
 /** The variable each step is published as. Read by the Tailwind palette. */

@@ -11,20 +11,24 @@ import Checkbox from '../ui/Checkbox';
 import SettingCard from './ui/SettingCard';
 import { describeTunnel } from '../../lib/tunnels';
 import { toastOptions } from '../../lib/toast';
+import { useT } from '../../i18n';
 
 const STATUS_BADGES = {
     new: null,
-    present: { label: 'already added', tone: 'text-gray-400 dark:text-neutral-500' },
-    conflict: { label: 'differs from stored key', tone: 'text-amber-600 dark:text-amber-500' },
+    present: { labelKey: 'import.statusPresent', tone: 'text-gray-400 dark:text-neutral-500' },
+    conflict: { labelKey: 'import.statusConflict', tone: 'text-amber-600 dark:text-amber-500' },
 };
 
 export function StatusBadge({ status }) {
+    const t = useT();
     const badge = STATUS_BADGES[status];
     if (!badge) return null;
-    return <span className={`shrink-0 text-[11px] ${badge.tone}`}>{badge.label}</span>;
+    return <span className={`shrink-0 text-[11px] ${badge.tone}`}>{t(badge.labelKey)}</span>;
 }
 
 export function GroupHeader({ icon, title, count, selected, onToggleAll, children }) {
+    const t = useT();
+
     return (
         <div className="flex items-center gap-3 px-3 h-10 border-b border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base/60">
             <Checkbox
@@ -37,7 +41,7 @@ export function GroupHeader({ icon, title, count, selected, onToggleAll, childre
             <span className="text-gray-400">{icon}</span>
             <span className="text-sm font-semibold text-gray-900 dark:text-white">{title}</span>
             <span className="text-[11px] text-gray-400 dark:text-neutral-500">
-                {selected} of {count} selected
+                {t('import.selectedOf', { selected, count })}
             </span>
             <div className="flex-1" />
             {children}
@@ -47,6 +51,7 @@ export function GroupHeader({ icon, title, count, selected, onToggleAll, childre
 
 /** A line of small facts under a row: tunnels, key state, parse warnings. */
 function RowNotes({ host }) {
+    const t = useT();
     const notes = [];
 
     if (host.tunnels?.length) {
@@ -55,8 +60,8 @@ function RowNotes({ host }) {
     if (host.identityName) {
         notes.push(
             host.identityState === 'ready'
-                ? `key ${host.identityName}`
-                : `key ${host.identityName} (${host.identityState})`
+                ? t('import.keyNote', { name: host.identityName })
+                : t('import.keyNoteState', { name: host.identityName, state: host.identityState })
         );
     }
 
@@ -86,6 +91,7 @@ function RowNotes({ host }) {
  * is safe and re-scanning after an import shows exactly what it did.
  */
 export default function ImportSection({ onImported }) {
+    const t = useT();
     const [paths, setPaths] = useState(null);
     const [scan, setScan] = useState(null);
     const [scanning, setScanning] = useState(false);
@@ -110,20 +116,20 @@ export default function ImportSection({ onImported }) {
             setSelectedHosts(new Set(result.config.hosts.filter(h => h.status === 'new').map(h => h.key)));
             setSelectedKeys(new Set(result.knownHosts.entries.filter(e => e.status === 'new').map(e => e.key)));
         } catch (error) {
-            toast.error(`Could not read the SSH config: ${error.message}`, toastOptions());
+            toast.error(t('import.scanFailed', { reason: error.message }), toastOptions());
         } finally {
             setScanning(false);
         }
-    }, []);
+    }, [t]);
 
     const chooseFile = useCallback(async () => {
         const result = await window.api.dialog.open({
-            title: 'Choose an SSH config file',
+            title: t('import.chooseConfigTitle'),
             properties: ['openFile'],
         });
         if (result.canceled || !result.filePaths?.[0]) return;
         runScan({ configPath: result.filePaths[0] });
-    }, [runScan]);
+    }, [runScan, t]);
 
     const toggle = useCallback((setter, key) => {
         setter((current) => {
@@ -164,30 +170,37 @@ export default function ImportSection({ onImported }) {
             await runScan({ configPath: scan.config.path, knownHostsPath: scan.knownHosts.path });
 
             const parts = [];
-            if (result.hosts.imported) parts.push(`${result.hosts.imported} host${result.hosts.imported > 1 ? 's' : ''}`);
-            if (result.keys.imported) parts.push(`${result.keys.imported} key${result.keys.imported > 1 ? 's' : ''}`);
-            if (result.knownHosts.imported) parts.push(`${result.knownHosts.imported} host key${result.knownHosts.imported > 1 ? 's' : ''}`);
+            if (result.hosts.imported) parts.push(t('hosts.count', { count: result.hosts.imported }));
+            if (result.keys.imported) parts.push(t('keychain.count', { count: result.keys.imported }));
+            if (result.knownHosts.imported) {
+                parts.push(t('import.hostKeyCount', { count: result.knownHosts.imported }));
+            }
 
-            toast.success(parts.length ? `Imported ${parts.join(', ')}` : 'Nothing new to import', toastOptions());
+            toast.success(
+                parts.length
+                    ? t('import.imported', { what: parts.join(', ') })
+                    : t('import.nothingNew'),
+                toastOptions(),
+            );
         } catch (error) {
-            toast.error(`Import failed: ${error.message}`, toastOptions());
+            toast.error(t('import.failed', { reason: error.message }), toastOptions());
         } finally {
             setImporting(false);
         }
-    }, [scan, selectedHosts, selectedKeys, withIdentityFiles, onImported, runScan]);
+    }, [scan, selectedHosts, selectedKeys, withIdentityFiles, onImported, runScan, t]);
 
     const skipNote = useMemo(() => {
         const stats = scan?.knownHosts?.stats;
         if (!stats) return '';
 
         const bits = [];
-        if (stats.hashed) bits.push(`${stats.hashed} hashed`);
-        if (stats.patterns) bits.push(`${stats.patterns} wildcard`);
-        if (stats.markers) bits.push(`${stats.markers} certificate/revoked`);
-        if (stats.malformed) bits.push(`${stats.malformed} unreadable`);
+        if (stats.hashed) bits.push(t('import.skipHashed', { count: stats.hashed }));
+        if (stats.patterns) bits.push(t('import.skipPatterns', { count: stats.patterns }));
+        if (stats.markers) bits.push(t('import.skipMarkers', { count: stats.markers }));
+        if (stats.malformed) bits.push(t('import.skipMalformed', { count: stats.malformed }));
 
-        return bits.length ? `${bits.join(', ')} skipped` : '';
-    }, [scan]);
+        return bits.length ? t('import.skipped', { what: bits.join(', ') }) : '';
+    }, [scan, t]);
 
     return (
         <SettingCard className="flex flex-col gap-5">
@@ -195,16 +208,14 @@ export default function ImportSection({ onImported }) {
                 <div className="min-w-0">
                     <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         <Download01Icon size={18} strokeWidth={2} className="text-gray-400" />
-                        From OpenSSH
+                        {t('import.title')}
                     </h4>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Read <code className="font-mono text-xs">~/.ssh/config</code> and{' '}
-                        <code className="font-mono text-xs">~/.ssh/known_hosts</code> and bring
-                        the hosts, their port forwards and their trusted keys in here.
+                        {t('import.desc')}
                     </p>
                     {paths && !paths.hasConfig && !paths.hasKnownHosts && (
                         <p className="text-xs text-gray-400 dark:text-neutral-500 mt-2">
-                            Nothing found in {paths.sshDir}. You can still pick a file.
+                            {t('import.nothingFound', { dir: paths.sshDir })}
                         </p>
                     )}
                 </div>
@@ -214,14 +225,14 @@ export default function ImportSection({ onImported }) {
                         onClick={chooseFile}
                         className="px-3 h-9 rounded-xl border border-gray-300 dark:border-surface-control text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                     >
-                        Choose file…
+                        {t('settings.backup.chooseFile')}
                     </button>
                     <button
                         onClick={() => runScan()}
                         disabled={scanning}
                         className="px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-50"
                     >
-                        {scanning ? 'Scanning…' : 'Scan ~/.ssh'}
+                        {scanning ? t('import.scanning') : t('import.scan')}
                     </button>
                 </div>
             </div>
@@ -232,7 +243,8 @@ export default function ImportSection({ onImported }) {
                     <div className="flex flex-col gap-1 text-[11px] text-gray-500 dark:text-neutral-500 font-mono">
                         <span className="truncate">
                             {scan.config.error ? `config: ${scan.config.error}` : scan.config.path}
-                            {scan.config.stats?.files > 1 && ` (+${scan.config.stats.files - 1} included)`}
+                            {scan.config.stats?.files > 1
+                                && ` (${t('import.included', { count: scan.config.stats.files - 1 })})`}
                         </span>
                         <span className="truncate">
                             {scan.knownHosts.error
@@ -253,7 +265,7 @@ export default function ImportSection({ onImported }) {
                         <div className="border border-gray-200 dark:border-surface-control rounded-xl overflow-hidden">
                             <GroupHeader
                                 icon={<ServerStack01Icon size={15} strokeWidth={2} />}
-                                title="Hosts"
+                                title={t('nav.hosts')}
                                 count={hosts.length}
                                 selected={selectedHosts.size}
                                 onToggleAll={toggleAllHosts}
@@ -291,7 +303,7 @@ export default function ImportSection({ onImported }) {
                         <div className="border border-gray-200 dark:border-surface-control rounded-xl overflow-hidden">
                             <GroupHeader
                                 icon={<ShieldKeyIcon size={15} strokeWidth={2} />}
-                                title="Trusted host keys"
+                                title={t('import.trustedKeys')}
                                 count={entries.length}
                                 selected={selectedKeys.size}
                                 onToggleAll={toggleAllKeys}
@@ -325,7 +337,7 @@ export default function ImportSection({ onImported }) {
 
                     {hosts.length === 0 && entries.length === 0 && (
                         <p className="text-sm text-gray-400 dark:text-neutral-500 py-6 text-center">
-                            Nothing to import from these files.
+                            {t('import.nothingToImport')}
                         </p>
                     )}
 
@@ -336,8 +348,8 @@ export default function ImportSection({ onImported }) {
                             variant="card"
                             checked={withIdentityFiles}
                             onChange={(event) => setWithIdentityFiles(event.target.checked)}
-                            label="Copy the private keys these hosts reference"
-                            description="Each IdentityFile is read into the keychain and encrypted with the OS keystore. Without this, imported hosts are set to use your SSH agent instead."
+                            label={t('import.copyKeys')}
+                            description={t('import.copyKeysDesc')}
                         />
                     )}
 
@@ -346,12 +358,17 @@ export default function ImportSection({ onImported }) {
                             {report && (
                                 <p className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
                                     <CheckmarkCircle02Icon size={14} strokeWidth={2} className="shrink-0" />
-                                    Imported {report.hosts.imported} host(s), {report.keys.imported} key(s),{' '}
-                                    {report.knownHosts.imported} host key(s).
+                                    {t('import.report', {
+                                        hosts: report.hosts.imported,
+                                        keys: report.keys.imported,
+                                        hostKeys: report.knownHosts.imported,
+                                    })}
                                     {report.hosts.skipped + report.knownHosts.skipped > 0
-                                        && ` ${report.hosts.skipped + report.knownHosts.skipped} already present.`}
+                                        && ` ${t('import.reportSkipped', {
+                                            count: report.hosts.skipped + report.knownHosts.skipped,
+                                        })}`}
                                     {report.hosts.relayed > 0
-                                        && ` ${report.hosts.relayed} set to connect through a jump host.`}
+                                        && ` ${t('import.reportRelayed', { count: report.hosts.relayed })}`}
                                 </p>
                             )}
                         </div>
@@ -360,7 +377,11 @@ export default function ImportSection({ onImported }) {
                             disabled={total === 0 || importing}
                             className="shrink-0 px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            {importing ? 'Importing…' : total > 0 ? `Import ${total} selected` : 'Nothing selected'}
+                            {importing
+                                ? t('import.importing')
+                                : total > 0
+                                    ? t('import.importSelected', { count: total })
+                                    : t('import.nothingSelected')}
                         </button>
                     </div>
                 </>

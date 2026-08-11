@@ -27,6 +27,7 @@ import EmptyFrame from './ui/EmptyFrame';
 import Button, { IconButton } from './ui/Button';
 import { FIELD_CLASS } from './ui/Field';
 import { useActivity } from '../hooks/useActivity';
+import { useT } from '../i18n';
 import {
     CATEGORY_LABELS,
     describeChange,
@@ -53,11 +54,11 @@ import { toastOptions } from '../lib/toast';
  */
 
 const FILTERS = [
-    { id: '', label: 'All' },
-    { id: 'connection', label: CATEGORY_LABELS.connection },
-    { id: 'data', label: CATEGORY_LABELS.data },
-    { id: 'files', label: CATEGORY_LABELS.files },
-    { id: 'security', label: CATEGORY_LABELS.security },
+    { id: '', labelKey: 'logs.filterAll' },
+    { id: 'connection', labelKey: CATEGORY_LABELS.connection },
+    { id: 'data', labelKey: CATEGORY_LABELS.data },
+    { id: 'files', labelKey: CATEGORY_LABELS.files },
+    { id: 'security', labelKey: CATEGORY_LABELS.security },
 ];
 
 /** One glyph per kind of thing that happened, so the list scans vertically. */
@@ -236,6 +237,7 @@ function LogRow({ entry, currentActor }) {
 }
 
 function LogsPanel({ isActive = true, reachedForPage = 0 }) {
+    const t = useT();
     const [category, setCategory] = useState('');
     const [failuresOnly, setFailuresOnly] = useState(false);
     const [search, setSearch] = useState('');
@@ -284,7 +286,7 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
     return (
         <div className="flex flex-col gap-6 h-full" id="logs-panel">
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Logs</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('nav.logs')}</h2>
 
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="relative">
@@ -296,21 +298,21 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                         <input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Filter"
+                            placeholder={t('common.filter')}
                             spellCheck={false}
-                            aria-label="Filter the activity log"
+                            aria-label={t('logs.filterAria')}
                             className={`${FIELD_CLASS} w-44 h-9 pl-9 pr-3 rounded-xl`}
                         />
                     </div>
 
                     <IconButton
                         icon={<RefreshIcon size={15} strokeWidth={2} />}
-                        title="Refresh"
+                        title={t('logs.refresh')}
                         onClick={refresh}
                     />
                     <IconButton
                         icon={<Download04Icon size={15} strokeWidth={2} />}
-                        title="Export as JSON"
+                        title={t('logs.export')}
                         onClick={handleExport}
                     />
                     <Button
@@ -319,19 +321,17 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                         onClick={handleClear}
                         disabled={!counts.all}
                     >
-                        Clear
+                        {t('common.clear')}
                     </Button>
                 </div>
             </div>
 
             <p className={`-mt-3 max-w-3xl text-sm ${MUTED}`}>
-                Every connection made and every record changed on this machine, newest first.
-                Recorded against the signed-in OS account
+                {t('logs.blurbStart')}
                 {counts.actor?.user
                     ? <span className="font-medium text-gray-800 dark:text-gray-200">{` ${counts.actor.user}`}</span>
                     : null}
-                , and tagged on the row only when it was somebody else.
-                Passwords and key material are never recorded.
+                {t('logs.blurbEnd')}
             </p>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -349,7 +349,7 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                                       + 'hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-surface-hover'
                             }`}
                         >
-                            {filter.label}
+                            {t(filter.labelKey)}
                             {count > 0 && (
                                 <span className={`ml-1.5 tabular-nums ${active ? 'opacity-60' : 'opacity-50'}`}>
                                     {count}
@@ -371,7 +371,7 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                     }`}
                 >
                     <AlertCircleIcon size={13} strokeWidth={2} />
-                    Problems only
+                    {t('logs.problemsOnly')}
                     {(counts.failures || 0) + (counts.warnings || 0) > 0 && (
                         <span className="tabular-nums opacity-60">
                             {(counts.failures || 0) + (counts.warnings || 0)}
@@ -381,19 +381,19 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
             </div>
 
             {loading && entries.length === 0 ? (
-                <EmptyFrame title="Reading the log…" />
+                <EmptyFrame title={t('logs.reading')} />
             ) : entries.length === 0 ? (
                 counts.all ? (
                     <EmptyFrame
                         icon={<SearchRemoveIcon size={28} strokeWidth={1.5} />}
-                        title="Nothing matches those filters"
-                        note="Try another category, or clear the filter box."
+                        title={t('logs.noMatches')}
+                        note={t('logs.noMatchesNote')}
                     />
                 ) : (
                     <EmptyFrame
                         icon={<TimelineIcon size={28} strokeWidth={1.5} />}
-                        title="Nothing recorded yet"
-                        note="Connections and changes appear here as you make them."
+                        title={t('logs.empty')}
+                        note={t('logs.emptyNote')}
                     />
                 )
             ) : (
