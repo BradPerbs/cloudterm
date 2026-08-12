@@ -1,0 +1,29 @@
+# Run the same unit suite developers run locally on every PR and on main.
+# Packaging stays in release.yml; these tests are plain Node and do not need
+# Electron or a matrix of OS runners.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test

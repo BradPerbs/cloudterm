@@ -493,6 +493,52 @@ async function run() {
         assert.ok(text.includes('rdpPassword'), 'the change itself should still be logged');
     });
 
+    check('activity diffs mark rdpPassword as a secret with empty from/to', () => {
+        const activity = require(path.join(ROOT, 'activity.js'));
+        const changes = activity.diff(
+            { rdpPassword: 'cipher-a', name: 'win' },
+            { rdpPassword: 'cipher-b', name: 'win' }
+        );
+        const secret = changes.find(entry => entry.field === 'rdpPassword');
+        assert.ok(secret, 'rdpPassword must appear as a change');
+        assert.strictEqual(secret.secret, true);
+        assert.strictEqual(secret.from, '');
+        assert.strictEqual(secret.to, '');
+    });
+
+    check('RdpView wipes the password on every post-open path', () => {
+        const view = fs.readFileSync(
+            path.join(__dirname, '..', 'src', 'renderer', 'components', 'RdpView.jsx'), 'utf8'
+        );
+        // WASM must load before open so the secret is not held through compile.
+        const loadAt = view.indexOf('await loadIronRdp()');
+        const openAt = view.indexOf('await open(host?.id)');
+        assert.ok(loadAt >= 0 && openAt >= 0 && loadAt < openAt, 'IronRDP loads before open');
+        // A finally that clears result.password covers success, missing canvas,
+        // cancel, and connect errors alike.
+        assert.ok(
+            /finally\s*\{[\s\S]*?result\.password\s*=\s*''/.test(view),
+            'post-open finally must clear result.password'
+        );
+        // Cancel after a successful open still drops the credential.
+        assert.ok(
+            view.includes("if (result) result.password = ''"),
+            'cancelled open must wipe the password'
+        );
+    });
+
+    check('session snapshots never carry the password', () => {
+        const source = fs.readFileSync(path.join(ROOT, 'rdp.js'), 'utf8');
+        // snapshot() builds the live view the renderer polls; a password field
+        // here would re-expose CredSSP material after the one-shot open.
+        const snapshot = source.match(/function snapshot\([\s\S]*?\n\}/);
+        assert.ok(snapshot, 'snapshot helper must exist');
+        assert.strictEqual(
+            /\bpassword\b/.test(snapshot[0]), false,
+            'snapshot must not mention password'
+        );
+    });
+
     console.log(`\n${passed} checks passed`);
 }
 

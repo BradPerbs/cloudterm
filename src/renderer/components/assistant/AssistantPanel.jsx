@@ -4,6 +4,7 @@ import {
     PlusSignIcon,
     ArrowUp01Icon,
     StopCircleIcon,
+    Alert02Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
@@ -17,6 +18,7 @@ import ScopeMenu from './ScopeMenu';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
+import Dialog, { DialogButton } from '../ui/Dialog';
 import {
     GLOBAL,
     describe,
@@ -478,7 +480,8 @@ function AssistantConversation({
                             </h2>
                             <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-500">
                                 It reads this terminal, runs commands on their own channel, and can work
-                                across every host you have saved.
+                                across every host you have saved. Approvals default to ask-before-changes;
+                                switch modes from the composer chip or Settings.
                             </p>
                         </div>
 
@@ -687,12 +690,32 @@ function AssistantConversation({
                     </div>
                 </div>
             </div>
+
+            {settings && !settings.acknowledgedApprovalWarning && (
+                <Dialog
+                    title="How approvals work"
+                    subtitle="The assistant can read live terminals and run commands on your hosts. By default it asks before anything that changes a system. Ask every time stops on reads too. Never ask runs tools without prompts (blocked commands are still refused)."
+                    onClose={() => changeSettings({ acknowledgedApprovalWarning: true })}
+                    icon={
+                        <span className="w-9 h-9 rounded-xl flex items-center justify-center
+                            bg-amber-50 dark:bg-amber-900/20 text-amber-500">
+                            <Alert02Icon size={20} strokeWidth={2} />
+                        </span>
+                    }
+                    footer={
+                        <DialogButton
+                            variant="primary"
+                            data-autofocus
+                            onClick={() => changeSettings({ acknowledgedApprovalWarning: true })}
+                        >
+                            Got it
+                        </DialogButton>
+                    }
+                />
+            )}
         </>
     );
 }
-
-/**
- * The column the assistant lives in, open or shut.
  *
  * One element that changes width, not two swapped for each other: a swap has
  * nothing to animate between, and the rail is the same column with everything

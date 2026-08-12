@@ -260,10 +260,29 @@ function RdpView({ paneId, host, isActive, isFocused, isLive, toolbarHost = null
         // about what the last one was told this machine had copied.
         warnedRef.current = false;
         lastSentRef.current = null;
-        setStatus('opening');
 
-        const result = await open(host?.id);
+        // Load WASM before asking main for the password, so the secret does not
+        // sit on the IPC result through a multi-megabyte compile.
+        setStatus('loading');
+        let ironrdp;
+        try {
+            ironrdp = await loadIronRdp();
+        } catch (loadError) {
+            if (!current()) return;
+            setStatus('error');
+            setError(`The RDP module failed to load: ${loadError.message}`);
+            return;
+        }
+
         if (!current()) return;
+        ironrdpRef.current = ironrdp;
+
+        setStatus('opening');
+        const result = await open(host?.id);
+        if (!current()) {
+            if (result) result.password = '';
+            return;
+        }
 
         if (!result?.success) {
             setStatus('error');
@@ -272,38 +291,22 @@ function RdpView({ paneId, host, isActive, isFocused, isLive, toolbarHost = null
         }
 
         // From here the password is in hand. Everything between this line and
-        // the builder call is deliberately short and deliberately synchronous
-        // where it can be.
-        setStatus('loading');
-
-        let ironrdp;
-        try {
-            ironrdp = await loadIronRdp();
-        } catch (loadError) {
-            if (!current()) return;
-            setStatus('error');
-            setError(`The RDP module failed to load: ${loadError.message}`);
-            close(host?.id);
-            return;
-        }
-
-        if (!current()) return;
-        ironrdpRef.current = ironrdp;
-
-        const canvas = canvasRef.current;
-        const frame = frameRef.current;
-        if (!canvas || !frame) return;
-
-        setScaling(SCALING[result.scaling] ? result.scaling : 'fit');
-        setStatus('connecting');
-
-        const ratio = window.devicePixelRatio || 1;
-        const scaleFactor = scaleFactorFor(ratio);
-        const width = clampWidth((frame.clientWidth || MIN_WIDTH) * ratio);
-        const height = clampHeight((frame.clientHeight || MIN_HEIGHT) * ratio);
-
+        // the builder call is deliberately short; the wipe in `finally` covers
+        // every exit, including cancel, missing canvas, and connect errors.
         let live;
         try {
+            const canvas = canvasRef.current;
+            const frame = frameRef.current;
+            if (!canvas || !frame) return;
+
+            setScaling(SCALING[result.scaling] ? result.scaling : 'fit');
+            setStatus('connecting');
+
+            const ratio = window.devicePixelRatio || 1;
+            const scaleFactor = scaleFactorFor(ratio);
+            const width = clampWidth((frame.clientWidth || MIN_WIDTH) * ratio);
+            const height = clampHeight((frame.clientHeight || MIN_HEIGHT) * ratio);
+
             const builder = new ironrdp.SessionBuilder();
             builder.username(result.username || '');
             builder.password(result.password || '');
@@ -409,7 +412,8 @@ function RdpView({ paneId, host, isActive, isFocused, isLive, toolbarHost = null
             return;
         } finally {
             // The builder has copied what it needs. Nothing here should keep a
-            // reference to the credential after this point.
+            // reference to the credential after this point — including early
+            // exits above that never reached connect.
             result.password = '';
         }
 
@@ -428,8 +432,8 @@ function RdpView({ paneId, host, isActive, isFocused, isLive, toolbarHost = null
         setSize(agreedSize(live));
         setStatus('connected');
 
-        detachInputRef.current = attachInput(canvas, () => sessionRef.current, ironrdp);
-        if (isActive && isFocused) canvas.focus();
+        detachInputRef.current = attachInput(canvasRef.current, () => sessionRef.current, ironrdp);
+        if (isActive && isFocused) canvasRef.current?.focus();
 
         // `run` resolves when the session ends, however it ends. Anything other
         // than a shutdown we asked for is worth showing, because the pane

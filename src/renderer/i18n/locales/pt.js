@@ -452,15 +452,20 @@ export default {
     'settings.assistant.approval': 'Perguntar antes de correr',
     'settings.assistant.approval.always': 'Todas as ações',
     'settings.assistant.approval.writes': 'Só alterações',
-    'settings.assistant.approval.never': 'Nunca',
+    'settings.assistant.approval.never': 'Nunca perguntar',
     'settings.assistant.approval.always.note': 'Todas as chamadas a ferramentas esperam por si, '
         + 'incluindo ler um ficheiro ou o terminal. É minucioso, mas uma investigação longa '
         + 'transforma-se em muitos cliques.',
     'settings.assistant.approval.writes.note': 'A leitura corre à vontade. Tudo o que altere um '
-        + 'sistema para e mostra-lhe o comando exato e o anfitrião onde correria.',
+        + 'sistema para e mostra-lhe o comando exato e o anfitrião onde correria. Esta é a '
+        + 'predefinição.',
     'settings.assistant.approval.never.note': 'Nada para à espera de aprovação, incluindo comandos '
         + 'que apagam dados ou reiniciam serviços. Só faz sentido para anfitriões que pode dar-se '
-        + 'ao luxo de estragar.',
+        + 'ao luxo de estragar. Ativar isto pede confirmação primeiro.',
+    'settings.assistant.approval.neverConfirmTitle': 'Desligar aprovações?',
+    'settings.assistant.approval.neverConfirmMessage': 'Nunca perguntar corre todas as ferramentas '
+        + 'sem parar — incluindo comandos que apagam dados ou reiniciam serviços em anfitriões '
+        + 'ativos. Os comandos bloqueados continuam a ser recusados.',
     'settings.assistant.localTools': 'Permitir ferramentas neste computador',
     'settings.assistant.localToolsDesc': 'Deixa o assistente ler e escrever ficheiros locais e '
         + 'correr comandos locais. Desligado por predefinição: o painel serve para gerir '

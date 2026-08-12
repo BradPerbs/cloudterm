@@ -7,6 +7,7 @@ import Toggle from './ui/Toggle';
 import Slider from './ui/Slider';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import { useT } from '../../i18n';
 
 /**
@@ -70,6 +71,7 @@ export default function AssistantSection() {
     const [commands, setCommands] = useState('');
     const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
+    const [confirmNever, setConfirmNever] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -98,6 +100,14 @@ export default function AssistantSection() {
         setSettings(next);
         return next;
     }, []);
+
+    const pickApproval = useCallback((value) => {
+        if (value === 'never' && settings?.approval !== 'never') {
+            setConfirmNever(true);
+            return;
+        }
+        update({ approval: value });
+    }, [settings?.approval, update]);
 
     const saveKey = useCallback(async () => {
         const result = await window.api.ai.setApiKey(keyValue);
@@ -217,7 +227,7 @@ export default function AssistantSection() {
                             label: t(`settings.assistant.approval.${value}`),
                         }))}
                         value={settings.approval}
-                        onChange={(value) => update({ approval: value })}
+                        onChange={pickApproval}
                     />
                 </SettingRow>
 
@@ -444,6 +454,20 @@ export default function AssistantSection() {
                     </ul>
                 </SettingRow>
             </SettingCard>
+
+            {confirmNever && (
+                <ConfirmDialog
+                    title={t('settings.assistant.approval.neverConfirmTitle')}
+                    message={t('settings.assistant.approval.neverConfirmMessage')}
+                    confirmLabel={t('settings.assistant.approval.never')}
+                    variant="danger"
+                    onConfirm={() => {
+                        setConfirmNever(false);
+                        update({ approval: 'never' });
+                    }}
+                    onCancel={() => setConfirmNever(false)}
+                />
+            )}
         </>
     );
 }

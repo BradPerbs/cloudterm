@@ -280,7 +280,9 @@ function clear() {
  * Change detection
  * ------------------------------------------------------------------ */
 
-const SECRET_FIELDS = new Set(['password', 'privateKey', 'passphrase', 'vncPassword']);
+const SECRET_FIELDS = new Set([
+    'password', 'privateKey', 'passphrase', 'vncPassword', 'rdpPassword', 'bmcPassword',
+]);
 
 /**
  * Bookkeeping the app writes on its own. `lastConnectedAt` alone is written on
@@ -290,6 +292,7 @@ const SECRET_FIELDS = new Set(['password', 'privateKey', 'passphrase', 'vncPassw
 const NOISE_FIELDS = new Set([
     'id', 'lastConnectedAt', 'os', 'distro',
     'hasPassword', 'hasPrivateKey', 'hasPassphrase', 'hasVncPassword',
+    'hasRdpPassword', 'hasBmcPassword',
 ]);
 
 /** How many of a list of words are worth naming before it becomes a paragraph. */

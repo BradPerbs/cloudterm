@@ -77,7 +77,8 @@
 }
 
 .xterm .composition-view {
-    /* TODO: Composition position got messed up somewhere */
+    /* TODO: Composition position got messed up somewhere (upstream xterm).
+       CloudTerm quarantine / fix plan: docs/ime-composition.md, GitHub #7. */
     background: #000;
     color: #FFF;
     display: none;

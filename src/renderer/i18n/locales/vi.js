@@ -438,15 +438,20 @@ export default {
     'settings.assistant.approval': 'Hỏi trước khi chạy',
     'settings.assistant.approval.always': 'Mọi thao tác',
     'settings.assistant.approval.writes': 'Chỉ khi thay đổi',
-    'settings.assistant.approval.never': 'Không bao giờ',
+    'settings.assistant.approval.never': 'Không bao giờ hỏi',
     'settings.assistant.approval.always.note': 'Mọi lần gọi công cụ đều chờ bạn, kể cả khi chỉ đọc '
         + 'một tệp hay đọc terminal. Rất chắc chắn, nhưng một cuộc điều tra dài sẽ thành rất nhiều '
         + 'lần bấm.',
     'settings.assistant.approval.writes.note': 'Thao tác đọc chạy tự do. Bất cứ thứ gì thay đổi hệ '
-        + 'thống đều dừng lại và cho bạn xem đúng lệnh đó cùng máy chủ nó sẽ chạy trên.',
+        + 'thống đều dừng lại và cho bạn xem đúng lệnh đó cùng máy chủ nó sẽ chạy trên. Đây là '
+        + 'mặc định.',
     'settings.assistant.approval.never.note': 'Không có gì dừng lại chờ phê duyệt, kể cả các lệnh '
         + 'xoá dữ liệu hay khởi động lại dịch vụ. Chỉ nên dùng với máy chủ mà bạn chấp nhận được '
-        + 'việc nó hỏng.',
+        + 'việc nó hỏng. Bật chế độ này sẽ hỏi xác nhận trước.',
+    'settings.assistant.approval.neverConfirmTitle': 'Tắt phê duyệt?',
+    'settings.assistant.approval.neverConfirmMessage': 'Không bao giờ hỏi sẽ chạy mọi công cụ mà '
+        + 'không dừng — kể cả lệnh xoá dữ liệu hoặc khởi động lại dịch vụ trên máy đang dùng. Lệnh '
+        + 'trong danh sách chặn vẫn bị từ chối.',
     'settings.assistant.localTools': 'Cho phép dùng công cụ trên máy này',
     'settings.assistant.localToolsDesc': 'Cho phép trợ lý đọc ghi tệp cục bộ và chạy lệnh cục bộ. '
         + 'Mặc định tắt: bảng này dùng để quản lý máy chủ, còn máy của chính bạn là một phạm vi '

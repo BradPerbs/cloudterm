@@ -414,13 +414,16 @@ export default {
     'settings.assistant.approval': '运行前询问',
     'settings.assistant.approval.always': '每一步操作',
     'settings.assistant.approval.writes': '仅更改类操作',
-    'settings.assistant.approval.never': '从不',
+    'settings.assistant.approval.never': '从不询问',
     'settings.assistant.approval.always.note': '每一次工具调用都会等你确认，包括读取文件或终端。'
         + '这样很稳妥，但一次长时间的排查会变成大量点击。',
     'settings.assistant.approval.writes.note': '读取操作自由进行。任何会改变系统的操作都会停下来，'
-        + '并向你展示确切的命令以及将要运行它的主机。',
+        + '并向你展示确切的命令以及将要运行它的主机。这是默认设置。',
     'settings.assistant.approval.never.note': '任何操作都不会停下来等待批准，包括删除数据或重启服务的命令。'
-        + '只有在你能承受把主机弄坏时才适合使用。',
+        + '只有在你能承受把主机弄坏时才适合使用。开启前会先要求确认。',
+    'settings.assistant.approval.neverConfirmTitle': '关闭批准确认？',
+    'settings.assistant.approval.neverConfirmMessage': '“从不询问”会让每个工具直接运行而不停下来——'
+        + '包括在活动主机上删除数据或重启服务的命令。拦截列表中的命令仍会被拒绝。',
     'settings.assistant.localTools': '允许在这台电脑上使用工具',
     'settings.assistant.localToolsDesc': '允许助手读写本地文件并运行本地命令。默认关闭：'
         + '这个面板是用来管理服务器的，而你自己的机器是比这大得多的一片范围。',

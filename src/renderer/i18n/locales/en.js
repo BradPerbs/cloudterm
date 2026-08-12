@@ -492,13 +492,18 @@ export default {
     'settings.assistant.approval': 'Ask before running',
     'settings.assistant.approval.always': 'Every action',
     'settings.assistant.approval.writes': 'Changes only',
-    'settings.assistant.approval.never': 'Never',
+    'settings.assistant.approval.never': 'Never ask',
     'settings.assistant.approval.always.note': 'Every tool call waits for you, including reading a '
         + 'file or the terminal. Thorough, but a long investigation becomes a lot of clicking.',
     'settings.assistant.approval.writes.note': 'Reading runs freely. Anything that changes a system '
-        + 'stops and shows you the exact command and the host it would run on.',
+        + 'stops and shows you the exact command and the host it would run on. This is the default.',
     'settings.assistant.approval.never.note': 'Nothing stops for approval, including commands that '
-        + 'delete data or restart services. Only sensible for hosts you can afford to break.',
+        + 'delete data or restart services. Only sensible for hosts you can afford to break. '
+        + 'Turning this on asks for confirmation first.',
+    'settings.assistant.approval.neverConfirmTitle': 'Turn off approvals?',
+    'settings.assistant.approval.neverConfirmMessage': 'Never ask runs every tool without stopping — '
+        + 'including commands that delete data or restart services on live hosts. Blocked commands '
+        + 'are still refused.',
     'settings.assistant.localTools': 'Allow tools on this computer',
     'settings.assistant.localToolsDesc': 'Lets the assistant read and write local files and run '
         + 'local commands. Off by default: the panel is for managing servers, and your own machine '
