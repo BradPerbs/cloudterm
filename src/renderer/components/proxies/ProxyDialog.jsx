@@ -12,6 +12,7 @@ import Checkbox from '../ui/Checkbox';
 import Disclosure from '../ui/Disclosure';
 import StoredSecretHint from '../ui/StoredSecretHint';
 import Field, { FIELD_CLASS } from '../ui/Field';
+import Select from '../ui/Select';
 import {
     DEFAULT_PORTS,
     DEFAULT_TIMEOUT,
@@ -367,18 +368,18 @@ function ProxyDialog({ proxy, proxies = [], dismiss, onClose, onSave, onTest }) 
                                 ? 'Dialled first; this proxy is then reached through it. Each one only ever knows about the next, so the far end sees the last proxy in the route.'
                                 : 'For a proxy that is not reachable from this machine directly, name the proxy that can see it.'}
                         >
-                            <select
+                            <Select
                                 value={formData.viaProxyId}
-                                onChange={(e) => handleChange('viaProxyId', e.target.value)}
+                                onChange={(next) => handleChange('viaProxyId', next)}
                                 className={FIELD_CLASS}
-                            >
-                                <option value="">Dial it from this machine</option>
-                                {chainOptions.map(candidate => (
-                                    <option key={candidate.id} value={candidate.id}>
-                                        {nameProxy(candidate)}
-                                    </option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'Dial it from this machine' },
+                                    ...chainOptions.map(candidate => ({
+                                        value: candidate.id,
+                                        label: nameProxy(candidate),
+                                    })),
+                                ]}
+                            />
                             {/* Only once there is something the picker did not
                                 already say: one hop is what was just chosen, two
                                 came from that hop's own record. */}

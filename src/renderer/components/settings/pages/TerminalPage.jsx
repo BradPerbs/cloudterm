@@ -6,6 +6,7 @@ import SettingRow, { DIVIDED } from '../ui/SettingRow';
 import Slider from '../ui/Slider';
 import Toggle from '../ui/Toggle';
 import SegmentedControl from '../../ui/SegmentedControl';
+import Select from '../../ui/Select';
 import CustomThemeDialog from '../CustomThemeDialog';
 import {
     CUSTOM_THEME_ID,
@@ -148,7 +149,7 @@ export default function TerminalPage({
                             </div>
                         </div>
 
-                        <select
+                        <Select
                             id="terminal-font-family"
                             aria-label={t('settings.terminal.fontAria')}
                             className="w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutral-800
@@ -156,18 +157,16 @@ export default function TerminalPage({
                                 text-gray-900 dark:text-gray-100 outline-none
                                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25"
                             value={terminalSettings.fontFamily}
-                            onChange={(event) => set({ fontFamily: event.target.value })}
-                        >
-                            {terminalFonts.map(font => (
-                                <option key={font.id} value={font.id}>
-                                    {font.label}
-                                    {font.bundled ? ` (${t('settings.terminal.fontBundled')})` : ''}
-                                    {font.available === false
+                            onChange={(fontFamily) => set({ fontFamily })}
+                            options={terminalFonts.map(font => ({
+                                value: font.id,
+                                label: font.label
+                                    + (font.bundled ? ` (${t('settings.terminal.fontBundled')})` : '')
+                                    + (font.available === false
                                         ? ` (${t('settings.terminal.fontNotInstalled')})`
-                                        : ''}
-                                </option>
-                            ))}
-                        </select>
+                                        : ''),
+                            }))}
+                        />
                     </div>
                 </SettingRow>
 

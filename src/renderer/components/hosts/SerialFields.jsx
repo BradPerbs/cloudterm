@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { Alert02Icon, Loading03Icon, Refresh01Icon, UsbConnected01Icon } from 'hugeicons-react';
 import Checkbox from '../ui/Checkbox';
 import Field, { FIELD_CLASS } from '../ui/Field';
+import Select from '../ui/Select';
 import { useT } from '../../i18n';
 import {
     BAUD_RATES,
@@ -60,22 +61,24 @@ function SerialFields({ serial, onChange }) {
                 hint={missing ? undefined : 'The port the console cable is on.'}
             >
                 <div className="flex gap-2">
-                    <select
+                    <Select
                         value={config.path}
-                        onChange={(event) => set('path', event.target.value)}
+                        onChange={(next) => set('path', next)}
+                        containerClassName="flex-1"
                         className={FIELD_CLASS}
                         required
-                    >
-                        <option value="">{t('serial.selectPort')}</option>
-                        {missing && (
-                            <option value={config.path}>{config.path} (not connected)</option>
-                        )}
-                        {ports.map(port => (
-                            <option key={port.path} value={port.path}>
-                                {port.label ? `${port.path} (${port.label})` : port.path}
-                            </option>
-                        ))}
-                    </select>
+                        options={[
+                            { value: '', label: t('serial.selectPort') },
+                            ...(missing ? [{
+                                value: config.path,
+                                label: `${config.path} (not connected)`,
+                            }] : []),
+                            ...ports.map(port => ({
+                                value: port.path,
+                                label: port.label ? `${port.path} (${port.label})` : port.path,
+                            })),
+                        ]}
+                    />
                     <button
                         type="button"
                         onClick={refresh}
@@ -110,67 +113,68 @@ function SerialFields({ serial, onChange }) {
 
             <div className="grid grid-cols-2 gap-4">
                 <Field label={t('serial.baudRate')}>
-                    <select
+                    <Select
                         value={config.baudRate}
-                        onChange={(event) => set('baudRate', Number(event.target.value))}
+                        onChange={(next) => set('baudRate', Number(next))}
                         className={`${FIELD_CLASS} font-mono`}
-                    >
-                        {/* A rate the record already carries but the list does
-                            not (an adapter running at 31250) would otherwise
-                            be silently rewritten to whatever sits first. */}
-                        {!BAUD_RATES.includes(config.baudRate) && (
-                            <option value={config.baudRate}>{config.baudRate}</option>
-                        )}
-                        {BAUD_RATES.map(rate => (
-                            <option key={rate} value={rate}>{rate}</option>
-                        ))}
-                    </select>
+                        menuClassName="font-mono"
+                        options={[
+                            /* A rate the record already carries but the list
+                               does not (an adapter running at 31250) would
+                               otherwise be silently rewritten to whatever sits
+                               first. */
+                            ...(BAUD_RATES.includes(config.baudRate)
+                                ? []
+                                : [{ value: config.baudRate, label: String(config.baudRate) }]),
+                            ...BAUD_RATES.map(rate => ({ value: rate, label: String(rate) })),
+                        ]}
+                    />
                 </Field>
 
                 <Field label={t('serial.flowControl')}>
-                    <select
+                    <Select
                         value={config.flowControl}
-                        onChange={(event) => set('flowControl', event.target.value)}
+                        onChange={(next) => set('flowControl', next)}
                         className={FIELD_CLASS}
-                    >
-                        {FLOW_CONTROLS.map(entry => (
-                            <option key={entry.id} value={entry.id}>{t(entry.labelKey)}</option>
-                        ))}
-                    </select>
+                        options={FLOW_CONTROLS.map(entry => ({
+                            value: entry.id,
+                            label: t(entry.labelKey),
+                        }))}
+                    />
                 </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
                 <Field label={t('serial.dataBits')}>
-                    <select
+                    <Select
                         value={config.dataBits}
-                        onChange={(event) => set('dataBits', Number(event.target.value))}
+                        onChange={(next) => set('dataBits', Number(next))}
                         className={`${FIELD_CLASS} font-mono`}
-                    >
-                        {DATA_BITS.map(bits => <option key={bits} value={bits}>{bits}</option>)}
-                    </select>
+                        menuClassName="font-mono"
+                        options={DATA_BITS.map(bits => ({ value: bits, label: String(bits) }))}
+                    />
                 </Field>
 
                 <Field label={t('serial.parity')}>
-                    <select
+                    <Select
                         value={config.parity}
-                        onChange={(event) => set('parity', event.target.value)}
+                        onChange={(next) => set('parity', next)}
                         className={FIELD_CLASS}
-                    >
-                        {PARITIES.map(entry => (
-                            <option key={entry.id} value={entry.id}>{t(entry.labelKey)}</option>
-                        ))}
-                    </select>
+                        options={PARITIES.map(entry => ({
+                            value: entry.id,
+                            label: t(entry.labelKey),
+                        }))}
+                    />
                 </Field>
 
                 <Field label={t('serial.stopBits')}>
-                    <select
+                    <Select
                         value={config.stopBits}
-                        onChange={(event) => set('stopBits', Number(event.target.value))}
+                        onChange={(next) => set('stopBits', Number(next))}
                         className={`${FIELD_CLASS} font-mono`}
-                    >
-                        {STOP_BITS.map(bits => <option key={bits} value={bits}>{bits}</option>)}
-                    </select>
+                        menuClassName="font-mono"
+                        options={STOP_BITS.map(bits => ({ value: bits, label: String(bits) }))}
+                    />
                 </Field>
             </div>
 
