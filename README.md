@@ -300,6 +300,12 @@ winget install CloudBlast.CloudTerm
 
 Or browse [all GitHub releases](https://github.com/BradPerbs/cloudterm/releases).
 
+> **Windows SmartScreen / VirusTotal:** Installers are **unsigned** while a
+> code-signing certificate is being procured. This can trigger SmartScreen or
+> heuristic scanner warnings (often 1–3 vendors on VirusTotal). See
+> [docs/security.md](docs/security.md) for details and what to expect after
+> signing is enabled.
+
 ### Build from source
 
 ```bash
@@ -348,6 +354,7 @@ The same suite runs on every pull request via GitHub Actions (`.github/workflows
 | [docs/rdp-credentials.md](docs/rdp-credentials.md) | RDP password handling (CredSSP exception) |
 | [docs/ime-composition.md](docs/ime-composition.md) | CJK IME positioning (known limitation) |
 | [docs/winget.md](docs/winget.md) | Publishing to Windows Package Manager |
+| [docs/security.md](docs/security.md) | Signing status, SmartScreen/VirusTotal, npm audit |
 
 Full index: [docs/README.md](docs/README.md).
 

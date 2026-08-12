@@ -128,9 +128,15 @@ jobs:
       - name: Package
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
-          # There is no signing certificate on a CI runner. Without this,
-          # electron-builder hunts for one and fails the macOS build.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # When WIN_CSC_LINK / CSC_LINK secrets are set, electron-builder signs
+          # the Windows installer and portable exe (or the macOS bundle). Without
+          # them, builds stay unsigned — see docs/security.md.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Only hunt the macOS keychain when a Developer ID cert is supplied.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' && 'true' || 'false' }}
 
       # The agent SDK carries the Claude CLI as an optional platform package,
       # a 253MB binary that the app deliberately does not ship: the provider

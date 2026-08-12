@@ -98,7 +98,7 @@ Main (Electron): store, vault, transport (ssh|telnet|serial),
 |---------|--------|
 | GitHub Releases | NSIS + portable (Win), DMG/zip (macOS), AppImage (Linux) |
 | winget | `CloudBlast.CloudTerm` — see `docs/winget.md` |
-| Signing | **Not code-signed today** — SmartScreen / enterprise friction |
+| Signing | **Unsigned** — Windows Authenticode cert **pending procurement**; CI ready when secrets are set — see [docs/security.md](docs/security.md) |
 
 ---
 
@@ -121,7 +121,7 @@ Main (Electron): store, vault, transport (ssh|telnet|serial),
 | ID | Requirement | Current gap |
 |----|-------------|-------------|
 | N1 | PR builds run automated tests | **Shipped (M1):** `.github/workflows/ci.yml` on PRs and `main` |
-| N2 | Installers code-signed on Windows (and ideally macOS) | Unsigned |
+| N2 | Installers code-signed on Windows (and ideally macOS) | **Pending** — cert procurement in progress; release CI wired for signing |
 | N3 | Core paths (SSH connect, SFTP, lock/unlock) covered by automated smoke | Unit tests only; no E2E |
 | N4 | Cold start acceptable for SSH-only users | RDP/VNC/WASM always in bundle weight |
 | N5 | CJK IME composition usable in terminal | Known limitation — documented in `docs/ime-composition.md`; fix tracked in #7 |
@@ -161,7 +161,7 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **P1** | Code-sign Windows (and ideally macOS) builds | SmartScreen, winget, enterprise adoption |
+| **P1** | Code-sign Windows (and ideally macOS) builds | SmartScreen, winget, enterprise adoption | **In progress** — Windows cert pending; `release.yml` ready |
 | **P1** | Split oversized modules (`ipc.js`, `store.js`, `App.jsx`, `TerminalView.jsx`) by domain | Safer reviews; fewer regressions |
 | **P1** | E2E smoke: mock SSH → SFTP → lock/unlock | Catch IPC/UI wiring unit tests miss |
 | **P1** | SSH/SFTP integration tests (container or mock) | Core path under-tested vs edge protocols |
@@ -207,7 +207,7 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 | Milestone | Scope | Exit criteria |
 |-----------|--------|---------------|
 | **M1 — Trust & gates** | PR CI for tests; AI default hardening; RDP password audit; IME fix plan | **Shipped** — CI on PRs; safer AI defaults; RDP docs + tests; IME quarantined in `docs/ime-composition.md` |
-| **M2 — Distribution** | Code signing; icon quality; optional update consent | Signed Win (+ mac if feasible); reduced SmartScreen friction |
+| **M2 — Distribution** | Code signing; icon quality; optional update consent | Signed Win (+ mac if feasible); reduced SmartScreen friction — **cert pending** |
 | **M3 — Quality depth** | Module splits; E2E smoke; SSH/SFTP integration tests | Reviewable IPC surfaces; smoke green in CI |
 | **M4 — Polish** | Locale alignment; lazy-load remoting; docs for env/`userData`; a11y pass | Marketing ↔ app parity; measurable startup win |
 
@@ -216,7 +216,7 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 ## 11. Open questions
 
 1. Should cloud sync remain forever-free for non-CloudBlast users, or become tiered later?
-2. Is code signing budgeted for Windows only first, or Win+mac together?
+2. Code signing: **Windows certificate procurement in progress**; macOS Developer ID deferred until after first signed Windows release.
 3. Should “never ask” AI mode remain available, or be removed / hidden behind an advanced unlock?
 4. Telemetry: opt-in crash/usage metrics, or stay fully silent?
 5. Rename `appId` / package name in a major version, or keep `com.cloudblast.ssh` for upgrade continuity?
