@@ -4,12 +4,20 @@ All notable changes to CloudTerm are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions align
 with [GitHub Releases](https://github.com/BradPerbs/cloudterm/releases).
 
-## [Unreleased]
+## [1.3.1] - 2026-08-12
 
 ### Added
 
 - GitHub Actions CI (`.github/workflows/ci.yml`) runs `npm test` on every pull
   request and on pushes to `main`.
+- CI runs `npm audit --omit=dev` to block high-severity vulnerabilities in
+  production dependencies.
+- Optional Authenticode / macOS code signing in release builds when
+  `WIN_CSC_LINK` / `CSC_LINK` repository secrets are configured (certificate
+  **pending procurement** — builds stay unsigned until secrets are added). See
+  [docs/security.md](docs/security.md).
+- [Security documentation](docs/security.md): VirusTotal/SmartScreen, signing,
+  dependency audit, vulnerability reporting.
 - First-run assistant warning explaining that tools act on live sessions and
   what each approval mode means.
 - Confirm dialog before switching the assistant to **Never ask**.
@@ -19,6 +27,8 @@ with [GitHub Releases](https://github.com/BradPerbs/cloudterm/releases).
 
 ### Changed
 
+- npm production and dev dependencies updated (`npm audit fix`); esbuild
+  overridden to a patched release for the dev toolchain.
 - Default assistant approval mode is **Ask before changes** (`writes`): reads
   run freely; mutating tools stop for approval.
 - New installs ship with `allowLocalTools: false`.
