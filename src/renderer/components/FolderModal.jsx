@@ -2,6 +2,7 @@ import { memo, useCallback, useRef, useState } from 'react';
 import Sheet from './ui/Sheet';
 import Button from './ui/Button';
 import { FIELD_CLASS } from './ui/Field';
+import { useT } from '../i18n';
 
 /**
  * Mounted only while open: the sheet owns the enter and exit animations and
@@ -9,6 +10,7 @@ import { FIELD_CLASS } from './ui/Field';
  * `isClosing` bookkeeping to keep in step here.
  */
 function FolderModal({ folder, dismiss, onClose, onSave }) {
+    const t = useT();
     const [name, setName] = useState(folder?.name || '');
     const formRef = useRef(null);
 
@@ -30,15 +32,15 @@ function FolderModal({ folder, dismiss, onClose, onSave }) {
 
     return (
         <Sheet
-            title={folder ? 'Edit folder' : 'New folder'}
-            subtitle="Folders group hosts. Deleting one keeps whatever was inside it."
+            title={folder ? t('hosts.editFolder') : t('hosts.newFolder')}
+            subtitle={t('hosts.folderSubtitle')}
             dismiss={dismiss}
             onClose={onClose}
             footer={(close) => (
                 <>
-                    <Button onClick={close}>Cancel</Button>
+                    <Button onClick={close}>{t('common.cancel')}</Button>
                     <Button variant="primary" onClick={() => submit(close)}>
-                        {folder ? 'Save folder' : 'Create folder'}
+                        {folder ? t('hosts.saveFolder') : t('hosts.createFolder')}
                     </Button>
                 </>
             )}
@@ -51,7 +53,7 @@ function FolderModal({ folder, dismiss, onClose, onSave }) {
                 >
                     <label className="flex flex-col gap-1.5">
                         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            Folder name
+                            {t('hosts.folderName')}
                         </span>
                         <input
                             data-autofocus
@@ -59,7 +61,7 @@ function FolderModal({ folder, dismiss, onClose, onSave }) {
                             value={name}
                             onChange={(event) => setName(event.target.value)}
                             className={FIELD_CLASS}
-                            placeholder="e.g. AWS Servers"
+                            placeholder={t('hosts.folderNamePlaceholder')}
                             required
                         />
                     </label>

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { Alert02Icon, Loading03Icon, Refresh01Icon, UsbConnected01Icon } from 'hugeicons-react';
 import Checkbox from '../ui/Checkbox';
 import Field, { FIELD_CLASS } from '../ui/Field';
+import { useT } from '../../i18n';
 import {
     BAUD_RATES,
     DATA_BITS,
@@ -22,11 +23,12 @@ import {
  * cannot be seen cannot be checked against the label on the device.
  *
  * Ports are listed live for the same reason the agent is probed live in the
- * SSH editor — a USB adapter enumerates under a different name every time it
+ * SSH editor: a USB adapter enumerates under a different name every time it
  * moves socket, so an empty list or a missing port is worth seeing here rather
  * than at connect time.
  */
 function SerialFields({ serial, onChange }) {
+    const t = useT();
     const config = { ...DEFAULT_SERIAL, ...(serial || {}) };
     const [scan, setScan] = useState(null);
 
@@ -54,7 +56,7 @@ function SerialFields({ serial, onChange }) {
     return (
         <div className="flex flex-col gap-4">
             <Field
-                label="Serial port"
+                label={t('serial.port')}
                 hint={missing ? undefined : 'The port the console cable is on.'}
             >
                 <div className="flex gap-2">
@@ -64,7 +66,7 @@ function SerialFields({ serial, onChange }) {
                         className={FIELD_CLASS}
                         required
                     >
-                        <option value="">Select a port…</option>
+                        <option value="">{t('serial.selectPort')}</option>
                         {missing && (
                             <option value={config.path}>{config.path} (not connected)</option>
                         )}
@@ -77,7 +79,7 @@ function SerialFields({ serial, onChange }) {
                     <button
                         type="button"
                         onClick={refresh}
-                        title="Scan for ports again"
+                        title={t('serial.rescan')}
                         className="shrink-0 w-10 flex items-center justify-center rounded-xl border border-gray-300 dark:border-surface-control text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-surface-base transition-colors"
                     >
                         {scan === null
@@ -95,27 +97,26 @@ function SerialFields({ serial, onChange }) {
 
                 {scan?.available && ports.length === 0 && (
                     <p className="text-[11px] text-gray-500 dark:text-neutral-500">
-                        No serial ports found. Plug the adapter in and scan again.
+                        {t('serial.noPorts')}
                     </p>
                 )}
 
                 {missing && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                        {config.path} is not connected right now. It is kept on the host, and will
-                        work again when the cable is back.
+                        {t('serial.portMissing', { path: config.path })}
                     </p>
                 )}
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-                <Field label="Baud rate">
+                <Field label={t('serial.baudRate')}>
                     <select
                         value={config.baudRate}
                         onChange={(event) => set('baudRate', Number(event.target.value))}
                         className={`${FIELD_CLASS} font-mono`}
                     >
                         {/* A rate the record already carries but the list does
-                            not — an adapter running at 31250 — would otherwise
+                            not (an adapter running at 31250) would otherwise
                             be silently rewritten to whatever sits first. */}
                         {!BAUD_RATES.includes(config.baudRate) && (
                             <option value={config.baudRate}>{config.baudRate}</option>
@@ -126,21 +127,21 @@ function SerialFields({ serial, onChange }) {
                     </select>
                 </Field>
 
-                <Field label="Flow control">
+                <Field label={t('serial.flowControl')}>
                     <select
                         value={config.flowControl}
                         onChange={(event) => set('flowControl', event.target.value)}
                         className={FIELD_CLASS}
                     >
                         {FLOW_CONTROLS.map(entry => (
-                            <option key={entry.id} value={entry.id}>{entry.label}</option>
+                            <option key={entry.id} value={entry.id}>{t(entry.labelKey)}</option>
                         ))}
                     </select>
                 </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-                <Field label="Data bits">
+                <Field label={t('serial.dataBits')}>
                     <select
                         value={config.dataBits}
                         onChange={(event) => set('dataBits', Number(event.target.value))}
@@ -150,19 +151,19 @@ function SerialFields({ serial, onChange }) {
                     </select>
                 </Field>
 
-                <Field label="Parity">
+                <Field label={t('serial.parity')}>
                     <select
                         value={config.parity}
                         onChange={(event) => set('parity', event.target.value)}
                         className={FIELD_CLASS}
                     >
                         {PARITIES.map(entry => (
-                            <option key={entry.id} value={entry.id}>{entry.label}</option>
+                            <option key={entry.id} value={entry.id}>{t(entry.labelKey)}</option>
                         ))}
                     </select>
                 </Field>
 
-                <Field label="Stop bits">
+                <Field label={t('serial.stopBits')}>
                     <select
                         value={config.stopBits}
                         onChange={(event) => set('stopBits', Number(event.target.value))}
@@ -176,21 +177,21 @@ function SerialFields({ serial, onChange }) {
             {/* The one-line summary of everything above, in the form the label
                 on the back of a switch is written in. */}
             <p className="text-[11px] font-mono text-gray-500 dark:text-neutral-500">
-                {config.path || 'No port'} · {describeLine(config)} · {
-                    FLOW_CONTROLS.find(entry => entry.id === config.flowControl)?.label
+                {config.path || t('hosts.noPort')} · {describeLine(config)} · {
+                    t(FLOW_CONTROLS.find(entry => entry.id === config.flowControl)?.labelKey || 'serial.flowNone')
                 }
             </p>
 
             <Field
-                label="Enter sends"
-                hint="No protocol answers this. A device given the wrong one looks dead: the prompt simply never comes back."
+                label={t('serial.enterSends')}
+                hint={t('serial.enterSendsHint')}
             >
                 <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 dark:bg-surface-base rounded-xl">
                     {NEWLINES.map(entry => (
                         <button
                             key={entry.id}
                             type="button"
-                            title={entry.hint}
+                            title={t(entry.hintKey)}
                             onClick={() => set('newline', entry.id)}
                             className={`px-2 py-1.5 rounded-lg text-sm font-medium transition-all ${
                                 config.newline === entry.id
@@ -208,33 +209,32 @@ function SerialFields({ serial, onChange }) {
                 variant="card"
                 checked={config.localEcho}
                 onChange={(event) => set('localEcho', event.target.checked)}
-                label="Echo what I type"
-                description="Turn on for a device that does not echo back. Without it the pane stays blank while you type, which reads as a dead port rather than a quiet one."
+                label={t('serial.localEcho')}
+                description={t('serial.localEchoHint')}
             />
 
             <Checkbox
                 variant="card"
                 checked={config.dtr}
                 onChange={(event) => set('dtr', event.target.checked)}
-                label="Assert DTR on open"
-                description="On by default, which is what most devices expect. Turn it off for a board wired to reset on DTR, which would otherwise reboot every time this port is opened."
+                label={t('serial.dtr')}
+                description={t('serial.dtrHint')}
             />
 
             <Checkbox
                 variant="card"
                 checked={config.rts}
                 onChange={(event) => set('rts', event.target.checked)}
-                label="Assert RTS on open"
+                label={t('serial.rts')}
                 description={config.flowControl === 'rtscts'
-                    ? 'Ignored while hardware flow control is on: RTS belongs to the driver then.'
-                    : 'On by default. Some adapters wire RTS to a reset or boot pin.'}
+                    ? t('serial.rtsIgnored')
+                    : t('serial.rtsHint')}
             />
 
             <p className="flex items-start gap-2 text-[11px] text-gray-500 dark:text-neutral-500">
                 <UsbConnected01Icon size={13} strokeWidth={2} className="shrink-0 mt-0.5" />
                 <span>
-                    A serial line carries no window size and no terminal type, so the device
-                    assumes 80×24 however large the pane is.
+                    {t('serial.noWindowSize')}
                 </span>
             </p>
         </div>

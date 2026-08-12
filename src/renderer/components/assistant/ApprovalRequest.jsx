@@ -3,6 +3,7 @@ import { Alert02Icon, Cancel01Icon, Edit02Icon, Tick02Icon } from 'hugeicons-rea
 import Button from '../ui/Button';
 import CopyButton from '../ui/CopyButton';
 import { describeCall } from './ToolCall';
+import { useT } from '../../i18n';
 
 /**
  * A tool call stopped in front of the user.
@@ -41,22 +42,22 @@ import { describeCall } from './ToolCall';
  */
 
 const TITLES = {
-    run_command: 'Run a command',
-    send_input: 'Type into the terminal',
-    write_file: 'Overwrite a file',
-    connect_host: 'Open a connection',
-    disconnect_session: 'Close a session',
-    read_terminal: 'Read the terminal',
-    read_file: 'Read a file',
-    list_directory: 'List a directory',
-    list_hosts: 'List saved hosts',
-    list_sessions: 'List open sessions',
+    run_command: 'assistant.askRunCommand',
+    send_input: 'assistant.askSendInput',
+    write_file: 'assistant.askWriteFile',
+    connect_host: 'assistant.askConnectHost',
+    disconnect_session: 'assistant.askDisconnect',
+    read_terminal: 'assistant.askReadTerminal',
+    read_file: 'assistant.askReadFile',
+    list_directory: 'assistant.askListDirectory',
+    list_hosts: 'assistant.askListHosts',
+    list_sessions: 'assistant.askListSessions',
 };
 
 const SETTLED = {
-    approved: { label: 'Allowed', dot: 'bg-emerald-500' },
-    denied: { label: 'Declined', dot: 'bg-gray-400 dark:bg-gray-600' },
-    expired: { label: 'Timed out', dot: 'bg-gray-400 dark:bg-gray-600' },
+    approved: { labelKey: 'assistant.allowed', dot: 'bg-emerald-500' },
+    denied: { labelKey: 'assistant.declined', dot: 'bg-gray-400 dark:bg-gray-600' },
+    expired: { labelKey: 'assistant.timedOut', dot: 'bg-gray-400 dark:bg-gray-600' },
 };
 
 /**
@@ -94,6 +95,7 @@ function Choice({ icon, label, onClick }) {
 }
 
 export default function ApprovalRequest({ item, onRespond }) {
+    const t = useT();
     // What to say instead of yes or no. Held here rather than in the hook: it
     // is worth nothing the moment this question is answered, and a card that
     // is one of twenty in a transcript should not be putting anything in the
@@ -102,7 +104,9 @@ export default function ApprovalRequest({ item, onRespond }) {
 
     const summary = describeCall(item.name, item.input);
     const settled = SETTLED[item.status];
-    const title = TITLES[item.name] || (item.local ? `Run ${item.name} locally` : item.title);
+    const title = TITLES[item.name]
+        ? t(TITLES[item.name])
+        : (item.local ? t('assistant.askRunLocally', { tool: item.name }) : item.title);
 
     // Once answered it collapses to the same one-line shape as a tool row, so
     // scrolling back through a long run is not a wall of spent dialogs.
@@ -111,7 +115,7 @@ export default function ApprovalRequest({ item, onRespond }) {
             <div className="h-8 px-2.5 flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-white/[0.035]">
                 <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${settled.dot}`} />
                 <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400 shrink-0">
-                    {settled.label}
+                    {t(settled.labelKey)}
                 </span>
                 <span
                     className={`min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-500 ${
@@ -146,7 +150,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                 </span>
                 {item.host && (
                     <span className="min-w-0 truncate text-[11px] text-gray-500 dark:text-gray-500">
-                        on {item.host}
+                        {t('assistant.onHost', { host: item.host })}
                     </span>
                 )}
             </div>
@@ -174,7 +178,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                         </div>
                         <CopyButton
                             text={summary.text}
-                            label={summary.mono ? 'Copy command' : 'Copy'}
+                            label={summary.mono ? t('assistant.copyCommand') : t('common.copy')}
                             className="absolute right-1 top-1"
                         />
                     </div>
@@ -188,7 +192,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                             strokeWidth={2}
                             className="shrink-0 mt-px text-amber-500"
                         />
-                        This runs on your own computer, not on a server.
+                        {t('assistant.localWarning')}
                     </p>
                 )}
 
@@ -196,12 +200,12 @@ export default function ApprovalRequest({ item, onRespond }) {
                     <div className="space-y-1.5">
                         <Choice
                             icon={<Tick02Icon size={14} strokeWidth={2.5} />}
-                            label="Allow"
+                            label={t('assistant.allow')}
                             onClick={() => onRespond(item.requestId, true)}
                         />
                         <Choice
                             icon={<Cancel01Icon size={13} strokeWidth={2.5} />}
-                            label="Decline"
+                            label={t('assistant.decline')}
                             onClick={() => onRespond(item.requestId, false)}
                         />
                         {/* A no with a reason attached. The text goes back as
@@ -211,7 +215,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                             rather than as a new instruction arriving later. */}
                         <Choice
                             icon={<Edit02Icon size={13} strokeWidth={2} />}
-                            label="Something else..."
+                            label={t('assistant.somethingElse')}
                             onClick={() => setNote('')}
                         />
                     </div>
@@ -236,7 +240,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                                     setNote(null);
                                 }
                             }}
-                            placeholder="What should it do instead?"
+                            placeholder={t('assistant.insteadPlaceholder')}
                             className="block w-full max-h-32 px-2.5 pt-2 pb-1 bg-transparent
                                 resize-none outline-none
                                 text-xs leading-relaxed text-gray-900 dark:text-white
@@ -244,7 +248,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                         />
                         <div className="flex items-center justify-end gap-1.5 px-1.5 pb-1.5">
                             <Button size="sm" variant="outline" onClick={() => setNote(null)}>
-                                Cancel
+                                {t('common.cancel')}
                             </Button>
                             <Button
                                 size="sm"
@@ -252,7 +256,7 @@ export default function ApprovalRequest({ item, onRespond }) {
                                 disabled={!note.trim()}
                                 onClick={sendNote}
                             >
-                                Send
+                                {t('assistant.send')}
                             </Button>
                         </div>
                     </div>

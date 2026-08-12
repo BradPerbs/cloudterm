@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { ArrowLeft01Icon, CloudIcon } from 'hugeicons-react';
 import { syncedFolder } from '../../lib/server-sync';
 import { IconButton } from '../ui/Button';
+import { useT } from '../../i18n';
 
 /**
  * Where you are in the folder tree, and the way back out.
@@ -16,6 +17,7 @@ import { IconButton } from '../ui/Button';
  * so.
  */
 function HostsBreadcrumb({ path, dropTargetId, onNavigate }) {
+    const t = useT();
     const parentId = path.length > 1 ? path[path.length - 2].id : null;
 
     return (
@@ -24,7 +26,7 @@ function HostsBreadcrumb({ path, dropTargetId, onNavigate }) {
                 <IconButton
                     size="sm"
                     variant="ghost"
-                    title="Up one level"
+                    title={t('hosts.upOneLevel')}
                     onClick={() => onNavigate(parentId)}
                     icon={<ArrowLeft01Icon size={16} strokeWidth={2} />}
                     className="-ml-1 mr-0.5"
@@ -48,7 +50,7 @@ function HostsBreadcrumb({ path, dropTargetId, onNavigate }) {
                             aria-current={isCurrent ? 'page' : undefined}
                             onClick={() => onNavigate(crumb.id)}
                             data-drop-folder={dropId}
-                            title={isSynced ? 'Synced from your CloudBlast account' : undefined}
+                            title={isSynced ? t('hosts.syncedAccount') : undefined}
                             className={`breadcrumb-item max-w-[14rem] truncate px-2 py-1 -mx-0.5 rounded-lg
                                 text-sm font-medium transition-colors outline-none
                                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25

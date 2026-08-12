@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FolderAddIcon } from 'hugeicons-react';
 import Dialog, { DialogButton } from '../ui/Dialog';
 import { FIELD_CLASS } from '../ui/Field';
+import { translate, useT } from '../../i18n';
 
 /**
  * Name the folder a selection is about to be gathered into.
@@ -11,7 +12,10 @@ import { FIELD_CLASS } from '../ui/Field';
  * which is not something it otherwise knows how to do.
  */
 export default function GroupIntoFolderDialog({ count, parentLabel, onCreate, onCancel }) {
-    const [name, setName] = useState('New folder');
+    const t = useT();
+    // Seeded once, so `translate` rather than `t`: this is the text the field
+    // opens with, not a label that should follow a later language change.
+    const [name, setName] = useState(() => translate('hosts.newFolder'));
     const [busy, setBusy] = useState(false);
 
     const trimmed = name.trim();
@@ -30,8 +34,11 @@ export default function GroupIntoFolderDialog({ count, parentLabel, onCreate, on
 
     return (
         <Dialog
-            title="New folder from selection"
-            subtitle={`${count} item${count === 1 ? '' : 's'} will be moved into it, inside ${parentLabel}.`}
+            title={t('hosts.groupTitle')}
+            subtitle={t('hosts.groupSubtitle', {
+                what: t('hosts.itemCount', { count }),
+                parent: parentLabel,
+            })}
             onClose={busy ? undefined : onCancel}
             icon={
                 <span className="w-9 h-9 rounded-xl flex items-center justify-center
@@ -41,9 +48,9 @@ export default function GroupIntoFolderDialog({ count, parentLabel, onCreate, on
             }
             footer={
                 <>
-                    <DialogButton onClick={onCancel} disabled={busy}>Cancel</DialogButton>
+                    <DialogButton onClick={onCancel} disabled={busy}>{t('common.cancel')}</DialogButton>
                     <DialogButton variant="primary" onClick={submit} disabled={!trimmed || busy}>
-                        {busy ? 'Creating…' : 'Create folder'}
+                        {busy ? t('hosts.creating') : t('hosts.createFolder')}
                     </DialogButton>
                 </>
             }
@@ -58,9 +65,9 @@ export default function GroupIntoFolderDialog({ count, parentLabel, onCreate, on
                     submit();
                 }}
                 onFocus={(event) => event.target.select()}
-                placeholder="Folder name"
+                placeholder={t('hosts.folderName')}
                 spellCheck={false}
-                aria-label="Folder name"
+                aria-label={t('hosts.folderName')}
                 data-autofocus
                 className={FIELD_CLASS}
             />

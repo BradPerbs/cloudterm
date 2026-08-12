@@ -17,6 +17,7 @@ import ScopeMenu from './ScopeMenu';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
+import { useT } from '../../i18n';
 import {
     GLOBAL,
     describe,
@@ -136,6 +137,8 @@ const WINDOWS = {
  * this app was given, or a key the runtime says it is using.
  */
 function Usage({ account, rateLimit, costUsd, hasStoredKey }) {
+    const t = useT();
+
     if (account?.subscriptionType) {
         if (rateLimit?.utilization === null || rateLimit?.utilization === undefined) return null;
 
@@ -165,7 +168,7 @@ function Usage({ account, rateLimit, costUsd, hasStoredKey }) {
     if (!metered || !costUsd) return null;
 
     return (
-        <Tooltip label="Estimated cost of this conversation, charged per token" placement="top">
+        <Tooltip label={t('assistant.costHint')} placement="top">
             <span className="px-1 text-[10px] tabular-nums text-gray-400 dark:text-gray-600">
                 ${costUsd.toFixed(3)}
             </span>
@@ -225,6 +228,7 @@ function AssistantConversation({
     onOpenSettings,
     onClose,
 }) {
+    const t = useT();
     /**
      * Which servers this conversation is about: the session in front, every
      * host, or an explicit set of sessions and saved hosts. See
@@ -370,8 +374,8 @@ function AssistantConversation({
      */
     const followLabel = useMemo(() => describeSession(
         sessions.find(session => session.sessionId === activeSessionId),
-        'Nothing connected',
-    ), [sessions, activeSessionId]);
+        t('assistant.nothingConnected'),
+    ), [sessions, activeSessionId, t]);
 
     /** What the panel is actually pointed at, for the title and placeholder. */
     const described = useMemo(
@@ -418,7 +422,7 @@ function AssistantConversation({
                 {/* Starting again is the thing people do most often in a
                     panel like this, so it is one click and not two. */}
                 <HeaderButton
-                    title="New conversation"
+                    title={t('assistant.newConversation')}
                     icon={<PlusSignIcon size={16} strokeWidth={1.5} />}
                     onClick={assistant.reset}
                 />
@@ -430,7 +434,7 @@ function AssistantConversation({
                     onRefresh={assistant.refreshConversations}
                 />
                 <HeaderButton
-                    title="Close"
+                    title={t('common.close')}
                     hint="Ctrl+Shift+A"
                     icon={<Cancel01Icon size={16} strokeWidth={1.5} />}
                     onClick={onClose}
@@ -474,11 +478,10 @@ function AssistantConversation({
                                 a frame around a frame. */}
                             <AgentMark size={64} animated className="mb-3" />
                             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
-                                Let's work on your servers
+                                {t('assistant.welcome')}
                             </h2>
                             <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-500">
-                                It reads this terminal, runs commands on their own channel, and can work
-                                across every host you have saved.
+                                {t('assistant.welcomeNote')}
                             </p>
                         </div>
 
@@ -520,7 +523,7 @@ function AssistantConversation({
                                         hover:text-gray-700 dark:hover:text-gray-300"
                                 >
                                     <PlusSignIcon size={13} strokeWidth={2} />
-                                    Create quick prompts
+                                    {t('assistant.createQuickPrompts')}
                                 </button>
                             )}
                         </div>
@@ -580,7 +583,7 @@ function AssistantConversation({
                             <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
                                 style={{ animationDelay: '300ms' }} />
                         </span>
-                        Working
+                        {t('assistant.working')}
                     </div>
                 )}
             </div>
@@ -613,7 +616,7 @@ function AssistantConversation({
                         value={text}
                         onChange={(event) => setText(event.target.value)}
                         onKeyDown={onKeyDown}
-                        placeholder={`Ask about ${described.sentence}`}
+                        placeholder={t('assistant.askAbout', { about: described.sentence })}
                         className="block w-full max-h-40 px-3 pt-2.5 pb-1 bg-transparent
                             resize-none outline-none
                             text-[13px] leading-relaxed text-gray-900 dark:text-white
@@ -654,10 +657,10 @@ function AssistantConversation({
                                 disabled: a permanently greyed control is
                                 just clutter with a hover state. */}
                             {assistant.busy ? (
-                                <Tooltip label="Stop" placement="top">
+                                <Tooltip label={t('assistant.stop')} placement="top">
                                     <button
                                         type="button"
-                                        aria-label="Stop"
+                                        aria-label={t('assistant.stop')}
                                         onClick={assistant.interrupt}
                                         className="w-7 h-7 shrink-0 flex items-center justify-center
                                             rounded-full transition-colors
@@ -669,10 +672,10 @@ function AssistantConversation({
                                     </button>
                                 </Tooltip>
                             ) : text.trim() ? (
-                                <Tooltip label="Send" hint="Enter" placement="top">
+                                <Tooltip label={t('assistant.send')} hint="Enter" placement="top">
                                     <button
                                         type="button"
-                                        aria-label="Send"
+                                        aria-label={t('assistant.send')}
                                         onClick={submit}
                                         className="w-7 h-7 shrink-0 flex items-center justify-center
                                             rounded-full transition-all active:scale-95
@@ -720,6 +723,8 @@ export default function AssistantPanel({
     onOpen,
     onClose,
 }) {
+    const t = useT();
+
     // The width the column is actually drawn at. It lags `open` by a couple of
     // frames on the way in, which is what gives the transition an old value to
     // start from.
@@ -837,7 +842,7 @@ export default function AssistantPanel({
                     }}
                 >
                     <HeaderButton
-                        title="AI Agent"
+                        title={t('assistant.title')}
                         hint="Ctrl+Shift+A"
                         placement="left"
                         icon={<AgentMark size={20} mono />}

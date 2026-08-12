@@ -127,6 +127,32 @@ input[type="color"]::-webkit-color-swatch {
     border-color: rgb(255 255 255 / 0.16);
 }
 
+/* The list a `select` drops down is drawn by the browser, not by this file, and
+   it takes its colours from the colour scheme the page declares rather than
+   from anything the control is wearing. Undeclared, that scheme is light, so
+   the app's dark mode was opening a white list in front of a dark shell.
+
+   Declaring it per theme is the whole fix: the popup, and any other chrome the
+   engine draws for itself, follows the theme the user picked. The switch is on
+   `:root`, which App.jsx already toggles `.dark` on.
+
+   The rows are then tinted to the app's own ramp rather than left on Chromium's
+   grey. Only the dark half needs it; the light popup is white on white already.
+   Backgrounds only, so the highlight on the row under the pointer is still the
+   system's and still visible. */
+:root {
+    color-scheme: light;
+}
+
+:root.dark {
+    color-scheme: dark;
+}
+
+.dark select option {
+    background-color: rgb(var(--app-raised));
+    color: #fff;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;

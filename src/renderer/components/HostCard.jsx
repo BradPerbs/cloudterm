@@ -6,6 +6,7 @@ import { STATE_STYLES, stateOf, describeStatus } from '../lib/monitor';
 import IconTile from './hosts/IconTile';
 import MenuButton, { dropdownItems } from './ui/MenuButton';
 import Tag from './ui/Tag';
+import { useT } from '../i18n';
 
 /**
  * One host, as a tile in the grid or a row in the list.
@@ -52,6 +53,7 @@ function HostCard({
     onTagClick,
     ...dragProps      // data-card-id and the pointer handle, from useCardDrag
 }) {
+    const t = useT();
     const isList = view === 'list';
 
     const handleClick = useCallback((event) => {
@@ -118,7 +120,7 @@ function HostCard({
      * are told apart by which port they are on, which is why that stays here.
      */
     const detail = kind === 'serial'
-        ? [host.serial?.path || 'No port', host.serial?.baudRate].filter(Boolean).join(' · ')
+        ? [host.serial?.path || t('hosts.noPort'), host.serial?.baudRate].filter(Boolean).join(' · ')
         : kind === 'ipmi'
         // The board's own account, which is not an account on the machine and is
         // the thing that tells two service processors apart.
@@ -139,12 +141,12 @@ function HostCard({
         // Forwards a non-SSH host is still carrying are never started, so
         // counting them here would describe something that does not happen.
         kind === 'ssh' && host.tunnels?.length
-            ? `${host.tunnels.length} tunnel${host.tunnels.length === 1 ? '' : 's'}`
+            ? t('hosts.tunnelCount', { count: host.tunnels.length })
             : '',
         // Not which proxy: the card has no proxy list to name one from, and the
         // point of saying it here is that this host does not dial straight out,
         // which is worth spotting from the grid. The editor names it.
-        kind !== 'serial' && host.proxyId ? 'via proxy' : '',
+        kind !== 'serial' && host.proxyId ? t('hosts.viaProxy') : '',
     ].filter(Boolean);
 
     const tags = host.tags || [];
@@ -226,7 +228,7 @@ function HostCard({
                         and red is one that is not. */}
                     {connected ? (
                         <span
-                            title="Connected"
+                            title={t('hosts.connected')}
                             className="absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500
                                 ring-2 ring-white dark:ring-surface-control"
                         />

@@ -7,27 +7,29 @@
  * anything opens a socket.
  */
 
+import { translate } from '../i18n';
+
 export const TUNNEL_TYPES = [
     {
         id: 'local',
-        label: 'Local',
+        labelKey: 'tunnel.local',
         flag: '-L',
-        summary: 'Reach a remote service from this machine',
-        detail: 'Opens a port here. Anything that connects to it comes out on the server, which then dials the destination.',
+        summaryKey: 'tunnel.local.summary',
+        detailKey: 'tunnel.local.detail',
     },
     {
         id: 'remote',
-        label: 'Remote',
+        labelKey: 'tunnel.remote',
         flag: '-R',
-        summary: 'Expose a local service on the server',
-        detail: 'Opens a port on the server. Connections it accepts are dialled from this machine.',
+        summaryKey: 'tunnel.remote.summary',
+        detailKey: 'tunnel.remote.detail',
     },
     {
         id: 'dynamic',
-        label: 'Dynamic',
+        labelKey: 'tunnel.dynamic',
         flag: '-D',
-        summary: 'A SOCKS5 proxy through the server',
-        detail: 'Opens a SOCKS5 proxy here. Each connection names its own destination, which the server dials.',
+        summaryKey: 'tunnel.dynamic.summary',
+        detailKey: 'tunnel.dynamic.detail',
     },
 ];
 
@@ -55,17 +57,17 @@ export function validateTunnel(tunnel) {
 
     if (tunnel.type === 'remote') {
         if (!Number.isInteger(listenPort) || listenPort < 0 || listenPort > 65535) {
-            return 'Remote port must be between 0 and 65535';
+            return translate('tunnel.badRemotePort');
         }
     } else if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
-        return 'Listen port must be between 1 and 65535';
+        return translate('tunnel.badListenPort');
     }
 
     if (tunnel.type === 'dynamic') return '';
 
-    if (!String(tunnel.destHost || '').trim()) return 'Destination host is required';
+    if (!String(tunnel.destHost || '').trim()) return translate('tunnel.destHostRequired');
     if (!Number.isInteger(destPort) || destPort < 1 || destPort > 65535) {
-        return 'Destination port must be between 1 and 65535';
+        return translate('tunnel.badDestPort');
     }
 
     return '';
@@ -76,8 +78,8 @@ export function describeTunnel(tunnel) {
     const port = tunnel.listenPort || '*';
     const listen = `${tunnel.listenHost}:${port}`;
 
-    if (tunnel.type === 'dynamic') return `${listen} → SOCKS5 → anywhere`;
-    if (tunnel.type === 'remote') return `server:${port} → ${tunnel.destHost}:${tunnel.destPort}`;
+    if (tunnel.type === 'dynamic') return `${listen} → SOCKS5 → ${translate('tunnel.anywhere')}`;
+    if (tunnel.type === 'remote') return `${translate('tunnel.serverWord')}:${port} → ${tunnel.destHost}:${tunnel.destPort}`;
     return `${listen} → ${tunnel.destHost}:${tunnel.destPort}`;
 }
 
@@ -86,16 +88,16 @@ export function usageHint(tunnel) {
     if (tunnel.state !== 'active') return '';
 
     const port = tunnel.boundPort || tunnel.listenPort;
-    if (tunnel.type === 'dynamic') return `SOCKS5 proxy at ${tunnel.listenHost}:${port}`;
-    if (tunnel.type === 'remote') return `On the server: ${tunnel.listenHost}:${port}`;
-    return `Connect to ${tunnel.listenHost}:${port}`;
+    if (tunnel.type === 'dynamic') return translate('tunnel.usageDynamic', { where: `${tunnel.listenHost}:${port}` });
+    if (tunnel.type === 'remote') return translate('tunnel.usageRemote', { where: `${tunnel.listenHost}:${port}` });
+    return translate('tunnel.usageLocal', { where: `${tunnel.listenHost}:${port}` });
 }
 
 export const TUNNEL_STATES = {
-    active: { dot: 'bg-green-500', label: 'Active', tone: 'text-green-600 dark:text-green-400' },
-    starting: { dot: 'bg-yellow-500 animate-pulse', label: 'Starting…', tone: 'text-amber-600 dark:text-amber-500' },
-    stopped: { dot: 'bg-gray-400 dark:bg-neutral-600', label: 'Stopped', tone: 'text-gray-500 dark:text-gray-400' },
-    error: { dot: 'bg-red-500', label: 'Failed', tone: 'text-red-600 dark:text-red-400' },
+    active: { dot: 'bg-green-500', labelKey: 'tunnel.stateActive', tone: 'text-green-600 dark:text-green-400' },
+    starting: { dot: 'bg-yellow-500 animate-pulse', labelKey: 'tunnel.stateStarting', tone: 'text-amber-600 dark:text-amber-500' },
+    stopped: { dot: 'bg-gray-400 dark:bg-neutral-600', labelKey: 'tunnel.stateStopped', tone: 'text-gray-500 dark:text-gray-400' },
+    error: { dot: 'bg-red-500', labelKey: 'tunnel.stateFailed', tone: 'text-red-600 dark:text-red-400' },
 };
 
 export const stateInfo = (state) => TUNNEL_STATES[state] || TUNNEL_STATES.stopped;

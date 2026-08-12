@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Folder02Icon, FolderTransferIcon, Search01Icon } from 'hugeicons-react';
 import Dialog, { DialogButton } from '../ui/Dialog';
 import { FIELD_CLASS } from '../ui/Field';
-import { ROOT_LABEL, folderLabel, folderSubtree } from '../../lib/organize';
+import { rootLabel, folderLabel, folderSubtree } from '../../lib/organize';
+import { useT } from '../../i18n';
 
 /**
  * Where a selection is going.
@@ -25,6 +26,7 @@ export default function MoveToFolderDialog({
     onMove,
     onCancel,
 }) {
+    const t = useT();
     const [query, setQuery] = useState('');
 
     // Every folder being moved, and everything inside it, at any depth.
@@ -41,7 +43,7 @@ export default function MoveToFolderDialog({
             .map(folder => ({ id: folder.id, label: folderLabel(folders, folder.id) }))
             .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
 
-        return [{ id: '', label: ROOT_LABEL }, ...list];
+        return [{ id: '', label: rootLabel() }, ...list];
     }, [folders]);
 
     const shown = useMemo(() => {
@@ -52,8 +54,8 @@ export default function MoveToFolderDialog({
 
     return (
         <Dialog
-            title={`Move ${count} item${count === 1 ? '' : 's'}`}
-            subtitle="Pick the folder they should go into."
+            title={t('hosts.moveTitle', { count })}
+            subtitle={t('hosts.moveSubtitle')}
             onClose={onCancel}
             icon={
                 <span className="w-9 h-9 rounded-xl flex items-center justify-center
@@ -61,7 +63,7 @@ export default function MoveToFolderDialog({
                     <FolderTransferIcon size={20} strokeWidth={2} />
                 </span>
             }
-            footer={<DialogButton onClick={onCancel}>Cancel</DialogButton>}
+            footer={<DialogButton onClick={onCancel}>{t('common.cancel')}</DialogButton>}
         >
             <div className="relative mb-2">
                 <Search01Icon
@@ -76,9 +78,9 @@ export default function MoveToFolderDialog({
                     type="text"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Find a folder…"
+                    placeholder={t('hosts.findFolder')}
                     spellCheck={false}
-                    aria-label="Find a folder"
+                    aria-label={t('hosts.findFolder')}
                     data-autofocus
                     className={`${FIELD_CLASS} pl-9 py-1.5 rounded-lg text-[13px]`}
                 />
@@ -87,7 +89,7 @@ export default function MoveToFolderDialog({
             <div className="max-h-64 overflow-y-auto flex flex-col gap-0.5 -mx-1 px-1">
                 {shown.length === 0 && (
                     <p className="text-xs text-gray-500 dark:text-neutral-500 px-2 py-6 text-center">
-                        No folder matches “{query.trim()}”.
+                        {t('hosts.noFolderMatches', { query: query.trim() })}
                     </p>
                 )}
 
@@ -112,7 +114,7 @@ export default function MoveToFolderDialog({
                             </span>
                             {(here || inside) && (
                                 <span className="shrink-0 text-[10px] text-gray-400 dark:text-neutral-500">
-                                    {here ? 'already here' : 'inside the selection'}
+                                    {here ? t('hosts.alreadyHere') : t('hosts.insideSelection')}
                                 </span>
                             )}
                         </button>

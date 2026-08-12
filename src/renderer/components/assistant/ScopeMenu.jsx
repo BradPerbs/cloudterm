@@ -6,6 +6,7 @@ import { useTooltip } from '../ui/Tooltip';
 import { OsIcon, hostOs } from '../../lib/os-icons';
 import { hostKind } from '../../lib/protocols';
 import { FOLLOW, GLOBAL, TARGETS, describeSession } from '../../lib/assistant-scope';
+import { useT } from '../../i18n';
 
 /**
  * What the assistant is pointed at, and the menu that changes it.
@@ -69,6 +70,7 @@ const SEARCH_AT = 6;
  * screen saying why half the servers are missing.
  */
 function ScopeSearch({ value, onChange }) {
+    const t = useT();
     const ref = useRef(null);
 
     useEffect(() => {
@@ -83,8 +85,8 @@ function ScopeSearch({ value, onChange }) {
             ref={ref}
             value={value}
             onChange={onChange}
-            ariaLabel="Search sessions and hosts"
-            placeholder="Search servers"
+            ariaLabel={t('assistant.searchScopeAria')}
+            placeholder={t('assistant.searchScope')}
             onKeyDown={(event) => {
                 // Escape is claimed while there is something to clear, or the
                 // first press shuts the menu rather than emptying the field it
@@ -234,6 +236,7 @@ export default function ScopeMenu({
     followLabel,
     scopeLabel,
 }) {
+    const t = useT();
     const [query, setQuery] = useState('');
 
     /**
@@ -289,7 +292,7 @@ export default function ScopeMenu({
                 key: `host:${id}`,
                 os: hostOs(host),
                 distro: host.distro,
-                name: host.name || host.host || 'Unnamed host',
+                name: host.name || host.host || t('hosts.unnamed'),
                 // Same dimming as the menu rows, and for the same reason: a
                 // pinned host with nothing open is a target you have not
                 // reached yet.
@@ -341,15 +344,15 @@ export default function ScopeMenu({
             options: [
                 {
                     value: FOLLOW,
-                    label: 'Current session',
+                    label: t('assistant.currentSession'),
                     tooltip: followLabel,
                     tooltipHint: followed?.address || '',
                     icon: <ServerStack03Icon size={14} strokeWidth={1.5} />,
                 },
                 {
                     value: GLOBAL,
-                    label: 'All hosts',
-                    tooltip: 'Every saved host and open session',
+                    label: t('hosts.rootLabel'),
+                    tooltip: t('assistant.allHostsHint'),
                     icon: <GlobalIcon size={14} strokeWidth={1.5} />,
                 },
             ],
@@ -358,7 +361,7 @@ export default function ScopeMenu({
 
     if (shownSessions.length > 0) {
         sections.push({
-            heading: 'Open sessions',
+            heading: t('assistant.openSessions'),
             multi: true,
             values: pinned ? scope.sessionIds : [],
             onToggle: id => onToggle('session', id),
@@ -377,7 +380,7 @@ export default function ScopeMenu({
 
     if (shownHosts.length > 0) {
         sections.push({
-            heading: 'Saved hosts',
+            heading: t('assistant.savedHosts'),
             multi: true,
             values: pinned ? scope.hostIds : [],
             onToggle: id => onToggle('host', id),
@@ -385,7 +388,7 @@ export default function ScopeMenu({
                 const open = openByHost.get(host.id) || 0;
                 return {
                     value: host.id,
-                    label: host.name || host.host || 'Unnamed host',
+                    label: host.name || host.host || t('hosts.unnamed'),
                     icon: <OsIcon os={hostOs(host)} distro={host.distro} className="w-4 h-4" />,
                     // Dimmed with nothing open, as a tab is before its session
                     // comes up. It is the one thing about a host row that is
@@ -394,10 +397,10 @@ export default function ScopeMenu({
                     dim: open === 0,
                     // What ticking this row will mean, spelled out for the one
                     // moment someone wants it rather than on every row forever.
-                    tooltip: host.host || host.name || 'Saved host',
+                    tooltip: host.host || host.name || t('assistant.savedHost'),
                     tooltipHint: open > 0
-                        ? `${open} session${open === 1 ? '' : 's'} open`
-                        : 'Not connected',
+                        ? t('assistant.sessionsOpen', { count: open })
+                        : t('assistant.notConnected'),
                 };
             }),
         });

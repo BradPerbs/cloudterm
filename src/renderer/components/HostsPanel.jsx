@@ -39,7 +39,7 @@ import useMonitor from '../hooks/useMonitor';
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection';
 import { CARD_GRID } from '../lib/layout';
 import {
-    ROOT_LABEL,
+    rootLabel,
     SORT_MANUAL,
     SORT_NAME,
     SORT_LABELS,
@@ -70,7 +70,7 @@ const NOTHING_SELECTED = new Set();
 /** The size the icons in a card's menu are drawn at, wherever it is shown. */
 const ICON = 15;
 
-const countLabel = (n) => `${n} item${n === 1 ? '' : 's'}`;
+const countLabel = (t, n) => t('hosts.itemCount', { count: n });
 
 /**
  * The list as the drag is currently proposing it.
@@ -129,6 +129,7 @@ function HostsPanel({
     onArrange,
     onTagHosts,
 }) {
+    const t = useT();
     const [query, setQuery] = useState('');
     const [view, setView] = useState(() => readPreference(VIEW_KEY, ['grid', 'list'], 'grid'));
     const [sort, setSort] = useState(() => readPreference(SORT_KEY, Object.keys(SORT_LABELS), SORT_NAME));
@@ -459,8 +460,8 @@ function HostsPanel({
                 if (count > 0) {
                     toast.success(
                         count === asked
-                            ? `Moved ${countLabel(count)}`
-                            : `Moved ${count} of ${countLabel(asked)}; the rest could not go there`,
+                            ? t('hosts.moved', { what: countLabel(t, count) })
+                            : t('hosts.movedSome', { count, of: countLabel(t, asked) }),
                         toastOptions({ duration: 2400 }),
                     );
                 }
@@ -469,7 +470,7 @@ function HostsPanel({
 
         if (kind === 'folder') {
             if (!canMoveFolder(allFolders, id, destination)) {
-                toast.error('A folder cannot be moved inside itself.', toastOptions({ duration: 2500 }));
+                toast.error(t('hosts.folderInsideItself'), toastOptions({ duration: 2500 }));
                 return undefined;
             }
 
@@ -499,7 +500,7 @@ function HostsPanel({
                 update.id === id ? { ...update, folderId: destination } : update
             )),
         });
-    }, [allFolders, allHosts, applyArrange, moveSelection, clearSelection]);
+    }, [allFolders, allHosts, applyArrange, moveSelection, clearSelection, t]);
 
     /** Whether a card may be filed into a folder, asked once per frame mid-drag. */
     const canFile = useCallback((kind, id, folderId) => {
@@ -583,26 +584,26 @@ function HostsPanel({
      * ------------------------------------------------------------------ */
 
     const confirmDeleteHost = useCallback((host) => setConfirming({
-        title: 'Delete this host?',
-        message: `“${host.name}” and its stored credentials will be removed. Any session already open stays connected.`,
-        confirmLabel: 'Delete host',
+        title: t('hosts.deleteHostTitle'),
+        message: t('hosts.deleteHostMessage', { name: host.name }),
+        confirmLabel: t('hosts.deleteHost'),
         onConfirm: async () => {
             setConfirming(null);
             await onDeleteHost(host.id);
-            toast.success(`Deleted “${host.name}”`, toastOptions({ duration: 2200 }));
+            toast.success(t('hosts.deleted', { name: host.name }), toastOptions({ duration: 2200 }));
         },
-    }), [onDeleteHost]);
+    }), [onDeleteHost, t]);
 
     const confirmDeleteFolder = useCallback((folder) => setConfirming({
-        title: 'Delete this folder?',
-        message: `“${folder.name}” will be removed. Everything inside it moves up a level rather than being deleted.`,
-        confirmLabel: 'Delete folder',
+        title: t('hosts.deleteFolderTitle'),
+        message: t('hosts.deleteFolderMessage', { name: folder.name }),
+        confirmLabel: t('hosts.deleteFolder'),
         onConfirm: async () => {
             setConfirming(null);
             await onDeleteFolder(folder.id);
-            toast.success(`Deleted “${folder.name}”`, toastOptions({ duration: 2200 }));
+            toast.success(t('hosts.deleted', { name: folder.name }), toastOptions({ duration: 2200 }));
         },
-    }), [onDeleteFolder]);
+    }), [onDeleteFolder, t]);
 
     const handleDuplicate = useCallback(async (host) => {
         await onDuplicateHost(host);
@@ -639,11 +640,21 @@ function HostsPanel({
         const count = await moveSelection(destination, keys);
         clearSelection();
 
-        const where = destination ? `“${labels.get(destination) || ''}”` : ROOT_LABEL;
-        if (count === 0) toast(`Nothing to move: all of it is already there`, toastOptions({ duration: 2400 }));
-        else if (count === asked) toast.success(`Moved ${countLabel(count)} to ${where}`, toastOptions({ duration: 2400 }));
-        else toast.success(`Moved ${count} of ${countLabel(asked)} to ${where}`, toastOptions({ duration: 3000 }));
-    }, [moving, moveSelection, clearSelection, labels]);
+        const where = destination ? `“${labels.get(destination) || ''}”` : rootLabel();
+        if (count === 0) {
+            toast(t('hosts.nothingToMove'), toastOptions({ duration: 2400 }));
+        } else if (count === asked) {
+            toast.success(
+                t('hosts.movedTo', { what: countLabel(t, count), where }),
+                toastOptions({ duration: 2400 }),
+            );
+        } else {
+            toast.success(
+                t('hosts.movedSomeTo', { count, of: countLabel(t, asked), where }),
+                toastOptions({ duration: 3000 }),
+            );
+        }
+    }, [moving, moveSelection, clearSelection, labels, t]);
 
     /**
      * Gather the selection into a folder that does not exist yet.
@@ -658,20 +669,23 @@ function HostsPanel({
         try {
             folder = await onCreateFolder({ name, parentId: currentFolderId });
         } catch (error) {
-            toast.error(`Could not create that folder: ${error.message}`, toastOptions());
+            toast.error(t('hosts.folderCreateFailedWhy', { reason: error.message }), toastOptions());
             return;
         }
 
         if (!folder?.id) {
-            toast.error('Could not create that folder', toastOptions());
+            toast.error(t('hosts.folderCreateFailed'), toastOptions());
             return;
         }
 
         const count = await moveSelection(folder.id, keys);
         setNaming(false);
         clearSelection();
-        toast.success(`Moved ${countLabel(count)} into “${name}”`, toastOptions({ duration: 2600 }));
-    }, [onCreateFolder, currentFolderId, moveSelection, clearSelection]);
+        toast.success(
+            t('hosts.movedInto', { what: countLabel(t, count), name }),
+            toastOptions({ duration: 2600 }),
+        );
+    }, [onCreateFolder, currentFolderId, moveSelection, clearSelection, t]);
 
     /**
      * Add and remove tags across the hosts in the selection.
@@ -734,14 +748,14 @@ function HostsPanel({
         // Two very different consequences, so the message only promises the
         // ones that are actually about to happen.
         const consequences = [
-            hostIds.length > 0 && 'Hosts are removed along with their stored credentials, and any session already open stays connected.',
-            folderIds.length > 0 && 'Folders are removed, but everything inside them moves up a level rather than being deleted.',
+            hostIds.length > 0 && t('hosts.deleteManyHostsNote'),
+            folderIds.length > 0 && t('hosts.deleteManyFoldersNote'),
         ].filter(Boolean);
 
         setConfirming({
-            title: `Delete ${countLabel(total)}?`,
+            title: t('hosts.deleteManyTitle', { what: countLabel(t, total) }),
             message: consequences.join(' '),
-            confirmLabel: `Delete ${countLabel(total)}`,
+            confirmLabel: t('hosts.deleteMany', { what: countLabel(t, total) }),
             details: [
                 ...folderIds.map(id => allFolders.find(folder => folder.id === id)?.name).filter(Boolean),
                 ...hostIds.map(id => allHosts.find(host => host.id === id)?.name).filter(Boolean),
@@ -751,14 +765,17 @@ function HostsPanel({
                 try {
                     await onDeleteMany({ hostIds, folderIds });
                 } catch (error) {
-                    toast.error(`Could not delete that: ${error.message}`, toastOptions());
+                    toast.error(t('hosts.deleteFailed', { reason: error.message }), toastOptions());
                     return;
                 }
                 clearSelection();
-                toast.success(`Deleted ${countLabel(total)}`, toastOptions({ duration: 2400 }));
+                toast.success(
+                    t('hosts.deletedMany', { what: countLabel(t, total) }),
+                    toastOptions({ duration: 2400 }),
+                );
             },
         });
-    }, [selectedHostIds, selectedFolderIds, allHosts, allFolders, onDeleteMany, clearSelection]);
+    }, [selectedHostIds, selectedFolderIds, allHosts, allFolders, onDeleteMany, clearSelection, t]);
 
     /* ------------------------------------------------------------------ *
      * What a card can be told to do
@@ -790,7 +807,7 @@ function HostsPanel({
          */
         const ways = kind === 'desktop'
             ? [{
-                label: `Connect via ${desktopLabel}`,
+                label: t('hosts.connectVia', { protocol: desktopLabel }),
                 icon: <ComputerIcon size={ICON} />,
                 onClick: () => connectAs(host, 'desktop'),
             }]
@@ -798,23 +815,23 @@ function HostsPanel({
             // to open, so the board's own interface is the only way in.
             : kind === 'ipmi'
             ? [{
-                label: 'Open the IPMI',
+                label: t('hosts.openIpmi'),
                 icon: <CpuIcon size={ICON} />,
                 onClick: () => connectAs(host, 'bmc'),
             }]
             : [
                 {
-                    label: `Connect via ${protocolLabel(kind)}`,
+                    label: t('hosts.connectVia', { protocol: protocolLabel(kind) }),
                     icon: <CommandLineIcon size={ICON} />,
                     onClick: () => connectAs(host, 'ssh'),
                 },
                 kind === 'ssh' && {
-                    label: 'Connect via SFTP',
+                    label: t('hosts.connectVia', { protocol: 'SFTP' }),
                     icon: <Folder01Icon size={ICON} />,
                     onClick: () => connectAs(host, 'sftp'),
                 },
                 kind === 'ssh' && hasDesktop && {
-                    label: `Connect via ${desktopLabel}`,
+                    label: t('hosts.connectVia', { protocol: desktopLabel }),
                     icon: <ComputerIcon size={ICON} />,
                     onClick: () => connectAs(host, 'desktop'),
                 },
@@ -823,7 +840,7 @@ function HostsPanel({
                 // needs nothing from the session, which is exactly why it is
                 // worth reaching for when the session is the thing that is down.
                 hasBmc && {
-                    label: 'Open the IPMI',
+                    label: t('hosts.openIpmi'),
                     icon: <CpuIcon size={ICON} />,
                     onClick: () => connectAs(host, 'bmc'),
                 },
@@ -832,58 +849,58 @@ function HostsPanel({
                 // turned off rather than left out: the answer to "where is RDP"
                 // should be on screen and not a gap.
                 kind === 'ssh' && !hasDesktop && hostOs(host) === 'windows' && {
-                    label: 'Connect via RDP',
+                    label: t('hosts.connectVia', { protocol: 'RDP' }),
                     icon: <ComputerIcon size={ICON} />,
                     onClick: () => {},
                     disabled: true,
-                    shortcut: 'not set up',
+                    shortcut: t('hosts.notSetUp'),
                 },
             ];
 
         return [
             ...ways,
             { type: 'separator' },
-            { label: 'Edit host', icon: <Edit02Icon size={ICON} />, onClick: () => onEditHost(host) },
-            { label: 'Duplicate', icon: <Copy01Icon size={ICON} />, onClick: () => handleDuplicate(host) },
+            { label: t('hosts.editHost'), icon: <Edit02Icon size={ICON} />, onClick: () => onEditHost(host) },
+            { label: t('titleBar.duplicate'), icon: <Copy01Icon size={ICON} />, onClick: () => handleDuplicate(host) },
             {
-                label: 'Move to folder…',
+                label: t('hosts.moveToFolder'),
                 icon: <FolderTransferIcon size={ICON} />,
                 onClick: () => setMoving(new Set([cardKey('host', host.id)])),
             },
             { type: 'separator' },
             {
-                label: 'Delete',
+                label: t('common.delete'),
                 icon: <Delete02Icon size={ICON} />,
                 danger: true,
                 onClick: () => confirmDeleteHost(host),
             },
         ];
-    }, [connectAs, onEditHost, handleDuplicate, confirmDeleteHost]);
+    }, [connectAs, onEditHost, handleDuplicate, confirmDeleteHost, t]);
 
     const folderMenu = useCallback((folder) => [
         {
-            label: 'Open',
+            label: t('hosts.open'),
             icon: <FolderOpenIcon size={ICON} />,
             // Both narrowings go, not just the query: walking into a folder
             // while a tag filter was still on would open it onto nothing.
             onClick: () => { clearFilters(); onNavigateFolder(folder.id); },
         },
         { type: 'separator' },
-        { label: 'Rename', icon: <Edit02Icon size={ICON} />, onClick: () => onEditFolder(folder) },
+        { label: t('common.rename'), icon: <Edit02Icon size={ICON} />, onClick: () => onEditFolder(folder) },
         {
-            label: 'Move to folder…',
+            label: t('hosts.moveToFolder'),
             icon: <FolderTransferIcon size={ICON} />,
             onClick: () => setMoving(new Set([cardKey('folder', folder.id)])),
         },
         { type: 'separator' },
         {
-            label: 'Delete',
-            shortcut: 'keeps contents',
+            label: t('common.delete'),
+            shortcut: t('hosts.keepsContents'),
             icon: <Delete02Icon size={ICON} />,
             danger: true,
             onClick: () => confirmDeleteFolder(folder),
         },
-    ], [clearFilters, onNavigateFolder, onEditFolder, confirmDeleteFolder]);
+    ], [clearFilters, onNavigateFolder, onEditFolder, confirmDeleteFolder, t]);
 
     /**
      * The menu for a right-click on one of several picked-out cards.
@@ -901,26 +918,26 @@ function HostsPanel({
 
         return [
             {
-                label: `Move ${countLabel(total)}…`,
+                label: t('hosts.moveMany', { what: countLabel(t, total) }),
                 icon: <FolderTransferIcon size={ICON} />,
                 onClick: () => setMoving(selectedRef.current),
             },
-            { label: 'Group into a folder…', icon: <FolderAddIcon size={ICON} />, onClick: () => setNaming(true) },
+            { label: t('hosts.groupIntoFolder'), icon: <FolderAddIcon size={ICON} />, onClick: () => setNaming(true) },
             selectedHostIds.length > 0 && {
-                label: 'Tags…',
+                label: t('hosts.tags'),
                 icon: <Tag01Icon size={ICON} />,
                 onClick: () => setTagging(true),
             },
             { type: 'separator' },
             {
-                label: `Delete ${countLabel(total)}`,
+                label: t('hosts.deleteMany', { what: countLabel(t, total) }),
                 icon: <Delete02Icon size={ICON} />,
                 danger: true,
                 onClick: confirmDeleteSelection,
             },
-            { label: 'Clear selection', icon: <Cancel01Icon size={ICON} />, onClick: clearSelection },
+            { label: t('hosts.clearSelection'), icon: <Cancel01Icon size={ICON} />, onClick: clearSelection },
         ];
-    }, [selectedHostIds, selectedFolderIds, confirmDeleteSelection, clearSelection]);
+    }, [selectedHostIds, selectedFolderIds, confirmDeleteSelection, clearSelection, t]);
 
     /**
      * Right-click on a card.
@@ -1081,7 +1098,7 @@ function HostsPanel({
                                 key={tag}
                                 tag={tag}
                                 onRemove={() => handleTagClick(tag)}
-                                title={`Stop filtering by “${tag}”`}
+                                title={t('hosts.stopFilteringBy', { tag })}
                             />
                         ))}
 
@@ -1090,7 +1107,7 @@ function HostsPanel({
                             onClick={clearFilters}
                             className="ml-0.5 text-sm font-medium text-gray-900 dark:text-white hover:underline"
                         >
-                            Clear
+                            {t('common.clear')}
                         </button>
                     </div>
                 ) : (
@@ -1108,8 +1125,8 @@ function HostsPanel({
                 {!empty && selectionCount === 0 && (
                     <p className="hidden lg:block text-[11px] text-gray-400 dark:text-gray-500 shrink-0 text-right">
                         {filtering
-                            ? 'Drag a box across the cards to pick out several'
-                            : 'Drag a card onto a folder to file it · Drag a box to pick out several'}
+                            ? t('hosts.dragHintFiltered')
+                            : t('hosts.dragHint')}
                     </p>
                 )}
             </div>
@@ -1203,7 +1220,7 @@ function HostsPanel({
             {naming && (
                 <GroupIntoFolderDialog
                     count={selectionCount}
-                    parentLabel={currentFolderId ? `“${labels.get(currentFolderId) || ''}”` : ROOT_LABEL}
+                    parentLabel={currentFolderId ? `“${labels.get(currentFolderId) || ''}”` : rootLabel()}
                     onCreate={handleGroup}
                     onCancel={() => setNaming(false)}
                 />

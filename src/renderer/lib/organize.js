@@ -8,6 +8,8 @@
  * than buried in a drop handler.
  */
 
+import { translate } from '../i18n';
+
 // Numeric so "web-2" sorts before "web-10", base sensitivity so a stray capital
 // does not push a name to the far end of the list.
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -17,15 +19,22 @@ export const SORT_NAME_DESC = 'name-desc';
 export const SORT_RECENT = 'recent';
 export const SORT_MANUAL = 'manual';
 
+/** Catalog keys: the sort menu names these in the app's own language. */
 export const SORT_LABELS = {
-    [SORT_NAME]: 'Name A-Z',
-    [SORT_NAME_DESC]: 'Name Z-A',
-    [SORT_RECENT]: 'Recently used',
-    [SORT_MANUAL]: 'Manual',
+    [SORT_NAME]: 'hosts.sortNameAsc',
+    [SORT_NAME_DESC]: 'hosts.sortNameDesc',
+    [SORT_RECENT]: 'hosts.sortRecent',
+    [SORT_MANUAL]: 'hosts.sortManual',
 };
 
 /** The breadcrumb's first crumb, and the name of the folder that is no folder. */
-export const ROOT_LABEL = 'All hosts';
+/**
+ * What the top of the folder tree is called, in the app's own language.
+ *
+ * A getter rather than a constant: a module-level string would be resolved once
+ * at import time and then keep the language the app happened to start in.
+ */
+export const rootLabel = () => translate('hosts.rootLabel');
 
 const nameOf = (item) => item?.name || '';
 
@@ -75,7 +84,7 @@ export function folderPath(folders, folderId) {
         current = folder.parentId || '';
     }
 
-    return [{ id: '', name: ROOT_LABEL }, ...path];
+    return [{ id: '', name: rootLabel() }, ...path];
 }
 
 /** "AWS / Production", or '' for a host sitting at the root. */

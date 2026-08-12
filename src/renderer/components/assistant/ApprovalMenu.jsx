@@ -1,5 +1,6 @@
 import { ArrowDown01Icon, FlashIcon, SecurityCheckIcon, Shield01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
+import { useT } from '../../i18n';
 
 /**
  * What the assistant will do before asking, as a chip in the composer.
@@ -19,26 +20,34 @@ import PanelMenu from './PanelMenu';
 const APPROVALS = [
     {
         value: 'always',
-        label: 'Ask every time',
-        hint: 'Every tool call waits for you',
+        labelKey: 'assistant.approvalAlways',
+        hintKey: 'assistant.approvalAlwaysHint',
         icon: <SecurityCheckIcon size={14} strokeWidth={1.5} />,
     },
     {
         value: 'writes',
-        label: 'Ask before changes',
-        hint: 'Reading runs freely',
+        labelKey: 'assistant.approvalWrites',
+        hintKey: 'assistant.approvalWritesHint',
         icon: <Shield01Icon size={14} strokeWidth={1.5} />,
     },
     {
         value: 'never',
-        label: 'Yolo Mode',
-        hint: 'Nothing stops, deletes included',
+        labelKey: 'assistant.approvalNever',
+        hintKey: 'assistant.approvalNeverHint',
         icon: <FlashIcon size={14} strokeWidth={1.5} />,
     },
 ];
 
 export default function ApprovalMenu({ settings, onChange }) {
-    const current = APPROVALS.find(option => option.value === settings.approval) || APPROVALS[1];
+    const t = useT();
+
+    const options = APPROVALS.map(option => ({
+        ...option,
+        label: t(option.labelKey),
+        hint: t(option.hintKey),
+    }));
+
+    const current = options.find(option => option.value === settings.approval) || options[1];
 
     // The one state worth colouring. Somebody who has turned approvals off and
     // then forgotten deserves to notice before the next destructive command,
@@ -53,7 +62,7 @@ export default function ApprovalMenu({ settings, onChange }) {
                 {
                     value: settings.approval,
                     onChange: (value) => onChange({ approval: value }),
-                    options: APPROVALS,
+                    options,
                 },
             ]}
             trigger={({ open, toggle }) => (
@@ -61,9 +70,9 @@ export default function ApprovalMenu({ settings, onChange }) {
                     type="button"
                     aria-haspopup="menu"
                     aria-expanded={open}
-                    aria-label={`Approvals: ${current.label}`}
+                    aria-label={t('assistant.approvalsLabel', { mode: current.label })}
                     onClick={toggle}
-                    title={`Approvals: ${current.label}`}
+                    title={t('assistant.approvalsLabel', { mode: current.label })}
                     className={`h-7 pl-1.5 pr-1 rounded-xl flex items-center gap-0.5 transition-colors
                         outline-none focus-visible:ring-2
                         focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25

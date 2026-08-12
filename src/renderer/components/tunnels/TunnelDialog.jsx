@@ -10,6 +10,7 @@ import {
     validateTunnel,
     isWildcardHost,
 } from '../../lib/tunnels';
+import { useT } from '../../i18n';
 
 /**
  * The shared field, in mono: everything typed into this dialog is an address or
@@ -40,6 +41,7 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
         setForm(previous => ({ ...previous, [field]: value }));
     }, []);
 
+    const t = useT();
     const info = typeInfo(form.type);
     const isDynamic = form.type === 'dynamic';
     const isRemote = form.type === 'remote';
@@ -61,8 +63,8 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
 
     return (
         <Dialog
-            title={tunnel?.id ? 'Edit port forward' : 'New port forward'}
-            subtitle={info.detail}
+            title={tunnel?.id ? t('tunnel.editTitle') : t('tunnel.newTitle')}
+            subtitle={t(info.detailKey)}
             width="34rem"
             onClose={onClose}
             icon={
@@ -72,9 +74,9 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
             }
             footer={
                 <>
-                    <DialogButton onClick={onClose}>Cancel</DialogButton>
+                    <DialogButton onClick={onClose}>{t('common.cancel')}</DialogButton>
                     <DialogButton variant="primary" onClick={submit} disabled={Boolean(error)}>
-                        {tunnel?.id ? 'Save' : 'Add forward'}
+                        {tunnel?.id ? t('common.save') : t('tunnel.add')}
                     </DialogButton>
                 </>
             }
@@ -86,7 +88,7 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                         <button
                             key={option.id}
                             type="button"
-                            title={option.summary}
+                            title={t(option.summaryKey)}
                             onClick={() => set('type', option.id)}
                             className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${
                                 form.type === option.id
@@ -94,18 +96,18 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                                     : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
                             }`}
                         >
-                            {option.label}
+                            {t(option.labelKey)}
                             <span className="ml-1.5 font-mono text-[10px] opacity-60">{option.flag}</span>
                         </button>
                     ))}
                 </div>
 
-                <Field label="Label" hint="Optional, shown instead of the addresses">
+                <Field label={t('tunnel.label')} hint={t('tunnel.labelHint')}>
                     <input
                         data-autofocus
                         value={form.name}
                         onChange={(event) => set('name', event.target.value)}
-                        placeholder="e.g. Production database"
+                        placeholder={t('tunnel.labelPlaceholder')}
                         className={`${FIELD_CLASS} font-sans`}
                     />
                 </Field>
@@ -114,8 +116,8 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                 <div className="grid grid-cols-3 gap-3">
                     <div className="col-span-2">
                         <Field
-                            label={isRemote ? 'Bind address on the server' : 'Listen address'}
-                            hint={isRemote ? 'Needs "GatewayPorts yes" for anything but loopback' : undefined}
+                            label={isRemote ? t('tunnel.bindAddress') : t('tunnel.listenAddress')}
+                            hint={isRemote ? t('tunnel.bindAddressHint') : undefined}
                         >
                             <input
                                 value={form.listenHost}
@@ -126,14 +128,14 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                             />
                         </Field>
                     </div>
-                    <Field label={isRemote ? 'Remote port' : 'Listen port'}>
+                    <Field label={isRemote ? t('tunnel.remotePort') : t('tunnel.listenPort')}>
                         <input
                             type="number"
                             min={isRemote ? 0 : 1}
                             max={65535}
                             value={form.listenPort}
                             onChange={(event) => set('listenPort', event.target.value)}
-                            placeholder={isRemote ? '0 = auto' : '8080'}
+                            placeholder={isRemote ? t('tunnel.autoPort') : '8080'}
                             className={FIELD_CLASS}
                         />
                     </Field>
@@ -144,10 +146,10 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                     <div className="grid grid-cols-3 gap-3">
                         <div className="col-span-2">
                             <Field
-                                label="Destination host"
+                                label={t('tunnel.destHost')}
                                 hint={isRemote
-                                    ? 'Resolved from this machine'
-                                    : 'Resolved from the server, so its private names work'}
+                                    ? t('tunnel.destHostLocalHint')
+                                    : t('tunnel.destHostRemoteHint')}
                             >
                                 <input
                                     value={form.destHost}
@@ -158,7 +160,7 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                                 />
                             </Field>
                         </div>
-                        <Field label="Destination port">
+                        <Field label={t('tunnel.destPort')}>
                             <input
                                 type="number"
                                 min={1}
@@ -176,8 +178,8 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                     variant="card"
                     checked={form.autoStart}
                     onChange={(event) => set('autoStart', event.target.checked)}
-                    label="Start with the connection"
-                    description="Brought up whenever this host connects, including after a reconnect."
+                    label={t('tunnel.autoStart')}
+                    description={t('tunnel.autoStartHint')}
                 />
 
                 {/* Binding past loopback is a real exposure, so it is said out loud. */}
@@ -185,8 +187,7 @@ export default function TunnelDialog({ tunnel, onSave, onClose }) {
                     <p className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500">
                         <Alert02Icon size={14} strokeWidth={2} className="shrink-0 mt-px" />
                         <span>
-                            Anyone who can reach this machine on the network will be able to use
-                            this forward. Use 127.0.0.1 unless you mean to share it.
+                            {t('tunnel.exposedWarning')}
                         </span>
                     </p>
                 )}

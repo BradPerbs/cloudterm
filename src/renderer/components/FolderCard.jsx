@@ -3,6 +3,7 @@ import { MoreVerticalIcon, CloudIcon } from 'hugeicons-react';
 import { syncedFolder } from '../lib/server-sync';
 import IconTile from './hosts/IconTile';
 import MenuButton, { dropdownItems } from './ui/MenuButton';
+import { useT } from '../i18n';
 
 /**
  * One folder, as a tile in the grid or a row in the list.
@@ -45,16 +46,16 @@ const CLOUD_CUTOUT = 'M7.9 16a1.9 1.9 0 0 1 1.05-3.45 2.9 2.9 0 0 1 5.5-.2 2.1 2
  * connected, in among folders the user did make.
  */
 const SYNC_TITLES = {
-    account: 'Synced from your CloudBlast account',
-    project: 'A project on your CloudBlast account. The sync keeps its name and its place',
+    account: 'hosts.syncedAccount',
+    project: 'hosts.syncedProject',
 };
 
 /** "3 hosts · 1 folder", and a plain word when there is nothing in it. */
-function describeContents({ hosts, folders }) {
+function describeContents(t, { hosts, folders }) {
     const parts = [];
-    if (hosts > 0) parts.push(`${hosts} host${hosts === 1 ? '' : 's'}`);
-    if (folders > 0) parts.push(`${folders} folder${folders === 1 ? '' : 's'}`);
-    return parts.join(' · ') || 'Empty';
+    if (hosts > 0) parts.push(t('hosts.count', { count: hosts }));
+    if (folders > 0) parts.push(t('hosts.folderCount', { count: folders }));
+    return parts.join(' · ') || t('hosts.folderEmpty');
 }
 
 function FolderCard({
@@ -70,6 +71,7 @@ function FolderCard({
     onContextMenu,
     ...dragProps      // data-card-id and the pointer handle, from useCardDrag
 }) {
+    const t = useT();
     const isList = view === 'list';
 
     const handleClick = useCallback((event) => {
@@ -89,7 +91,7 @@ function FolderCard({
         onOpen();
     }, [onOpen]);
 
-    const contents = describeContents(counts);
+    const contents = describeContents(t, counts);
 
     // Not a prop: it is a plain question about the folder's own id, and one
     // place to ask it is one place for the answer to be wrong.
@@ -126,7 +128,7 @@ function FolderCard({
                         {/* An SVG ignores a `title` attribute, it wants a
                             `<title>` child, so the glyph would otherwise be a
                             silent one. */}
-                        {synced && !dropInto && <title>{SYNC_TITLES[synced]}</title>}
+                        {synced && !dropInto && <title>{t(SYNC_TITLES[synced])}</title>}
 
                         {/* Even-odd only where there is a hole to punch: the
                             open folder is two overlapping subpaths, and that
@@ -156,7 +158,7 @@ function FolderCard({
                                 the folder they are sitting in have said it. */}
                             {synced === 'account' && (
                                 <span
-                                    title={SYNC_TITLES.account}
+                                    title={t(SYNC_TITLES.account)}
                                     // The same fill as the icon tile beside it,
                                     // and translucent rather than a step of the
                                     // ramp: the card moves up the ramp on hover,
@@ -165,7 +167,7 @@ function FolderCard({
                                         bg-gray-900/[0.06] dark:bg-white/10 text-gray-600 dark:text-gray-300"
                                 >
                                     <CloudIcon size={11} strokeWidth={2.5} />
-                                    Synced
+                                    {t('hosts.syncedBadge')}
                                 </span>
                             )}
                         </div>
@@ -190,7 +192,7 @@ function FolderCard({
                 >
                     <MenuButton
                         icon={<MoreVerticalIcon size={16} strokeWidth={2} />}
-                        title="Folder actions"
+                        title={t('hosts.folderActions')}
                         items={dropdownItems(items)}
                     />
                 </div>

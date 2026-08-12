@@ -15,6 +15,7 @@ import { useTunnels } from '../../hooks/useTunnels';
 import { describeTunnel, stateInfo, typeInfo, usageHint } from '../../lib/tunnels';
 import { formatSize } from '../../lib/format';
 import { toastOptions } from '../../lib/toast';
+import { useT } from '../../i18n';
 
 function Counter({ label, value }) {
     return (
@@ -26,6 +27,7 @@ function Counter({ label, value }) {
 }
 
 function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
+    const t = useT();
     const state = stateInfo(tunnel.state);
     const info = typeInfo(tunnel.type);
     const running = tunnel.state === 'active' || tunnel.state === 'starting';
@@ -34,7 +36,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
     return (
         <div className="border border-gray-200 dark:border-surface-control rounded-xl overflow-hidden">
             <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${state.dot}`} title={state.label} />
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${state.dot}`} title={t(state.labelKey)} />
 
                 <span className="shrink-0 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-surface-control text-[10px] font-semibold font-mono text-gray-600 dark:text-gray-400">
                     {info.flag}
@@ -52,13 +54,13 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
                         )}
                     </div>
                     <div className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate">
-                        {tunnel.name ? describeTunnel(tunnel) : info.summary}
+                        {tunnel.name ? describeTunnel(tunnel) : t(info.summaryKey)}
                     </div>
                 </div>
 
                 {tunnel.state === 'active' && (
                     <div className="hidden sm:flex items-center gap-3 shrink-0">
-                        <Counter label="conn" value={tunnel.activeConnections} />
+                        <Counter label={t('tunnel.connections')} value={tunnel.activeConnections} />
                         <Counter label="↑" value={formatSize(tunnel.bytesUp)} />
                         <Counter label="↓" value={formatSize(tunnel.bytesDown)} />
                     </div>
@@ -68,7 +70,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
                     <button
                         onClick={running ? onStop : onStart}
                         disabled={!isLive && !running}
-                        title={running ? 'Stop' : isLive ? 'Start' : 'Not connected'}
+                        title={running ? t('tunnel.stop') : isLive ? t('tunnel.start') : t('assistant.notConnected')}
                         className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                             running
                                 ? 'text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
@@ -82,7 +84,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
 
                     <button
                         onClick={onEdit}
-                        title="Edit"
+                        title={t('common.edit')}
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                     >
                         <Edit02Icon size={13} strokeWidth={2} />
@@ -90,7 +92,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
 
                     <button
                         onClick={onDelete}
-                        title="Remove"
+                        title={t('common.remove')}
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
                         <Delete02Icon size={13} strokeWidth={2} />
@@ -114,9 +116,9 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
                                     onClick={() => {
                                         const port = tunnel.boundPort || tunnel.listenPort;
                                         navigator.clipboard.writeText(`${tunnel.listenHost}:${port}`);
-                                        toast.success('Address copied', toastOptions({ duration: 1500 }));
+                                        toast.success(t('tunnel.addressCopied'), toastOptions({ duration: 1500 }));
                                     }}
-                                    title="Copy address"
+                                    title={t('tunnel.copyAddress')}
                                     className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                                 >
                                     <Copy01Icon size={11} strokeWidth={2} />
@@ -126,7 +128,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
                     )}
                     {tunnel.state !== 'error' && tunnel.lastError && (
                         <span className="text-[11px] text-amber-600 dark:text-amber-500 truncate max-w-[45%]" title={tunnel.lastError}>
-                            last error: {tunnel.lastError}
+                            {t('tunnel.lastError', { error: tunnel.lastError })}
                         </span>
                     )}
                 </div>
@@ -140,6 +142,7 @@ function TunnelCard({ tunnel, isLive, onStart, onStop, onEdit, onDelete }) {
  * tunnel added mid-session is still there the next time it connects.
  */
 function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
+    const t = useT();
     const { tunnels, start, stop, startAll, stopAll, sync } = useTunnels(tabId);
     const [editing, setEditing] = useState(null);
     const [confirming, setConfirming] = useState(null);
@@ -166,21 +169,27 @@ function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
 
         setEditing(null);
         await persist(current);
-        toast.success(index >= 0 ? 'Forward updated' : 'Forward added', toastOptions({ duration: 1800 }));
-    }, [tunnels, persist]);
+        toast.success(
+            index >= 0 ? t('tunnel.updated') : t('tunnel.added'),
+            toastOptions({ duration: 1800 }),
+        );
+    }, [tunnels, persist, t]);
 
     const handleDelete = useCallback((tunnel) => {
         setConfirming({
-            title: 'Remove this port forward?',
-            message: `${tunnel.name || describeTunnel(tunnel)} will be stopped and removed from ${host.name}.`,
-            confirmLabel: 'Remove',
+            title: t('tunnel.removeTitle'),
+            message: t('tunnel.removeMessage', {
+                tunnel: tunnel.name || describeTunnel(tunnel),
+                host: host.name,
+            }),
+            confirmLabel: t('common.remove'),
             onConfirm: async () => {
                 setConfirming(null);
                 await persist(tunnels.filter(entry => entry.id !== tunnel.id));
-                toast.success('Forward removed', toastOptions({ duration: 1800 }));
+                toast.success(t('tunnel.removed'), toastOptions({ duration: 1800 }));
             },
         });
-    }, [tunnels, persist, host.name]);
+    }, [tunnels, persist, host.name, t]);
 
     const anyRunning = tunnels.some(tunnel => tunnel.state === 'active' || tunnel.state === 'starting');
 
@@ -189,9 +198,9 @@ function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
             <div className="max-w-3xl mx-auto p-6 flex flex-col gap-5">
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Port forwarding</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('tunnel.heading')}</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                            Tunnels run over this session's connection and stop when it closes.
+                            {t('tunnel.headingNote')}
                         </p>
                     </div>
 
@@ -202,7 +211,7 @@ function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
                                 disabled={!isLive && !anyRunning}
                                 className="px-3 h-9 rounded-xl border border-gray-300 dark:border-surface-control text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-control transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                {anyRunning ? 'Stop all' : 'Start all'}
+                                {anyRunning ? t('tunnel.stopAll') : t('tunnel.startAll')}
                             </button>
                         )}
                         <button
@@ -210,14 +219,14 @@ function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
                             className="flex items-center gap-2 px-4 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md"
                         >
                             <PlusSignIcon size={16} strokeWidth={2.5} />
-                            <span>Add forward</span>
+                            <span>{t('tunnel.add')}</span>
                         </button>
                     </div>
                 </div>
 
                 {!isLive && tunnels.length > 0 && (
                     <p className="text-xs text-amber-600 dark:text-amber-500 rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10 px-3 py-2">
-                        The session is not connected. Forwards will start again when it reconnects.
+                        {t('tunnel.sessionDown')}
                     </p>
                 )}
 
@@ -229,11 +238,10 @@ function TunnelsView({ tabId, host, isLive, onUpdateHost }) {
                             className="mx-auto text-gray-300 dark:text-neutral-700 mb-3"
                         />
                         <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
-                            No port forwards yet
+                            {t('tunnel.empty')}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-                            Forward a port to reach a database or an internal dashboard through this
-                            server, or open a SOCKS proxy to browse from it.
+                            {t('tunnel.emptyNote')}
                         </p>
                     </div>
                 ) : (
