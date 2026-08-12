@@ -439,6 +439,11 @@ export default {
     'settings.terminal.scrollbackDesc': 'Lines kept above the top of the window, per session. '
         + 'Find-in-scrollback searches all of them, and every line costs memory in this window '
         + 'rather than on the server.',
+    'settings.terminal.smoothScroll': 'Smooth scrolling',
+    'settings.terminal.smoothScrollAria': 'Smooth scroll duration',
+    'settings.terminal.smoothScrollDesc': 'How long wheel and trackpad movements take to settle. '
+        + 'Turn it off to follow input immediately.',
+    'settings.terminal.smoothScrollMs': '{value} ms',
     'settings.terminal.links': 'Opening links',
     'settings.terminal.linksDesc': 'A URL printed in the session is clickable and opens in your '
         + 'browser. Asking for {modifier} as well is what editors do: it stops a click meant for '
@@ -447,8 +452,8 @@ export default {
     'settings.terminal.link.modifier': '{modifier} + click',
     'settings.terminal.reset': 'Back to the defaults',
     'settings.terminal.resetAlready': 'Everything above is already at its default.',
-    'settings.terminal.resetDesc': 'Resets the font, spacing, cursor, scrollback and link clicking. '
-        + 'Leaves the colour scheme alone.',
+    'settings.terminal.resetDesc': 'Resets the font, spacing, cursor, scrollback, scrolling and '
+        + 'link clicking. Leaves the colour scheme alone.',
     'settings.terminal.resetDone': 'Terminal type reset',
     'settings.terminal.colors': 'Terminal Colors',
     'settings.terminal.colorsDesc': 'Choose a color scheme for your terminal, or build your own',

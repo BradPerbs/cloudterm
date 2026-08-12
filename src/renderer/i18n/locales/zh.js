@@ -370,6 +370,11 @@ export default {
     'settings.terminal.scrollbackAria': '回滚行数',
     'settings.terminal.scrollbackDesc': '每个会话在窗口顶部之上保留的行数。回滚搜索会搜索全部这些行，'
         + '而每一行占用的都是本窗口的内存，而不是服务器的。',
+    'settings.terminal.smoothScroll': '平滑滚动',
+    'settings.terminal.smoothScrollAria': '平滑滚动时长',
+    'settings.terminal.smoothScrollDesc': '鼠标滚轮和触控板的滚动需要多长时间才会停稳。'
+        + '关闭后，滚动会立即响应操作。',
+    'settings.terminal.smoothScrollMs': '{value} 毫秒',
     'settings.terminal.links': '打开链接',
     'settings.terminal.linksDesc': '会话中打印出的 URL 可以点击，并在浏览器中打开。同时要求按住 {modifier} '
         + '是编辑器的做法：这样一来，原本想点在 URL 下方文字上的点击就不会在会话中途弹出浏览器。',
@@ -377,7 +382,7 @@ export default {
     'settings.terminal.link.modifier': '{modifier} + 单击',
     'settings.terminal.reset': '恢复默认值',
     'settings.terminal.resetAlready': '以上各项都已是默认值。',
-    'settings.terminal.resetDesc': '重置字体、间距、光标、回滚和链接点击方式，配色方案保持不变。',
+    'settings.terminal.resetDesc': '重置字体、间距、光标、回滚、平滑滚动和链接点击方式，配色方案保持不变。',
     'settings.terminal.resetDone': '终端排版已重置',
     'settings.terminal.colors': '终端配色',
     'settings.terminal.colorsDesc': '为终端选择一套配色方案，或自行搭配',

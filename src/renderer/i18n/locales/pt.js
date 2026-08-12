@@ -402,6 +402,11 @@ export default {
     'settings.terminal.scrollbackDesc': 'Linhas guardadas acima do topo da janela, por sessão. A '
         + 'procura no histórico percorre-as todas, e cada linha custa memória nesta janela e não '
         + 'no servidor.',
+    'settings.terminal.smoothScroll': 'Deslocamento suave',
+    'settings.terminal.smoothScrollAria': 'Duração do deslocamento suave',
+    'settings.terminal.smoothScrollDesc': 'Quanto tempo o deslocamento demora a estabilizar depois '
+        + 'de usar a roda do rato ou o trackpad. Desligue para que responda de imediato.',
+    'settings.terminal.smoothScrollMs': '{value} ms',
     'settings.terminal.links': 'Abrir ligações',
     'settings.terminal.linksDesc': 'Um URL escrito na sessão é clicável e abre no seu navegador. '
         + 'Exigir também {modifier} é o que os editores fazem: impede que um clique destinado ao '
@@ -410,8 +415,8 @@ export default {
     'settings.terminal.link.modifier': '{modifier} + clique',
     'settings.terminal.reset': 'Voltar às predefinições',
     'settings.terminal.resetAlready': 'Tudo acima já está no valor predefinido.',
-    'settings.terminal.resetDesc': 'Repõe o tipo de letra, o espaçamento, o cursor, o histórico e o '
-        + 'clique em ligações. Deixa o esquema de cores como está.',
+    'settings.terminal.resetDesc': 'Repõe o tipo de letra, o espaçamento, o cursor, o histórico, o '
+        + 'deslocamento suave e o clique em ligações. Deixa o esquema de cores como está.',
     'settings.terminal.resetDone': 'Composição do terminal reposta',
     'settings.terminal.colors': 'Cores do terminal',
     'settings.terminal.colorsDesc': 'Escolha um esquema de cores para o terminal, ou faça o seu',

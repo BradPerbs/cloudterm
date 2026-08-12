@@ -389,6 +389,11 @@ export default {
     'settings.terminal.scrollbackDesc': 'Số dòng giữ lại phía trên đỉnh cửa sổ, cho mỗi phiên. Tìm '
         + 'trong bộ đệm cuộn sẽ tìm hết chỗ đó, và mỗi dòng tốn bộ nhớ của cửa sổ này chứ không '
         + 'phải của máy chủ.',
+    'settings.terminal.smoothScroll': 'Cuộn mượt',
+    'settings.terminal.smoothScrollAria': 'Thời lượng cuộn mượt',
+    'settings.terminal.smoothScrollDesc': 'Thời gian để chuyển động cuộn bằng con lăn chuột hoặc '
+        + 'bàn di chuột dừng hẳn. Tắt để cuộn theo thao tác ngay lập tức.',
+    'settings.terminal.smoothScrollMs': '{value} ms',
     'settings.terminal.links': 'Mở liên kết',
     'settings.terminal.linksDesc': 'Một URL in ra trong phiên có thể bấm được và sẽ mở trong trình '
         + 'duyệt. Yêu cầu giữ thêm {modifier} là cách các trình soạn thảo vẫn làm: nó ngăn một cú '
@@ -397,8 +402,8 @@ export default {
     'settings.terminal.link.modifier': '{modifier} + bấm',
     'settings.terminal.reset': 'Trở về mặc định',
     'settings.terminal.resetAlready': 'Mọi mục ở trên đều đang ở giá trị mặc định.',
-    'settings.terminal.resetDesc': 'Đặt lại phông, khoảng cách, con trỏ, bộ đệm cuộn và cách bấm '
-        + 'liên kết. Bảng màu được giữ nguyên.',
+    'settings.terminal.resetDesc': 'Đặt lại phông, khoảng cách, con trỏ, bộ đệm cuộn, độ mượt khi '
+        + 'cuộn và cách bấm liên kết. Bảng màu được giữ nguyên.',
     'settings.terminal.resetDone': 'Đã đặt lại kiểu chữ của terminal',
     'settings.terminal.colors': 'Màu terminal',
     'settings.terminal.colorsDesc': 'Chọn một bảng màu cho terminal, hoặc tự dựng riêng',

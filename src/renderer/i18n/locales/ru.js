@@ -416,6 +416,11 @@ export default {
     'settings.terminal.scrollbackDesc': 'Сколько строк хранится выше верхнего края окна, для '
         + 'каждого сеанса. Поиск по буферу просматривает их все, и каждая строка занимает память в '
         + 'этом окне, а не на сервере.',
+    'settings.terminal.smoothScroll': 'Плавная прокрутка',
+    'settings.terminal.smoothScrollAria': 'Длительность плавной прокрутки',
+    'settings.terminal.smoothScrollDesc': 'Сколько времени требуется, чтобы прокрутка колёсиком '
+        + 'мыши или жестом на трекпаде остановилась. Выключите, чтобы она сразу следовала за движением.',
+    'settings.terminal.smoothScrollMs': '{value} мс',
     'settings.terminal.links': 'Открытие ссылок',
     'settings.terminal.linksDesc': 'Напечатанный в сеансе URL можно нажать, и он откроется в '
         + 'браузере. Требовать при этом {modifier} принято в редакторах: так щелчок, нацеленный на '
@@ -424,8 +429,8 @@ export default {
     'settings.terminal.link.modifier': '{modifier} + щелчок',
     'settings.terminal.reset': 'Вернуть значения по умолчанию',
     'settings.terminal.resetAlready': 'Всё, что выше, уже имеет значение по умолчанию.',
-    'settings.terminal.resetDesc': 'Сбрасывает шрифт, интервалы, курсор, буфер прокрутки и способ '
-        + 'открытия ссылок. Цветовую схему не трогает.',
+    'settings.terminal.resetDesc': 'Сбрасывает шрифт, интервалы, курсор, буфер прокрутки, плавную '
+        + 'прокрутку и способ открытия ссылок. Цветовую схему не трогает.',
     'settings.terminal.resetDone': 'Набор терминала сброшен',
     'settings.terminal.colors': 'Цвета терминала',
     'settings.terminal.colorsDesc': 'Выберите цветовую схему для терминала или соберите свою',

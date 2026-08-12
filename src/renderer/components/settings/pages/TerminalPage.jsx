@@ -254,7 +254,7 @@ export default function TerminalPage({
                 />
             </SettingCard>
 
-            {/* ---------------- Cursor, buffer and links ---------------- */}
+            {/* ------------ Cursor, buffer, scrolling and links ------------ */}
             <SettingCard>
                 <SettingRow
                     align="center"
@@ -298,6 +298,24 @@ export default function TerminalPage({
                             {...LIMITS.scrollback}
                             onChange={(scrollback) => set({ scrollback })}
                             format={(value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : String(value))}
+                        />
+                    }
+                />
+
+                <SettingRow
+                    className={DIVIDED}
+                    align="center"
+                    title={t('settings.terminal.smoothScroll')}
+                    description={t('settings.terminal.smoothScrollDesc')}
+                    control={
+                        <Slider
+                            ariaLabel={t('settings.terminal.smoothScrollAria')}
+                            value={terminalSettings.smoothScrollDuration}
+                            {...LIMITS.smoothScrollDuration}
+                            onChange={(smoothScrollDuration) => set({ smoothScrollDuration })}
+                            format={(value) => (value === 0
+                                ? t('common.off')
+                                : t('settings.terminal.smoothScrollMs', { value }))}
                         />
                     }
                 />
