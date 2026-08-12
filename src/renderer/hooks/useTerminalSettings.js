@@ -94,8 +94,10 @@ export const LIMITS = {
     // 200k lines of an 80-column buffer is on the order of 100 MB per session,
     // which is the point past which the tab is the problem rather than the fix.
     scrollback: { min: 500, max: 200000, step: 500 },
-    // Long enough to make the easing visible without letting one wheel gesture
-    // leave the viewport chasing input for a noticeable fraction of a second.
+    // Past about a third of a second the easing from one wheel tick is still
+    // running when the next arrives, so a fast scroll stops being a view that
+    // follows the hand and becomes a queue of animations trailing behind it.
+    // 0 is off, and is the default: xterm's own easing is opt-in here.
     smoothScrollDuration: { min: 0, max: 300, step: 10 },
 };
 
@@ -133,34 +135,29 @@ export function sanitizeTerminalSettings(raw) {
 
     if (FONTS_BY_ID[source.fontFamily]) next.fontFamily = source.fontFamily;
 
-    next.fontSize = Math.round(clamp(source.fontSize, LIMITS.fontSize, next.fontSize));
-    next.fontWeight = quantize(
-        clamp(source.fontWeight, LIMITS.fontWeight, next.fontWeight),
-        LIMITS.fontWeight
-    );
-    // Two decimals: a line height carrying floating-point noise would be
-    // written back to storage differently every time it was read.
-    next.lineHeight = Number(
-        quantize(clamp(source.lineHeight, LIMITS.lineHeight, next.lineHeight), LIMITS.lineHeight)
-            .toFixed(2)
-    );
-    next.letterSpacing = Number(
-        quantize(clamp(source.letterSpacing, LIMITS.letterSpacing, next.letterSpacing), LIMITS.letterSpacing)
-            .toFixed(1)
-    );
-    next.scrollback = Math.round(
-        quantize(clamp(source.scrollback, LIMITS.scrollback, next.scrollback), LIMITS.scrollback)
-    );
-    next.smoothScrollDuration = Math.round(
-        quantize(
-            clamp(
-                source.smoothScrollDuration,
-                LIMITS.smoothScrollDuration,
-                next.smoothScrollDuration
-            ),
-            LIMITS.smoothScrollDuration
-        )
-    );
+    /**
+     * One numeric setting, bounded: clamped into its range, falling back to the
+     * default if it is not a number at all, then snapped to its step.
+     *
+     * A helper rather than the expression written out six times, because the
+     * expression names its key three times and getting one of the three wrong
+     * silently sanitises a setting against another setting's limits.
+     *
+     * `decimals` is not cosmetic. A fractional step leaves floating-point noise
+     * in the product, and a line height carrying it would be written back to
+     * storage differently every time it was read.
+     */
+    const bounded = (key, decimals = 0) => {
+        const limits = LIMITS[key];
+        return Number(quantize(clamp(source[key], limits, next[key]), limits).toFixed(decimals));
+    };
+
+    next.fontSize = bounded('fontSize');
+    next.fontWeight = bounded('fontWeight');
+    next.lineHeight = bounded('lineHeight', 2);
+    next.letterSpacing = bounded('letterSpacing', 1);
+    next.scrollback = bounded('scrollback');
+    next.smoothScrollDuration = bounded('smoothScrollDuration');
 
     if (typeof source.ligatures === 'boolean') next.ligatures = source.ligatures;
     if (CURSOR_STYLES.some(style => style.id === source.cursorStyle)) {

@@ -254,7 +254,7 @@ export default function TerminalPage({
                 />
             </SettingCard>
 
-            {/* ---------------- Cursor, buffer and links ---------------- */}
+            {/* ------------ Cursor, buffer, scrolling and links ------------ */}
             <SettingCard>
                 <SettingRow
                     align="center"

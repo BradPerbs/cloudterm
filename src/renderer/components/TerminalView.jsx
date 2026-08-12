@@ -72,6 +72,12 @@ function ensureTerminalFont(fontSize, weight, fontFamily) {
  *
  * One place, used by both the initial construction and the update effect, so
  * the two can never drift into disagreeing about what a setting does.
+ *
+ * Everything here is worth a refit, which is what makes it worth putting in one
+ * record: applying any of it means measuring the pane again and telling the
+ * remote its new window size. A setting that does not move the cell, the way
+ * the theme and the scroll easing do not, does not belong here; it gets its own
+ * two-line effect instead, so that changing it does not SIGWINCH the remote.
  */
 function terminalOptions(settings) {
     return {
@@ -86,9 +92,16 @@ function terminalOptions(settings) {
         cursorStyle: settings.cursorStyle,
         cursorBlink: settings.cursorBlink,
         scrollback: settings.scrollback,
-        smoothScrollDuration: settings.smoothScrollDuration,
     };
 }
+
+/**
+ * Same check as useCardDrag, useTabDrag and useTypewriter, and read at the
+ * moment it is applied rather than cached, so the terminal's one animation is
+ * not the only one in the app that ignores the OS setting.
+ */
+const prefersReducedMotion = () =>
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 // A row is only given back once the overflow is worth seeing. Both renderers
 // round the drawn height to whole device pixels, so a sub-pixel overhang is
@@ -426,9 +439,46 @@ function TerminalView({
         [terminalTheme, customTerminalTheme]
     );
 
-    // Same reasoning as the theme: a fresh object every render would re-assign
-    // xterm's options on every commit, and each assignment costs a reflow.
-    const options = useMemo(() => terminalOptions(terminalSettings), [terminalSettings]);
+    /**
+     * Same reasoning as the theme: a fresh object every render would re-assign
+     * xterm's options on every commit, and each assignment costs a reflow.
+     *
+     * Keyed on the contents and not on `terminalSettings`, which is replaced
+     * whenever *any* terminal setting changes. Half the record is not in here at
+     * all: the scroll easing, the link modifier, the ligature toggle. Memoising
+     * on the object would hand the refit effect below a new identity for those
+     * too, and refit every pane and SIGWINCH every remote for a record in which
+     * nothing moved. Keyed on the values, a change that is not in here is not a
+     * change, and the list stays honest on its own as fields come and go.
+     */
+    const geometry = terminalOptions(terminalSettings);
+    const geometryKey = JSON.stringify(geometry);
+    const options = useMemo(() => geometry, [geometryKey]);
+
+    /**
+     * The record the terminal is built from, read at construction time.
+     *
+     * The mount effect below is keyed on the pane alone and waits on a font
+     * before it constructs. A settings change landing inside that wait would
+     * otherwise be lost: the update effect runs, finds no terminal yet, returns,
+     * and never fires again, because `options` has already changed. The pane
+     * then keeps the settings it was opened with until the next edit.
+     */
+    const optionsRef = useRef(options);
+    optionsRef.current = options;
+
+    /**
+     * How long a wheel gesture takes to settle, with reduced motion applied.
+     *
+     * Deliberately not part of `options`: the easing does not change the size of
+     * a cell, and going through that effect would refit every pane and send a
+     * window-change to every remote on each of the thirty steps of a slider
+     * drag, which is a SIGWINCH storm and a full redraw in anything running
+     * full-screen.
+     */
+    const smoothScrollDuration = prefersReducedMotion() ? 0 : terminalSettings.smoothScrollDuration;
+    const smoothScrollRef = useRef(smoothScrollDuration);
+    smoothScrollRef.current = smoothScrollDuration;
 
     /**
      * Put the GPU renderer on a terminal, or take it off again.
@@ -525,12 +575,28 @@ function TerminalView({
             // webfont is still pending it measures the fallback instead, so the
             // glyph atlas and the size handed to the PTY both come out wrong:
             // measured here as 125 columns instead of 134.
-            await ensureTerminalFont(options.fontSize, options.fontWeight, options.fontFamily);
-            if (disposed || !terminalRef.current) return;
+            //
+            // Re-read after each wait rather than building from the record this
+            // effect closed over, for the reason `optionsRef` exists. Bounded,
+            // because a record still moving after three font loads is a slider
+            // mid-drag, and settling for the newest values with a font that is
+            // still arriving beats settling for values the user has left behind.
+            let mountOptions = optionsRef.current;
+            for (let pass = 0; pass < 3; pass += 1) {
+                await ensureTerminalFont(
+                    mountOptions.fontSize,
+                    mountOptions.fontWeight,
+                    mountOptions.fontFamily
+                );
+                if (disposed || !terminalRef.current) return;
+                if (optionsRef.current === mountOptions) break;
+                mountOptions = optionsRef.current;
+            }
 
             term = new Terminal({
-                ...options,
+                ...mountOptions,
                 theme: themeConfig,
+                smoothScrollDuration: smoothScrollRef.current,
                 allowProposedApi: true,
                 fastScrollModifier: 'alt',
                 rescaleOverlappingGlyphs: false,
@@ -704,6 +770,14 @@ function TerminalView({
             termRef.current.options.theme = themeConfig;
         }
     }, [themeConfig]);
+
+    // Scroll easing, live. Assigned on its own, not refitted: see the comment on
+    // `smoothScrollDuration` for why it stays out of the typography effect.
+    useEffect(() => {
+        if (termRef.current) {
+            termRef.current.options.smoothScrollDuration = smoothScrollDuration;
+        }
+    }, [smoothScrollDuration]);
 
     /**
      * Typography, live.
