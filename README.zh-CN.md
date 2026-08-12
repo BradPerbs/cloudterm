@@ -105,7 +105,7 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
 </p>
 
 - **使用本机已有的 Claude Code、Codex 或 OpenCode**，沿用你自己的账号和配置
-- **读取当前会话并操作远程服务器**，执行更改前会先征求你的同意
+- **读取当前会话并操作远程服务器**，执行更改前会先征求你的同意；提供三种审批模式，详见 [docs/assistant-approvals.md](docs/assistant-approvals.md)（英文）
 - **每个对话可单独选择模型和推理强度**，并在运行时显示用量
 
 ### 终端
@@ -267,6 +267,14 @@ npm run dev
 ```bash
 npm run build
 ```
+
+提交 pull request 前请运行单元测试：
+
+```bash
+npm test
+```
+
+更多文档见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/README.md](docs/README.md)（英文）。
 
 ### 快捷键
 

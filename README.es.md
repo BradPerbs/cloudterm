@@ -121,8 +121,9 @@ para leerlo y modificarlo.
 - **Trabaja en el terminal que ves**: los comandos se escriben en el panel y la
   salida se queda en tu historial, o se ejecutan en un canal oculto si lo
   prefieres
-- **Pregunta antes de cambiar nada**, con una lista de comandos que solo miran
-  y un modo más estricto o más suelto cuando lo quieras
+- **Pregunta antes de cambiar nada** — tres modos de aprobación (cada
+  herramienta / solo cambios / nunca), aviso al primer uso y confirmación antes
+  de **Nunca preguntar**. Ver [docs/assistant-approvals.md](docs/assistant-approvals.md) (inglés)
 - **Apuntado donde tú digas**: la sesión que tienes delante, una que fijes, o
   todos los hosts que tengas guardados
 - **Herramientas en vez de suposiciones**: conectar un host guardado, leer y
@@ -299,6 +300,14 @@ Compila un ejecutable portable en `dist/`:
 ```bash
 npm run build
 ```
+
+Antes de abrir un pull request, ejecuta las pruebas unitarias:
+
+```bash
+npm test
+```
+
+Más documentación en [CHANGELOG.md](CHANGELOG.md) y [docs/README.md](docs/README.md) (inglés).
 
 ### Atajos
 
