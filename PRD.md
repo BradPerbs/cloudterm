@@ -120,11 +120,11 @@ Main (Electron): store, vault, transport (ssh|telnet|serial),
 
 | ID | Requirement | Current gap |
 |----|-------------|-------------|
-| N1 | PR builds run automated tests | Release-only CI; no PR test workflow |
+| N1 | PR builds run automated tests | **Shipped (M1):** `.github/workflows/ci.yml` on PRs and `main` |
 | N2 | Installers code-signed on Windows (and ideally macOS) | Unsigned |
 | N3 | Core paths (SSH connect, SFTP, lock/unlock) covered by automated smoke | Unit tests only; no E2E |
 | N4 | Cold start acceptable for SSH-only users | RDP/VNC/WASM always in bundle weight |
-| N5 | CJK IME composition usable in terminal | Known TODO in `xterm.css` |
+| N5 | CJK IME composition usable in terminal | Known limitation — documented in `docs/ime-composition.md`; fix tracked in #7 |
 | N6 | Marketing locales match in-app locales | Spanish README without in-app `es` |
 
 ---
@@ -149,10 +149,10 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 
 | Priority | Item | Rationale | Notes |
 |----------|------|-----------|-------|
-| **P0** | Add CI workflow that runs `npm test` on PRs | Regressions can ship with release-only CI | Mirror local `npm test` script |
-| **P0** | Harden AI approval defaults + first-run warning | “Never ask” + `run_command` is high risk | Prefer ask-before-run; document modes clearly |
-| **P0** | Audit RDP password lifetime in renderer/WASM | Documented secret exception | Zero after auth; no logs; teardown tests |
-| **P0** | Fix or quarantine IME composition positioning | Blocks CJK users; zh locale is shipped | `src/renderer/xterm.css` TODO |
+| **P0** | Add CI workflow that runs `npm test` on PRs | Regressions can ship with release-only CI | **Done** — `.github/workflows/ci.yml` |
+| **P0** | Harden AI approval defaults + first-run warning | “Never ask” + `run_command` is high risk | **Done** — default `writes`, warning, confirm for `never`; see `docs/assistant-approvals.md` |
+| **P0** | Audit RDP password lifetime in renderer/WASM | Documented secret exception | **Done** — see `docs/rdp-credentials.md`; tests in `test/rdp.test.js` |
+| **P0** | Fix or quarantine IME composition positioning | Blocks CJK users; zh locale is shipped | **Quarantined (M1)** — `docs/ime-composition.md`; #7 open |
 | **P1** | Session restore reconnect policy | Tabs restore without live sockets | Explicit “reconnect all” or per-tab option |
 | **P1** | Update download UX | `autoDownload = true` may surprise corporate users | Optional “ask before download” |
 | **P1** | Align Spanish: add `es` locale **or** remove es README until ready | Docs/product mismatch | |
@@ -206,7 +206,7 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 
 | Milestone | Scope | Exit criteria |
 |-----------|--------|---------------|
-| **M1 — Trust & gates** | PR CI for tests; AI default hardening; RDP password audit; IME fix plan | Tests on every PR; safer AI defaults; documented RDP secret handling |
+| **M1 — Trust & gates** | PR CI for tests; AI default hardening; RDP password audit; IME fix plan | **Shipped** — CI on PRs; safer AI defaults; RDP docs + tests; IME quarantined in `docs/ime-composition.md` |
 | **M2 — Distribution** | Code signing; icon quality; optional update consent | Signed Win (+ mac if feasible); reduced SmartScreen friction |
 | **M3 — Quality depth** | Module splits; E2E smoke; SSH/SFTP integration tests | Reviewable IPC surfaces; smoke green in CI |
 | **M4 — Polish** | Locale alignment; lazy-load remoting; docs for env/`userData`; a11y pass | Marketing ↔ app parity; measurable startup win |
@@ -228,6 +228,8 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 | Doc | Path / URL |
 |-----|------------|
 | User README | `README.md` (+ zh-CN, es, ru) |
+| Changelog | `CHANGELOG.md` |
+| Contributor docs | `docs/README.md` |
 | Winget publish | `docs/winget.md` |
 | Resources / icon notes | `resources/README.md` |
 | License | `LICENSE` |
@@ -235,4 +237,5 @@ Priorities: **P0** ship-blocking / trust / safety · **P1** product quality · *
 
 ---
 
-*This PRD describes the product as of v1.3.0 and a prioritized improvement backlog. Update milestones when releases ship.*
+*This PRD describes the product as of v1.3.0 plus the M1 trust-and-gates
+work on `feat/m1-trust-gates`. Update milestones when releases ship.*
