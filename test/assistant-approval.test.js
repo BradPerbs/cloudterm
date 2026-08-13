@@ -266,7 +266,10 @@ check('an unknown tool is never auto approved', () => {
 });
 
 check('"never ask" really does mean never', () => {
-    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'rm -rf /' }, open), true);
+    // Everything except the block list, which is checked before the mode and
+    // is the one thing "never ask" does not reach. That case is its own check
+    // above; this one is about the rest of it.
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'systemctl restart nginx' }, open), true);
     assert.strictEqual(tools.isAutoApproved('some_new_tool', {}, open), true);
 });
 

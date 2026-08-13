@@ -316,7 +316,7 @@ export default {
     'settings.nav.general': 'General',
     'settings.nav.appearance': 'Appearance',
     'settings.nav.terminal': 'Terminal',
-    'settings.nav.assistant': 'Assistant',
+    'settings.nav.assistant': 'AI Agent',
     'settings.nav.monitoring': 'Monitoring',
     'settings.nav.logging': 'Logging',
     'settings.nav.security': 'Security',
@@ -466,19 +466,29 @@ export default {
     /* ---------------------------------------------------------------- *
      * Settings: Assistant
      * ---------------------------------------------------------------- */
-    'settings.assistant.title': 'Assistant',
-    'settings.assistant.desc': 'The assistant reads your terminals and works on your servers '
+    'settings.assistant.title': 'AI Agent',
+    'settings.assistant.desc': 'The agent reads your terminals and works on your servers '
         + 'through the connections you have already opened. It never sees a stored password or key.',
-    'settings.assistant.loading': 'Loading the assistant settings...',
+    'settings.assistant.loading': 'Loading the agent settings...',
     'settings.assistant.agent': 'Agent',
-    'settings.assistant.agentDesc': 'Which coding agent answers, using the copy already installed '
-        + 'on this machine. Switching starts a fresh conversation.',
-    'settings.assistant.provider.claudeCode': 'Uses the Claude Code already installed and signed in '
-        + 'on this machine.',
-    'settings.assistant.provider.codex': 'Uses the Codex CLI installed on this machine.',
-    'settings.assistant.provider.opencode': 'Uses the OpenCode CLI and providers configured on this '
-        + 'machine.',
+    'settings.assistant.agentDesc': 'Which coding agent answers: one installed on this machine, or '
+        + 'a model you are serving yourself. Switching starts a fresh conversation.',
+    'settings.assistant.provider.claudeCode': 'Anthropic’s agent, on your own account.',
+    'settings.assistant.provider.codex': 'OpenAI’s agent, on your own account.',
+    'settings.assistant.provider.opencode': 'Open source, on the providers you set up.',
+    'settings.assistant.provider.grok': 'xAI’s agent, on your own account.',
+    'settings.assistant.provider.local': 'Your own model: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Not available in this build yet.',
+    'settings.assistant.endpoint': 'Server address',
+    'settings.assistant.endpointDesc': 'Where the local model server is listening. Any server that '
+        + 'speaks the OpenAI API works here.',
+    'settings.assistant.endpointNote': 'LM Studio: http://localhost:1234/v1. Ollama: '
+        + 'http://localhost:11434/v1. llama.cpp: http://localhost:8080/v1.',
+    'settings.assistant.endpointChecking': 'Asking that address what it has...',
+    'settings.assistant.endpointFound_one': 'Answered, with 1 model to choose from.',
+    'settings.assistant.endpointFound_other': 'Answered, with {count} models to choose from.',
+    'settings.assistant.endpointNone': 'Nothing answered at that address. Check the server is '
+        + 'running and that its API is switched on.',
     'settings.assistant.commandMode': 'Where commands run',
     'settings.assistant.commandMode.terminal': 'In my terminal',
     'settings.assistant.commandMode.background': 'Out of sight',
@@ -540,6 +550,12 @@ export default {
     'settings.assistant.accountOpencode': 'OpenCode uses the providers and credentials already '
         + 'configured in its CLI. Manage them with "opencode auth login"; keys stored in CloudBlast '
         + 'are not passed to OpenCode.',
+    'settings.assistant.accountGrokApi': 'Grok Build is not installed on this machine, so CloudTerm '
+        + 'talks to the xAI API directly with the key stored here, and usage is charged per token. '
+        + 'Install the CLI and sign in to use your own plan instead.',
+    'settings.assistant.accountLocal': 'Nothing to sign in to. The model runs on this computer, so '
+        + 'there is no account and no per-token charge. A key is only needed if you put one on the '
+        + 'server yourself.',
     'settings.assistant.accountPlan': 'Signed in through {agent} on this machine, on a {plan} plan. '
         + 'Usage comes out of that plan, so no key is needed here.',
     'settings.assistant.accountProvider': '{agent} on this machine is set up against {provider}, '
@@ -552,6 +568,7 @@ export default {
         + 'this machine, which is the usual case. A key is only needed when you are not.',
     'settings.assistant.apiKey': 'API key',
     'settings.assistant.keyStored': 'A key is stored',
+    'settings.assistant.keyOptional': 'Only if your server asks for one',
     'settings.assistant.keySaved': 'Key saved.',
     'settings.assistant.keyRemoved': 'Key removed.',
     'settings.assistant.keyFailed': 'That key could not be saved.',

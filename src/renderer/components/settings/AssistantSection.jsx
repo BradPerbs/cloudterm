@@ -7,6 +7,7 @@ import Toggle from './ui/Toggle';
 import Slider from './ui/Slider';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
+import Reveal from '../ui/Reveal';
 import { useT } from '../../i18n';
 
 /**
@@ -32,6 +33,28 @@ const FIELD_CLASS = `w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutra
 
 const APPROVALS = ['always', 'writes', 'never'];
 
+/**
+ * What a key for each agent looks like, as the field's placeholder.
+ *
+ * A key is stored per agent, so this is also the one thing on the row that
+ * says whose key is being asked for: an Anthropic key typed into the box while
+ * Grok is selected is not a fallback, it is a login failure a week later.
+ */
+const KEY_HINTS = {
+    'claude-code': 'sk-ant-...',
+    codex: 'sk-proj-...',
+    grok: 'xai-...',
+};
+
+/** What the key box says when it is empty. */
+function keyPlaceholder(t, settings) {
+    if (settings.hasApiKey) return t('settings.assistant.keyStored');
+    // A local server usually wants no key at all, so the box says that rather
+    // than showing the shape of a credential nobody has to go and find.
+    if (settings.provider === 'local') return t('settings.assistant.keyOptional');
+    return KEY_HINTS[settings.provider] || 'sk-ant-...';
+}
+
 const COMMAND_MODES = ['terminal', 'background'];
 
 /**
@@ -44,6 +67,15 @@ const COMMAND_MODES = ['terminal', 'background'];
 function describeAccount(t, account, hasApiKey, provider) {
     const agent = PROVIDER_NAMES[provider] || t('settings.assistant.theAgent');
     if (provider === 'opencode') return t('settings.assistant.accountOpencode');
+    // Nothing is signed in to and nothing is charged. The only credential a
+    // model server ever wants is one the user put on it themselves.
+    if (provider === 'local') return t('settings.assistant.accountLocal');
+    // Grok with no CLI on the machine, which the provider says by naming the
+    // API as what answered. It is a different arrangement from the other four
+    // and the page should not describe it as an agent that is signed in here.
+    if (provider === 'grok' && account?.apiProvider === 'xAI API') {
+        return t('settings.assistant.accountGrokApi');
+    }
     if (account?.subscriptionType) {
         return t('settings.assistant.accountPlan', { agent, plan: account.subscriptionType });
     }
@@ -67,6 +99,8 @@ export default function AssistantSection() {
     const [tools, setTools] = useState([]);
     const [keyValue, setKeyValue] = useState('');
     const [keyState, setKeyState] = useState('');
+    const [endpoint, setEndpoint] = useState('');
+    const [endpointState, setEndpointState] = useState('');
     const [commands, setCommands] = useState('');
     const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
@@ -79,6 +113,7 @@ export default function AssistantSection() {
             setAccount(status.account || null);
             setProviders(status.providers || []);
             setTools(status.tools || []);
+            setEndpoint(status.settings.localBaseUrl || '');
             setCommands((status.settings.autoApproveCommands || []).join('\n'));
             setBlocked((status.settings.blockedCommands || []).join('\n'));
             setPrompts((status.settings.quickPrompts || []).join('\n'));
@@ -112,6 +147,25 @@ export default function AssistantSection() {
             setKeyState(result?.message || t('settings.assistant.keyFailed'));
         }
     }, [keyValue, t]);
+
+    /**
+     * Save the address, then say what is listening at it.
+     *
+     * The check is the point of the button. An address that is one digit out
+     * looks exactly like a correct one until a conversation fails several
+     * minutes later, and asking the server for its model list is the cheapest
+     * question that can tell the two apart.
+     */
+    const saveEndpoint = useCallback(async () => {
+        const next = await update({ localBaseUrl: endpoint });
+        setEndpoint(next.localBaseUrl || '');
+        setEndpointState(t('settings.assistant.endpointChecking'));
+
+        const rows = await window.api.ai.models({ refresh: true }).catch(() => null);
+        setEndpointState(rows?.length
+            ? t('settings.assistant.endpointFound', { count: rows.length })
+            : t('settings.assistant.endpointNone'));
+    }, [endpoint, update, t]);
 
     const saveCommands = useCallback(async () => {
         const list = commands.split('\n').map(line => line.trim()).filter(Boolean);
@@ -187,6 +241,44 @@ export default function AssistantSection() {
                         onChange={(value) => update({ provider: value })}
                     />
                 </SettingRow>
+
+                {/* Only for the one agent that has no installer to find it by.
+                    The other four are somewhere on the machine or they are
+                    not; this one is wherever the user said it is. It opens
+                    rather than appearing, because it belongs to the card
+                    above it and a row that blinks into existence reads as the
+                    page having been rebuilt. */}
+                <Reveal open={settings.provider === 'local'}>
+                    <SettingRow
+                        className={DIVIDED}
+                        title={t('settings.assistant.endpoint')}
+                        description={t('settings.assistant.endpointDesc')}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    aria-label={t('settings.assistant.endpoint')}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder="http://localhost:1234/v1"
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={endpoint}
+                                    onChange={(event) => {
+                                        setEndpoint(event.target.value);
+                                        setEndpointState('');
+                                    }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveEndpoint}>
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {endpointState || t('settings.assistant.endpointNote')}
+                            </p>
+                        </div>
+                    </SettingRow>
+                </Reveal>
             </SettingCard>
 
             <SettingCard>
@@ -395,9 +487,7 @@ export default function AssistantSection() {
                                     aria-label={t('settings.assistant.apiKey')}
                                     autoComplete="off"
                                     spellCheck={false}
-                                    placeholder={settings.hasApiKey
-                                        ? t('settings.assistant.keyStored')
-                                        : settings.provider === 'codex' ? 'sk-proj-...' : 'sk-ant-...'}
+                                    placeholder={keyPlaceholder(t, settings)}
                                     className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
                                     value={keyValue}
                                     onChange={(event) => { setKeyValue(event.target.value); setKeyState(''); }}

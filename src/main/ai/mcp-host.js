@@ -20,8 +20,9 @@ const catalog = require('./tools');
  *
  *   - it binds to 127.0.0.1 with an OS-assigned port, so nothing off this
  *     machine can reach it and the port is not guessable from run to run
- *   - every request must carry a bearer token generated at startup, compared
- *     in constant time. Anything else gets 401 before it is parsed
+ *   - every request must carry a token generated at startup, in the
+ *     Authorization header or in the URL path, compared in constant time.
+ *     Anything else gets 401 before it is parsed
  *   - it is started on demand by a provider that needs it, and stopped when
  *     the last one is done
  *
@@ -41,6 +42,23 @@ function tokenMatches(offered) {
     const a = Buffer.from(String(offered || ''));
     const b = Buffer.from(token);
     return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * The token a request is offering, from the header or from the path.
+ *
+ * The header is how an agent that can be told to send one does it, and it is
+ * still what Codex and OpenCode use. The path is for the ones that take a URL
+ * and nothing else: an address is the one thing every MCP client can be given,
+ * and on a loopback socket an unguessable path in it is the same secret in a
+ * different envelope. It buys nothing to be strict about which envelope, and
+ * it costs a provider that then cannot reach its own tools.
+ */
+function offeredToken(request) {
+    const header = String(request.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+    if (header) return header;
+    const [, fromPath = ''] = /^\/mcp\/([^/?#]+)/.exec(String(request.url || '')) || [];
+    return decodeURIComponent(fromPath);
 }
 
 function readBody(request) {
@@ -164,8 +182,7 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
     // turns, which for a socket this process is hosting is the point.
     ready = new Promise((resolve, reject) => {
         server = http.createServer(async (request, response) => {
-            const offered = String(request.headers.authorization || '').replace(/^Bearer\s+/i, '');
-            if (!tokenMatches(offered)) {
+            if (!tokenMatches(offeredToken(request))) {
                 if (process.env.CLOUDBLAST_MCP_DEBUG) console.error('[mcp] 401', request.method, request.url);
                 response.writeHead(401).end();
                 return;
@@ -198,7 +215,13 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
         server.on('error', reject);
         server.listen(0, '127.0.0.1', () => {
             const { port } = server.address();
-            resolve({ url: `http://127.0.0.1:${port}/mcp`, token });
+            resolve({
+                url: `http://127.0.0.1:${port}/mcp`,
+                token,
+                // The same endpoint with the token already in it, for a client
+                // that can only be handed an address. See `offeredToken`.
+                tokenUrl: `http://127.0.0.1:${port}/mcp/${token}`,
+            });
         });
     });
 
@@ -217,4 +240,4 @@ async function release() {
     await new Promise(resolve => closing.close(resolve));
 }
 
-module.exports = { acquire, release };
+module.exports = { acquire, release, _test: { offeredToken } };

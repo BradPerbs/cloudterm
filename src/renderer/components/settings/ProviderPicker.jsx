@@ -1,4 +1,4 @@
-import { ChatGptIcon, Tick02Icon } from 'hugeicons-react';
+import { ChatGptIcon, CpuIcon, Tick02Icon } from 'hugeicons-react';
 import openCodeLogoDark from '../../assets/icons/opencode-logo-dark-square.png';
 import openCodeLogoLight from '../../assets/icons/opencode-logo-light-square.png';
 import { useT } from '../../i18n';
@@ -62,6 +62,30 @@ function OpenCodeMark({ size = 22 }) {
     );
 }
 
+/**
+ * A crossed mark for Grok, drawn here rather than taken from anywhere.
+ *
+ * The continuous diagonal with the broken one across it is how xAI's own mark
+ * reads at this size. It is a glyph of our own, not a copy of theirs, which is
+ * the right side of the line for a card that names a product this app talks to.
+ */
+function GrokMark({ size = 22 }) {
+    return (
+        <svg
+            role="img"
+            aria-hidden="true"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+        >
+            <path d="M20.4 2.5h-3.3L3.6 21.5h3.3z" />
+            <path d="M3.6 2.5h3.3l4.3 5.9-1.7 2.3z" />
+            <path d="M20.4 21.5h-3.3l-4.3-5.9 1.7-2.3z" />
+        </svg>
+    );
+}
+
 const PROVIDERS = [
     {
         value: 'claude-code',
@@ -81,16 +105,33 @@ const PROVIDERS = [
         hintKey: 'settings.assistant.provider.opencode',
         mark: OpenCodeMark,
     },
+    {
+        value: 'grok',
+        name: 'Grok Build',
+        hintKey: 'settings.assistant.provider.grok',
+        mark: GrokMark,
+    },
+    {
+        value: 'local',
+        // Not the name of one product, because it is not one product: the card
+        // is for whatever is listening on the address below it.
+        name: 'Local model',
+        hintKey: 'settings.assistant.provider.local',
+        mark: ({ size = 22 }) => <CpuIcon size={size} strokeWidth={1.5} />,
+    },
 ];
 
-const CARD = `relative flex-1 min-w-0 p-3 rounded-xl border text-left transition-colors outline-none
+// Three across, wrapping. A row of five is how the names start breaking in
+// half, and these are read by their marks and their names rather than by
+// sitting on one line.
+const CARD = `relative min-w-0 p-3 rounded-xl border text-left transition-colors outline-none
     focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25`;
 
 export default function ProviderPicker({ value, available = [], onChange }) {
     const t = useT();
 
     return (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
             {PROVIDERS.map((provider) => {
                 const Mark = provider.mark;
                 const ready = available.includes(provider.value);
@@ -118,9 +159,11 @@ export default function ProviderPicker({ value, available = [], onChange }) {
                             />
                         )}
 
-                        <span className="flex items-center gap-2 text-gray-900 dark:text-white">
-                            <Mark size={22} />
-                            <span className="text-sm font-semibold">{provider.name}</span>
+                        <span className="flex items-center gap-2 min-w-0 text-gray-900 dark:text-white">
+                            <span className="shrink-0 leading-none">
+                                <Mark size={22} />
+                            </span>
+                            <span className="text-sm font-semibold truncate">{provider.name}</span>
                         </span>
 
                         <span className="mt-1.5 block text-[11px] leading-snug text-gray-500 dark:text-gray-400">

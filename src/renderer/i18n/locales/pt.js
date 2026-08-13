@@ -282,7 +282,7 @@ export default {
     'settings.nav.general': 'Geral',
     'settings.nav.appearance': 'Aspeto',
     'settings.nav.terminal': 'Terminal',
-    'settings.nav.assistant': 'Assistente',
+    'settings.nav.assistant': 'Agente de IA',
     'settings.nav.monitoring': 'Monitorização',
     'settings.nav.logging': 'Registo',
     'settings.nav.security': 'Segurança',
@@ -427,19 +427,30 @@ export default {
     'settings.terminal.customApplied': 'Tema de terminal personalizado aplicado',
 
     /* ---- Settings: Assistant ---- */
-    'settings.assistant.title': 'Assistente',
-    'settings.assistant.desc': 'O assistente lê os seus terminais e trabalha nos seus servidores '
+    'settings.assistant.title': 'Agente de IA',
+    'settings.assistant.desc': 'O agente lê os seus terminais e trabalha nos seus servidores '
         + 'através das ligações que já abriu. Nunca vê uma palavra-passe ou chave guardada.',
-    'settings.assistant.loading': 'A carregar as definições do assistente…',
+    'settings.assistant.loading': 'A carregar as definições do agente…',
     'settings.assistant.agent': 'Agente',
-    'settings.assistant.agentDesc': 'Que agente de programação responde, usando a cópia já '
-        + 'instalada nesta máquina. Mudar de agente começa uma conversa nova.',
-    'settings.assistant.provider.claudeCode': 'Usa o Claude Code já instalado e com sessão iniciada '
-        + 'nesta máquina.',
-    'settings.assistant.provider.codex': 'Usa a CLI do Codex instalada nesta máquina.',
-    'settings.assistant.provider.opencode': 'Usa a CLI do OpenCode e os fornecedores configurados '
-        + 'nesta máquina.',
+    'settings.assistant.agentDesc': 'Que agente de programação responde: um instalado nesta '
+        + 'máquina, ou um modelo que você mesmo está a servir. Mudar de agente começa uma conversa '
+        + 'nova.',
+    'settings.assistant.provider.claudeCode': 'O agente da Anthropic, na sua conta.',
+    'settings.assistant.provider.codex': 'O agente da OpenAI, na sua conta.',
+    'settings.assistant.provider.opencode': 'Código aberto, nos fornecedores que definir.',
+    'settings.assistant.provider.grok': 'O agente da xAI, na sua conta.',
+    'settings.assistant.provider.local': 'O seu modelo: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Ainda não disponível nesta versão.',
+    'settings.assistant.endpoint': 'Endereço do servidor',
+    'settings.assistant.endpointDesc': 'Onde o servidor de modelos local está à escuta. Serve '
+        + 'qualquer servidor que fale a API da OpenAI.',
+    'settings.assistant.endpointNote': 'LM Studio: http://localhost:1234/v1. Ollama: '
+        + 'http://localhost:11434/v1. llama.cpp: http://localhost:8080/v1.',
+    'settings.assistant.endpointChecking': 'A perguntar a esse endereço o que tem...',
+    'settings.assistant.endpointFound_one': 'Respondeu, com 1 modelo à escolha.',
+    'settings.assistant.endpointFound_other': 'Respondeu, com {count} modelos à escolha.',
+    'settings.assistant.endpointNone': 'Nada respondeu nesse endereço. Verifique se o servidor '
+        + 'está a correr e se a API dele está ligada.',
     'settings.assistant.commandMode': 'Onde correm os comandos',
     'settings.assistant.commandMode.terminal': 'No meu terminal',
     'settings.assistant.commandMode.background': 'Fora da vista',
@@ -502,6 +513,12 @@ export default {
     'settings.assistant.accountOpencode': 'O OpenCode usa os fornecedores e credenciais já '
         + 'configurados na sua CLI. Trate deles com “opencode auth login”; as chaves guardadas no '
         + 'CloudBlast não são passadas ao OpenCode.',
+    'settings.assistant.accountGrokApi': 'O Grok Build não está instalado nesta máquina, por isso o '
+        + 'CloudTerm fala diretamente com a API da xAI usando a chave guardada aqui, e o uso é '
+        + 'cobrado por token. Instale a CLI e inicie sessão para usar o seu próprio plano.',
+    'settings.assistant.accountLocal': 'Não há sessão para iniciar. O modelo corre neste '
+        + 'computador, por isso não há conta nem cobrança por token. Só precisa de uma chave se foi '
+        + 'você a pôr uma no servidor.',
     'settings.assistant.accountPlan': 'Com sessão iniciada através do {agent} nesta máquina, num '
         + 'plano {plan}. A utilização sai desse plano, por isso não é precisa nenhuma chave aqui.',
     'settings.assistant.accountProvider': 'O {agent} nesta máquina está configurado com {provider}, '
@@ -514,6 +531,7 @@ export default {
         + '{agent} nesta máquina, que é o caso habitual. Só é precisa uma chave quando não tem.',
     'settings.assistant.apiKey': 'Chave de API',
     'settings.assistant.keyStored': 'Há uma chave guardada',
+    'settings.assistant.keyOptional': 'Só se o seu servidor pedir uma',
     'settings.assistant.keySaved': 'Chave guardada.',
     'settings.assistant.keyRemoved': 'Chave removida.',
     'settings.assistant.keyFailed': 'Não foi possível guardar essa chave.',

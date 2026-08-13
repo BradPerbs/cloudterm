@@ -297,7 +297,7 @@ export default {
     'settings.nav.general': 'Общие',
     'settings.nav.appearance': 'Оформление',
     'settings.nav.terminal': 'Терминал',
-    'settings.nav.assistant': 'Ассистент',
+    'settings.nav.assistant': 'ИИ-ассистент',
     'settings.nav.monitoring': 'Мониторинг',
     'settings.nav.logging': 'Журналирование',
     'settings.nav.security': 'Безопасность',
@@ -441,19 +441,31 @@ export default {
     'settings.terminal.customApplied': 'Своя тема терминала применена',
 
     /* ---- Settings: Assistant ---- */
-    'settings.assistant.title': 'Ассистент',
+    'settings.assistant.title': 'ИИ-ассистент',
     'settings.assistant.desc': 'Ассистент читает ваши терминалы и работает на ваших серверах через '
         + 'уже открытые вами соединения. Он никогда не видит сохранённые пароли и ключи.',
     'settings.assistant.loading': 'Загрузка настроек ассистента…',
     'settings.assistant.agent': 'Агент',
-    'settings.assistant.agentDesc': 'Какой агент отвечает, используя копию, уже установленную на '
-        + 'этой машине. Смена агента начинает новый разговор.',
-    'settings.assistant.provider.claudeCode': 'Использует Claude Code, уже установленный на этой '
-        + 'машине и выполнивший вход.',
-    'settings.assistant.provider.codex': 'Использует Codex CLI, установленный на этой машине.',
-    'settings.assistant.provider.opencode': 'Использует OpenCode CLI и провайдеров, настроенных на '
-        + 'этой машине.',
+    'settings.assistant.agentDesc': 'Какой агент отвечает: установленный на этой машине или '
+        + 'модель, которую вы запустили сами. Смена агента начинает новый разговор.',
+    'settings.assistant.provider.claudeCode': 'Агент Anthropic, под вашей учётной записью.',
+    'settings.assistant.provider.codex': 'Агент OpenAI, под вашей учётной записью.',
+    'settings.assistant.provider.opencode': 'Открытый код, с вашими провайдерами.',
+    'settings.assistant.provider.grok': 'Агент xAI, под вашей учётной записью.',
+    'settings.assistant.provider.local': 'Ваша модель: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'В этой сборке пока недоступно.',
+    'settings.assistant.endpoint': 'Адрес сервера',
+    'settings.assistant.endpointDesc': 'Где слушает локальный сервер моделей. Подойдёт любой '
+        + 'сервер, говорящий на API OpenAI.',
+    'settings.assistant.endpointNote': 'LM Studio: http://localhost:1234/v1. Ollama: '
+        + 'http://localhost:11434/v1. llama.cpp: http://localhost:8080/v1.',
+    'settings.assistant.endpointChecking': 'Спрашиваем этот адрес, что у него есть...',
+    'settings.assistant.endpointFound_one': 'Ответил, доступна {count} модель.',
+    'settings.assistant.endpointFound_few': 'Ответил, доступно {count} модели.',
+    'settings.assistant.endpointFound_many': 'Ответил, доступно {count} моделей.',
+    'settings.assistant.endpointFound_other': 'Ответил, доступно {count} моделей.',
+    'settings.assistant.endpointNone': 'По этому адресу никто не ответил. Проверьте, что сервер '
+        + 'запущен и его API включён.',
     'settings.assistant.commandMode': 'Где выполняются команды',
     'settings.assistant.commandMode.terminal': 'В моём терминале',
     'settings.assistant.commandMode.background': 'Вне поля зрения',
@@ -517,6 +529,12 @@ export default {
     'settings.assistant.accountOpencode': 'OpenCode использует провайдеров и учётные данные, уже '
         + 'настроенные в его CLI. Управляйте ими командой «opencode auth login»; ключи, сохранённые '
         + 'в CloudBlast, в OpenCode не передаются.',
+    'settings.assistant.accountGrokApi': 'Grok Build не установлен на этой машине, поэтому '
+        + 'CloudTerm обращается к API xAI напрямую с сохранённым здесь ключом, и оплата идёт за '
+        + 'токены. Установите CLI и войдите, чтобы использовать свой тариф.',
+    'settings.assistant.accountLocal': 'Входить некуда. Модель работает на этом компьютере, так '
+        + 'что нет ни учётной записи, ни оплаты за токены. Ключ нужен, только если вы сами '
+        + 'поставили его на сервер.',
     'settings.assistant.accountPlan': 'Вход выполнен через {agent} на этой машине, тариф {plan}. '
         + 'Расход идёт по этому тарифу, поэтому ключ здесь не нужен.',
     'settings.assistant.accountProvider': '{agent} на этой машине настроен на {provider}, который '
@@ -529,6 +547,7 @@ export default {
         + 'машине, а так обычно и бывает. Ключ нужен, только если вход не выполнен.',
     'settings.assistant.apiKey': 'Ключ API',
     'settings.assistant.keyStored': 'Ключ сохранён',
+    'settings.assistant.keyOptional': 'Только если ваш сервер его требует',
     'settings.assistant.keySaved': 'Ключ сохранён.',
     'settings.assistant.keyRemoved': 'Ключ удалён.',
     'settings.assistant.keyFailed': 'Не удалось сохранить этот ключ.',

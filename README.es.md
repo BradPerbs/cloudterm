@@ -110,12 +110,19 @@ para leerlo y modificarlo.
   <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/local-model.svg" alt="Modelo local" title="Modelo local" height="34">
   <br/>
-  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
+  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Modelo local</b></sub>
 </p>
 
-- **Funciona con Claude Code, Codex u OpenCode que ya tienes** en tu máquina, con
-  tu propia cuenta: nada que pegar, ninguna suscripción adicional
+- **Funciona con Claude Code, Codex, OpenCode o Grok Build que ya tienes** en tu
+  máquina, con tu propia cuenta: nada que pegar, ninguna suscripción adicional
+- **O con un modelo local** servido en tu propio ordenador (LM Studio, Ollama,
+  llama.cpp, vLLM): sin cuenta, sin clave y sin que nada salga de la máquina
 - **Lee la sesión que estás mirando**, así que responde al error que tienes en
   pantalla sin que pegues nada
 - **Trabaja en el terminal que ves**: los comandos se escriben en el panel y la

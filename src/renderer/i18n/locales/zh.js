@@ -266,7 +266,7 @@ export default {
     'settings.nav.general': '通用',
     'settings.nav.appearance': '外观',
     'settings.nav.terminal': '终端',
-    'settings.nav.assistant': '助手',
+    'settings.nav.assistant': 'AI 助手',
     'settings.nav.monitoring': '监控',
     'settings.nav.logging': '日志记录',
     'settings.nav.security': '安全',
@@ -393,16 +393,25 @@ export default {
     'settings.terminal.customApplied': '已应用自定义终端主题',
 
     /* ---- Settings: Assistant ---- */
-    'settings.assistant.title': '助手',
+    'settings.assistant.title': 'AI 助手',
     'settings.assistant.desc': '助手会读取你的终端，并通过你已经打开的连接在服务器上工作。'
         + '它绝不会看到任何已保存的密码或密钥。',
     'settings.assistant.loading': '正在加载助手设置…',
     'settings.assistant.agent': '代理程序',
-    'settings.assistant.agentDesc': '由哪个编码代理来作答，使用的是本机已安装的那一份。切换会开始一次全新的对话。',
-    'settings.assistant.provider.claudeCode': '使用本机已安装并已登录的 Claude Code。',
-    'settings.assistant.provider.codex': '使用本机已安装的 Codex CLI。',
-    'settings.assistant.provider.opencode': '使用本机已配置的 OpenCode CLI 及其服务商。',
+    'settings.assistant.agentDesc': '由哪个编码代理来作答：本机已安装的那一份，或你自己运行的模型。切换会开始一次全新的对话。',
+    'settings.assistant.provider.claudeCode': '来自 Anthropic，用你自己的账号。',
+    'settings.assistant.provider.codex': '来自 OpenAI，用你自己的账号。',
+    'settings.assistant.provider.opencode': '开源，用你配置的服务商。',
+    'settings.assistant.provider.grok': '来自 xAI，用你自己的账号。',
+    'settings.assistant.provider.local': '你自己的模型：LM Studio、Ollama、vLLM。',
     'settings.assistant.provider.unavailable': '此版本尚未提供。',
+    'settings.assistant.endpoint': '服务器地址',
+    'settings.assistant.endpointDesc': '本地模型服务器监听的地址。任何讲 OpenAI API 的服务器都可以。',
+    'settings.assistant.endpointNote': 'LM Studio：http://localhost:1234/v1。Ollama：'
+        + 'http://localhost:11434/v1。llama.cpp：http://localhost:8080/v1。',
+    'settings.assistant.endpointChecking': '正在向该地址询问有哪些模型...',
+    'settings.assistant.endpointFound_other': '有响应，可选 {count} 个模型。',
+    'settings.assistant.endpointNone': '该地址没有任何响应。请检查服务器是否在运行，以及它的 API 是否已开启。',
     'settings.assistant.commandMode': '命令在哪里运行',
     'settings.assistant.commandMode.terminal': '在我的终端里',
     'settings.assistant.commandMode.background': '在后台',
@@ -454,6 +463,10 @@ export default {
     'settings.assistant.theAgent': '该代理程序',
     'settings.assistant.accountOpencode': 'OpenCode 使用其 CLI 中已配置的服务商和凭据。'
         + '请用“opencode auth login”管理它们；保存在 CloudBlast 中的密钥不会传给 OpenCode。',
+    'settings.assistant.accountGrokApi': '本机没有安装 Grok Build，因此 CloudTerm 直接用这里保存的密钥调用 xAI API，'
+        + '按 token 计费。安装 CLI 并登录后即可改用你自己的套餐。',
+    'settings.assistant.accountLocal': '没有需要登录的账户。模型就跑在这台电脑上，'
+        + '因此既没有账户，也不按 token 计费。只有你自己在服务器上设置了密钥时才需要填。',
     'settings.assistant.accountPlan': '已在本机通过 {agent} 登录，使用的是 {plan} 套餐。'
         + '用量从该套餐扣除，因此这里不需要填写密钥。',
     'settings.assistant.accountProvider': '本机的 {agent} 已配置为使用 {provider}，'
@@ -465,6 +478,7 @@ export default {
         + '只有在没有登录时才需要密钥。',
     'settings.assistant.apiKey': 'API 密钥',
     'settings.assistant.keyStored': '已保存一个密钥',
+    'settings.assistant.keyOptional': '只有服务器要求时才需要',
     'settings.assistant.keySaved': '密钥已保存。',
     'settings.assistant.keyRemoved': '密钥已删除。',
     'settings.assistant.keyFailed': '无法保存该密钥。',

@@ -109,13 +109,21 @@ CloudTerm собирает все способы подключения к се�
   <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/local-model.svg" alt="Локальная модель" title="Локальная модель" height="34">
   <br/>
-  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b></sub>
+  <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
+  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Локальная модель</b></sub>
 </p>
 
-- **Работает на уже установленных у вас Claude Code, Codex или OpenCode**, под вашей
-  собственной учётной записью: ничего не нужно вставлять и ни на что
-  дополнительно подписываться
+- **Работает на уже установленных у вас Claude Code, Codex, OpenCode или Grok
+  Build**, под вашей собственной учётной записью: ничего не нужно вставлять и ни
+  на что дополнительно подписываться
+- **Или на локальной модели**, запущенной на вашем же компьютере (LM Studio,
+  Ollama, llama.cpp, vLLM): без учётной записи, без ключа, и ничего не покидает
+  машину
 - **Читает сеанс, который вы смотрите**, поэтому отвечает на ту ошибку, что у
   вас на экране, и вставлять её не нужно
 - **Работает в терминале, который вы видите**: команды печатаются в панели, а

@@ -10,14 +10,15 @@ const fs = require('fs');
  * snippet, and the store's shape is the thing that syncs between machines.
  * A model choice belongs to the machine the model runs on.
  *
- * The one secret here is an optional API key for providers that accept one
- * directly. OpenCode keeps credentials in its own provider store; Claude Code
- * and Codex can use either this key or their existing machine login.
+ * The secrets here are API keys for the providers that accept one directly,
+ * one per provider. OpenCode keeps credentials in its own provider store;
+ * Claude Code, Codex and Grok can use either a key stored here or the login
+ * already on the machine; a local server usually wants no key at all.
  */
 
-const CONFIG_VERSION = 1;
+const CONFIG_VERSION = 2;
 
-const PROVIDERS = new Set(['claude-code', 'codex', 'opencode']);
+const PROVIDERS = new Set(['claude-code', 'codex', 'opencode', 'grok', 'local']);
 
 /**
  * Every level any agent here offers, low to high. The union, not one agent's
@@ -55,9 +56,24 @@ const APPROVALS = new Set(['always', 'writes', 'never']);
  */
 const COMMAND_MODES = new Set(['terminal', 'background']);
 
+/**
+ * Where a local model server is listening.
+ *
+ * LM Studio's default, because it is the one most people arrive with and the
+ * only one of these that ships a server switched on by a button. Anything that
+ * speaks the same OpenAI-shaped API works by typing its address here: Ollama
+ * is `http://localhost:11434/v1`, llama.cpp `http://localhost:8080/v1`, vLLM
+ * `http://localhost:8000/v1`.
+ */
+const DEFAULT_LOCAL_URL = 'http://localhost:1234/v1';
+
 const DEFAULTS = {
     enabled: true,
     provider: 'claude-code',
+    // Only read when the provider is `local`. Kept here rather than in a
+    // provider file because it is a setting the user types, and the settings
+    // page is what has to hand it back to them next time.
+    localBaseUrl: DEFAULT_LOCAL_URL,
     // Empty means whatever the installed agent is already set to use.
     // Inheriting is the right default for a feature whose selling point is
     // that it is the user's own agent: a model pinned here would
@@ -100,12 +116,44 @@ const DEFAULTS = {
 const stateFile = () => path.join(app.getPath('userData'), 'assistant.json');
 
 let config = null;
-let secret = null;
+
+/**
+ * The stored keys, one per provider, each encrypted by the OS keychain.
+ *
+ * One shared key was enough while every provider that took one was reaching
+ * Anthropic or OpenAI and the user only ever had one of them. It stopped being
+ * enough the moment a second key could be in play: an xAI key handed to Claude
+ * Code is not a fallback, it is a login failure with a confusing message, and
+ * switching agents would have quietly done exactly that.
+ */
+let secrets = {};
 
 function clampNumber(value, fallback, min, max) {
     const number = Number(value);
     if (!Number.isFinite(number)) return fallback;
     return Math.min(Math.max(Math.floor(number), min), max);
+}
+
+/**
+ * An address for a local model server, or the default if it is not one.
+ *
+ * Only http and https, and nothing with credentials or a query on it: this is
+ * pasted from a server's own console and then used to build request URLs, so
+ * the shapes that would surprise someone are refused here rather than being
+ * discovered halfway through a conversation. The trailing slash goes so
+ * `${base}/models` never has two of them.
+ */
+function cleanUrl(value, fallback) {
+    const text = String(value ?? '').trim();
+    if (!text) return fallback;
+    try {
+        const url = new URL(text);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback;
+        if (url.username || url.password) return fallback;
+        return `${url.origin}${url.pathname.replace(/\/+$/, '')}`.slice(0, 300);
+    } catch {
+        return fallback;
+    }
 }
 
 function sanitize(raw) {
@@ -118,7 +166,10 @@ function sanitize(raw) {
     if (raw && typeof raw === 'object') {
         if ('enabled' in raw) next.enabled = Boolean(raw.enabled);
         if (PROVIDERS.has(raw.provider)) next.provider = raw.provider;
-        if (typeof raw.model === 'string') next.model = raw.model.trim().slice(0, 80);
+        if ('localBaseUrl' in raw) next.localBaseUrl = cleanUrl(raw.localBaseUrl, DEFAULTS.localBaseUrl);
+        // Long enough for the publisher-and-repository ids a local server
+        // reports, which run past the 80 characters an alias needs.
+        if (typeof raw.model === 'string') next.model = raw.model.trim().slice(0, 160);
         if (EFFORTS.has(raw.effort)) next.effort = raw.effort;
         if (APPROVALS.has(raw.approval)) next.approval = raw.approval;
         if (COMMAND_MODES.has(raw.commandMode)) next.commandMode = raw.commandMode;
@@ -152,13 +203,36 @@ function sanitize(raw) {
     return next;
 }
 
+/**
+ * The keys as they are on disk, whichever version wrote them.
+ *
+ * A file from before there was one key per provider has a single `apiKey`, and
+ * the provider it belonged to is the one that was selected when it was typed.
+ * So it is filed under that provider rather than dropped or copied to all of
+ * them: the machine goes on working exactly as it did, and nothing else
+ * inherits a credential meant for somebody else's API.
+ */
+function readSecrets(parsed, provider) {
+    const stored = parsed?.keys;
+    if (stored && typeof stored === 'object') {
+        const kept = {};
+        for (const [name, value] of Object.entries(stored)) {
+            if (PROVIDERS.has(name) && typeof value === 'string' && value) kept[name] = value;
+        }
+        return kept;
+    }
+    return typeof parsed?.apiKey === 'string' && parsed.apiKey
+        ? { [provider]: parsed.apiKey }
+        : {};
+}
+
 function load() {
     if (config) return config;
     try {
         if (fs.existsSync(stateFile())) {
             const parsed = JSON.parse(fs.readFileSync(stateFile(), 'utf8'));
             config = sanitize(parsed?.config);
-            secret = typeof parsed?.apiKey === 'string' ? parsed.apiKey : null;
+            secrets = readSecrets(parsed, config.provider);
         } else {
             config = sanitize(null);
         }
@@ -173,7 +247,7 @@ function persist() {
     try {
         fs.writeFileSync(
             stateFile(),
-            JSON.stringify({ version: CONFIG_VERSION, config, apiKey: secret }),
+            JSON.stringify({ version: CONFIG_VERSION, config, keys: secrets }),
             'utf8'
         );
     } catch (error) {
@@ -187,9 +261,13 @@ function persist() {
  * host store follows for passwords.
  */
 function get() {
+    const current = load();
     return {
-        ...load(),
-        hasApiKey: Boolean(secret),
+        ...current,
+        // Whether the agent now selected has one, which is the question the
+        // settings page is actually asking. A key stored for another agent is
+        // not an answer to it.
+        hasApiKey: Boolean(secrets[current.provider]),
         encryptionAvailable: isEncryptionAvailable(),
         // What the app shipped with, so a settings page can offer the way back
         // without keeping a second copy of these lists that drifts from this
@@ -229,17 +307,18 @@ function isEncryptionAvailable() {
 }
 
 /**
- * Store or clear the API key.
+ * Store or clear the API key for one provider, by default the selected one.
  *
  * Refused rather than stored in the clear when the OS keychain is unavailable.
  * A credential written to a JSON file in plain text is worse than no feature:
  * the user believes it is protected because they were asked to type it into
  * something that looked like a password field.
  */
-function setApiKey(value) {
+function setApiKey(value, provider = load().provider) {
+    const name = PROVIDERS.has(provider) ? provider : load().provider;
     const text = String(value ?? '').trim();
     if (!text) {
-        secret = null;
+        delete secrets[name];
         persist();
         return { success: true, hasApiKey: false };
     }
@@ -247,7 +326,7 @@ function setApiKey(value) {
         return { success: false, message: 'This system has no secure store available, so a key cannot be saved here' };
     }
     try {
-        secret = safeStorage.encryptString(text).toString('base64');
+        secrets[name] = safeStorage.encryptString(text).toString('base64');
         persist();
         return { success: true, hasApiKey: true };
     } catch (error) {
@@ -256,7 +335,8 @@ function setApiKey(value) {
 }
 
 /** The decrypted key, for the provider only. Never leaves the main process. */
-function readApiKey() {
+function readApiKey(provider = load().provider) {
+    const secret = secrets[provider];
     if (!secret) return '';
     try {
         return safeStorage.decryptString(Buffer.from(secret, 'base64'));
@@ -277,4 +357,6 @@ module.exports = {
     COMMAND_MODES,
     EFFORTS,
     PROVIDERS,
+    DEFAULT_LOCAL_URL,
+    _test: { sanitize, readSecrets, cleanUrl },
 };

@@ -48,6 +48,8 @@ export const PROVIDER_NAMES = {
     'claude-code': 'Claude Code',
     codex: 'Codex',
     opencode: 'OpenCode',
+    grok: 'Grok Build',
+    local: 'Local model',
 };
 
 /**

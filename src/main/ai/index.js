@@ -28,6 +28,8 @@ const PROVIDERS = {
     'claude-code': require('./providers/claude-code'),
     codex: require('./providers/codex'),
     opencode: require('./providers/opencode'),
+    grok: require('./providers/grok'),
+    local: require('./providers/local'),
 };
 
 /** Kept per conversation, so a long session cannot grow without bound. */
@@ -314,8 +316,14 @@ function reconfigure(before, after) {
     // What is sent is the new agent's catalog if it has already been read, and
     // otherwise nothing, so a panel drops the old list at once rather than
     // showing it until the first ask comes back.
-    if (before.provider !== after.provider) {
-        lastAccount = null;
+    // A different address is a different machine with different models on it,
+    // so what was read from the last one is not an answer about this one. The
+    // list is dropped rather than refreshed here: reading it means a request,
+    // and someone typing an address has not finished typing it.
+    if (before.localBaseUrl !== after.localBaseUrl) modelCatalogs.delete('local');
+
+    if (before.provider !== after.provider || before.localBaseUrl !== after.localBaseUrl) {
+        if (before.provider !== after.provider) lastAccount = null;
         notify('ai-models', {
             provider: after.provider,
             models: modelCatalogs.get(after.provider) ?? null,

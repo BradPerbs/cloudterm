@@ -104,28 +104,37 @@ everyone, and the whole source is here to read and change.
 
 Pick the agent you already have. CloudTerm drives the CLI on your machine under
 your own account, so there is nothing to paste and nothing extra to subscribe
-to.
+to. Or point it at a model running on your own computer, and nothing leaves the
+machine at all.
 
 <table align="center">
   <tr>
-    <td align="center" width="230"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="32"></td>
-    <td align="center" width="230"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="32"></td>
-    <td align="center" width="230"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="32"></td>
+    <td align="center" width="150"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="32"></td>
+    <td align="center" width="150"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="32"></td>
+    <td align="center" width="150"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="32"></td>
+    <td align="center" width="150"><img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="32"></td>
+    <td align="center" width="150"><img src="docs/logos/local-model.svg" alt="Local model" title="Local model" height="32"></td>
   </tr>
   <tr>
     <td align="center"><b>Claude Code</b></td>
     <td align="center"><b>Codex</b></td>
     <td align="center"><b>OpenCode</b></td>
+    <td align="center"><b>Grok Build</b></td>
+    <td align="center"><b>Local model</b></td>
   </tr>
   <tr>
     <td align="center"><sub>Anthropic models</sub></td>
     <td align="center"><sub>OpenAI models</sub></td>
     <td align="center"><sub>Any provider you have set up</sub></td>
+    <td align="center"><sub>xAI models</sub></td>
+    <td align="center"><sub>Whatever you have loaded</sub></td>
   </tr>
   <tr>
     <td align="center"><sub>Sign in with <code>claude</code>, then <code>/login</code></sub></td>
     <td align="center"><sub>Sign in with the Codex app or CLI</sub></td>
     <td align="center"><sub>Sign in with <code>opencode auth login</code></sub></td>
+    <td align="center"><sub>Sign in with <code>grok</code>, or paste an xAI key</sub></td>
+    <td align="center"><sub>No account, no key, no internet</sub></td>
   </tr>
 </table>
 
@@ -309,6 +318,12 @@ npm run dev
 To use the AI agent with OpenCode, install the `opencode` CLI and configure at
 least one model provider with `opencode auth login`. CloudTerm uses OpenCode's
 existing providers and credentials; it does not copy or store them.
+
+To use a local model, start the server you already run and put its address in
+Settings, Assistant. LM Studio listens on `http://localhost:1234/v1`, Ollama on
+`http://localhost:11434/v1`, llama.cpp on `http://localhost:8080/v1`; anything
+that speaks the OpenAI API works. Pick a model with tool support, since the
+assistant works by calling tools rather than by writing text.
 
 Build a portable executable into `dist/`:
 

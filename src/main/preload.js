@@ -587,7 +587,9 @@ contextBridge.exposeInMainWorld('api', {
         // `refresh` throws away what was read for this agent and asks again,
         // for the button the menu shows when a read came back empty.
         models: ({ refresh = false } = {}) => ipcRenderer.invoke('ai-model-list', { refresh }),
-        // Write-only. The key goes in and never comes back out.
+        // Write-only. The key goes in and never comes back out. It is stored
+        // against the agent that is selected, since a key for one of them is
+        // not a credential for any of the others.
         setApiKey: (value) => ipcRenderer.invoke('ai-set-key', value),
 
         // `sessionIds` and `hostIds` are the explicit set a pinned scope fences

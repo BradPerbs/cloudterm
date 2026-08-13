@@ -272,7 +272,7 @@ export default {
     'settings.nav.general': 'Chung',
     'settings.nav.appearance': 'Giao diện',
     'settings.nav.terminal': 'Terminal',
-    'settings.nav.assistant': 'Trợ lý',
+    'settings.nav.assistant': 'Trợ lý AI',
     'settings.nav.monitoring': 'Theo dõi',
     'settings.nav.logging': 'Ghi nhật ký',
     'settings.nav.security': 'Bảo mật',
@@ -414,18 +414,28 @@ export default {
     'settings.terminal.customApplied': 'Đã áp dụng chủ đề terminal tuỳ chỉnh',
 
     /* ---- Settings: Assistant ---- */
-    'settings.assistant.title': 'Trợ lý',
+    'settings.assistant.title': 'Trợ lý AI',
     'settings.assistant.desc': 'Trợ lý đọc các terminal của bạn và làm việc trên máy chủ thông qua '
         + 'những kết nối bạn đã mở sẵn. Nó không bao giờ thấy mật khẩu hay khoá đã lưu.',
     'settings.assistant.loading': 'Đang tải cài đặt trợ lý…',
     'settings.assistant.agent': 'Tác nhân',
-    'settings.assistant.agentDesc': 'Tác nhân lập trình nào sẽ trả lời, dùng bản đã cài sẵn trên '
-        + 'máy này. Đổi tác nhân sẽ bắt đầu một cuộc trò chuyện mới.',
-    'settings.assistant.provider.claudeCode': 'Dùng bản Claude Code đã cài và đã đăng nhập trên máy này.',
-    'settings.assistant.provider.codex': 'Dùng Codex CLI đã cài trên máy này.',
-    'settings.assistant.provider.opencode': 'Dùng OpenCode CLI và các nhà cung cấp đã cấu hình trên '
-        + 'máy này.',
+    'settings.assistant.agentDesc': 'Tác nhân lập trình nào sẽ trả lời: một bản đã cài trên máy '
+        + 'này, hoặc một mô hình do chính bạn chạy. Đổi tác nhân sẽ bắt đầu một cuộc trò chuyện mới.',
+    'settings.assistant.provider.claudeCode': 'Tác nhân của Anthropic, bằng tài khoản của bạn.',
+    'settings.assistant.provider.codex': 'Tác nhân của OpenAI, bằng tài khoản của bạn.',
+    'settings.assistant.provider.opencode': 'Mã nguồn mở, với nhà cung cấp bạn cấu hình.',
+    'settings.assistant.provider.grok': 'Tác nhân của xAI, bằng tài khoản của bạn.',
+    'settings.assistant.provider.local': 'Mô hình của bạn: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Bản dựng này chưa có.',
+    'settings.assistant.endpoint': 'Địa chỉ máy chủ',
+    'settings.assistant.endpointDesc': 'Nơi máy chủ mô hình cục bộ đang lắng nghe. Bất kỳ máy chủ '
+        + 'nào nói API của OpenAI đều dùng được.',
+    'settings.assistant.endpointNote': 'LM Studio: http://localhost:1234/v1. Ollama: '
+        + 'http://localhost:11434/v1. llama.cpp: http://localhost:8080/v1.',
+    'settings.assistant.endpointChecking': 'Đang hỏi địa chỉ đó xem có những gì...',
+    'settings.assistant.endpointFound_other': 'Đã trả lời, có {count} mô hình để chọn.',
+    'settings.assistant.endpointNone': 'Không có gì trả lời ở địa chỉ đó. Hãy kiểm tra máy chủ có '
+        + 'đang chạy và API của nó đã bật chưa.',
     'settings.assistant.commandMode': 'Lệnh chạy ở đâu',
     'settings.assistant.commandMode.terminal': 'Trong terminal của tôi',
     'settings.assistant.commandMode.background': 'Chạy ngầm',
@@ -488,6 +498,12 @@ export default {
     'settings.assistant.accountOpencode': 'OpenCode dùng các nhà cung cấp và thông tin đăng nhập đã '
         + 'cấu hình trong CLI của nó. Hãy quản lý chúng bằng “opencode auth login”; khoá lưu trong '
         + 'CloudBlast không được chuyển cho OpenCode.',
+    'settings.assistant.accountGrokApi': 'Máy này chưa cài Grok Build, nên CloudTerm nói chuyện '
+        + 'thẳng với API của xAI bằng khoá lưu ở đây, và chi phí tính theo token. Hãy cài CLI và '
+        + 'đăng nhập để dùng gói của chính bạn.',
+    'settings.assistant.accountLocal': 'Không có gì để đăng nhập. Mô hình chạy trên chính máy '
+        + 'tính này, nên không có tài khoản và không tính tiền theo token. Chỉ cần khoá nếu chính '
+        + 'bạn đã đặt một khoá trên máy chủ.',
     'settings.assistant.accountPlan': 'Đã đăng nhập qua {agent} trên máy này, với gói {plan}. Mức '
         + 'dùng được trừ vào gói đó, nên ở đây không cần khoá.',
     'settings.assistant.accountProvider': '{agent} trên máy này được cấu hình dùng {provider}, và '
@@ -500,6 +516,7 @@ export default {
         + 'vốn là trường hợp thường gặp. Chỉ khi chưa đăng nhập thì mới cần khoá.',
     'settings.assistant.apiKey': 'Khoá API',
     'settings.assistant.keyStored': 'Đã lưu một khoá',
+    'settings.assistant.keyOptional': 'Chỉ khi máy chủ của bạn yêu cầu',
     'settings.assistant.keySaved': 'Đã lưu khoá.',
     'settings.assistant.keyRemoved': 'Đã gỡ khoá.',
     'settings.assistant.keyFailed': 'Không lưu được khoá đó.',

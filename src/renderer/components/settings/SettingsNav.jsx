@@ -8,10 +8,22 @@ import {
     Archive01Icon,
     InformationCircleIcon,
     UserCircleIcon,
-    AiMagicIcon,
     PulseRectangle01Icon,
 } from 'hugeicons-react';
+import AgentMark from '../assistant/AgentMark';
 import { useT } from '../../i18n';
+
+/**
+ * The agent's own mark, rather than a generic sparkle.
+ *
+ * The same cloud that sits on the rail button, in the same `mono` treatment, so
+ * the row that configures the agent is recognisably about the thing the button
+ * opens. A few pixels larger than its neighbours because the artwork is wider
+ * than it is tall and letterboxes inside a square box.
+ */
+const AgentIcon = ({ size = 17, className = '' }) => (
+    <AgentMark size={size + 3} mono className={className} />
+);
 
 /**
  * The categories, in the order they are shown. Adding a page means adding an
@@ -23,7 +35,7 @@ export const SETTINGS_CATEGORIES = [
     { id: 'general', icon: SlidersHorizontalIcon },
     { id: 'appearance', icon: PaintBoardIcon },
     { id: 'terminal', icon: CommandLineIcon },
-    { id: 'assistant', icon: AiMagicIcon },
+    { id: 'assistant', icon: AgentIcon },
     { id: 'monitoring', icon: PulseRectangle01Icon },
     { id: 'logging', icon: FileEditIcon },
     { id: 'security', icon: ShieldKeyIcon },
