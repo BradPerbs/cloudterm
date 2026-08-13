@@ -1123,7 +1123,8 @@ export default {
     'assistant.title': 'ИИ-ассистент',
     'assistant.welcome': 'Займёмся вашими серверами',
     'assistant.welcomeNote': 'Он читает этот терминал, выполняет команды в отдельном канале и может '
-        + 'работать со всеми сохранёнными хостами.',
+        + 'работать со всеми сохранёнными хостами. По умолчанию спрашивает перед изменениями; '
+        + 'режим можно сменить в чипе композера или в настройках.',
     'assistant.createQuickPrompts': 'Создать быстрые вопросы',
     'assistant.newConversation': 'Новый разговор',
     'assistant.chats': 'Разговоры',
@@ -1173,8 +1174,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Каждый вызов инструмента ждёт вас',
     'assistant.approvalWrites': 'Спрашивать перед изменениями',
     'assistant.approvalWritesHint': 'Чтение выполняется свободно',
-    'assistant.approvalNever': 'Режим Yolo',
+    'assistant.approvalNever': 'Никогда не спрашивать',
     'assistant.approvalNeverHint': 'Ничто не останавливается, включая удаление',
+    'assistant.approvalWarningTitle': 'Как работают подтверждения',
+    'assistant.approvalWarningBody': 'Ассистент может читать живые терминалы и выполнять команды на '
+        + 'ваших хостах. По умолчанию спрашивает перед любым изменением системы. «Спрашивать '
+        + 'каждый раз» останавливается и на чтении. «Никогда не спрашивать» запускает инструменты '
+        + 'без запросов (заблокированные команды по-прежнему отклоняются).',
+    'assistant.approvalWarningGotIt': 'Понятно',
 
     'assistant.didListHosts': 'Перечислил хосты',
     'assistant.didListSessions': 'Перечислил сеансы',

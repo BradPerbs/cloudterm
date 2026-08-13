@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowDown01Icon, FlashIcon, SecurityCheckIcon, Shield01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useT } from '../../i18n';
 
 /**
  * What the assistant will do before asking, as a chip in the composer.
@@ -37,15 +38,23 @@ const APPROVALS = [
     },
     {
         value: 'never',
-        label: 'Never ask',
-        hint: 'Nothing stops, deletes included',
+        labelKey: 'assistant.approvalNever',
+        hintKey: 'assistant.approvalNeverHint',
         icon: <FlashIcon size={14} strokeWidth={1.5} />,
     },
 ];
 
 export default function ApprovalMenu({ settings, onChange }) {
+    const t = useT();
     const [confirmNever, setConfirmNever] = useState(false);
-    const current = APPROVALS.find(option => option.value === settings.approval) || APPROVALS[1];
+
+    const options = APPROVALS.map(option => ({
+        ...option,
+        label: t(option.labelKey),
+        hint: t(option.hintKey),
+    }));
+
+    const current = options.find(option => option.value === settings.approval) || options[1];
 
     // The one state worth colouring. Somebody who has turned approvals off and
     // then forgotten deserves to notice before the next destructive command,
@@ -69,7 +78,7 @@ export default function ApprovalMenu({ settings, onChange }) {
                     {
                         value: settings.approval,
                         onChange: pick,
-                        options: APPROVALS,
+                        options,
                     },
                 ]}
                 trigger={({ open, toggle }) => (
@@ -77,9 +86,9 @@ export default function ApprovalMenu({ settings, onChange }) {
                         type="button"
                         aria-haspopup="menu"
                         aria-expanded={open}
-                        aria-label={`Approvals: ${current.label}`}
+                        aria-label={t('assistant.approvalsLabel', { mode: current.label })}
                         onClick={toggle}
-                        title={`Approvals: ${current.label}`}
+                        title={t('assistant.approvalsLabel', { mode: current.label })}
                         className={`h-7 pl-1.5 pr-1 rounded-xl flex items-center gap-0.5 transition-colors
                             outline-none focus-visible:ring-2
                             focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
@@ -102,9 +111,9 @@ export default function ApprovalMenu({ settings, onChange }) {
 
             {confirmNever && (
                 <ConfirmDialog
-                    title="Turn off approvals?"
-                    message="Never ask runs every tool without stopping — including commands that delete data or restart services on live hosts. Blocked commands are still refused."
-                    confirmLabel="Never ask"
+                    title={t('settings.assistant.approval.neverConfirmTitle')}
+                    message={t('settings.assistant.approval.neverConfirmMessage')}
+                    confirmLabel={t('settings.assistant.approval.never')}
                     variant="danger"
                     onConfirm={() => {
                         setConfirmNever(false);

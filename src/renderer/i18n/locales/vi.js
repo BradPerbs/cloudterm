@@ -1034,7 +1034,8 @@ export default {
     'assistant.title': 'Trợ lý AI',
     'assistant.welcome': 'Cùng làm việc trên máy chủ của bạn nào',
     'assistant.welcomeNote': 'Nó đọc terminal này, chạy lệnh trên kênh riêng, và có thể làm việc '
-        + 'trên mọi máy chủ bạn đã lưu.',
+        + 'trên mọi máy chủ bạn đã lưu. Phê duyệt mặc định là hỏi trước khi thay đổi; đổi chế độ '
+        + 'từ chip trên khung soạn hoặc trong Cài đặt.',
     'assistant.createQuickPrompts': 'Tạo câu hỏi nhanh',
     'assistant.newConversation': 'Cuộc trò chuyện mới',
     'assistant.chats': 'Cuộc trò chuyện',
@@ -1081,8 +1082,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Mọi lần gọi công cụ đều chờ bạn',
     'assistant.approvalWrites': 'Hỏi trước khi thay đổi',
     'assistant.approvalWritesHint': 'Thao tác đọc chạy tự do',
-    'assistant.approvalNever': 'Chế độ thả cửa',
+    'assistant.approvalNever': 'Không bao giờ hỏi',
     'assistant.approvalNeverHint': 'Không gì dừng lại, kể cả lệnh xoá',
+    'assistant.approvalWarningTitle': 'Cách phê duyệt hoạt động',
+    'assistant.approvalWarningBody': 'Trợ lý có thể đọc terminal đang chạy và thực thi lệnh trên '
+        + 'máy chủ của bạn. Mặc định nó hỏi trước mọi thứ làm thay đổi hệ thống. Hỏi mọi lúc cũng '
+        + 'dừng cả thao tác đọc. Không bao giờ hỏi chạy công cụ không hỏi (lệnh bị chặn vẫn bị '
+        + 'từ chối).',
+    'assistant.approvalWarningGotIt': 'Đã hiểu',
 
     'assistant.didListHosts': 'Đã liệt kê máy chủ',
     'assistant.didListSessions': 'Đã liệt kê phiên',

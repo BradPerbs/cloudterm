@@ -105,7 +105,7 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
 </p>
 
 - **使用本机已有的 Claude Code、Codex 或 OpenCode**，沿用你自己的账号和配置
-- **读取当前会话并操作远程服务器**，执行更改前会先征求你的同意；提供三种审批模式，详见 [docs/assistant-approvals.md](docs/assistant-approvals.md)（英文）
+- **读取当前会话并操作远程服务器**；是否征求同意由审批模式决定（每次 / 仅更改 / 从不——从不模式会自动批准未拦截的工具），详见 [docs/assistant-approvals.md](docs/assistant-approvals.md)（英文）
 - **每个对话可单独选择模型和推理强度**，并在运行时显示用量
 
 ### 终端

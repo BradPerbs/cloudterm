@@ -152,8 +152,8 @@ function sanitize(raw) {
                 .filter(Boolean)
                 .slice(0, 12);
         }
-        if ('acknowledgedApprovalWarning' in raw) {
-            next.acknowledgedApprovalWarning = Boolean(raw.acknowledgedApprovalWarning);
+        if (typeof raw.acknowledgedApprovalWarning === 'boolean') {
+            next.acknowledgedApprovalWarning = raw.acknowledgedApprovalWarning;
         }
     }
     return next;

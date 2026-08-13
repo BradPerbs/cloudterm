@@ -11,3 +11,6 @@ releases/
 # Local working notes and agent config, not part of the project
 CLAUDE.md
 .claude/
+
+# Local product planning notes; keep out of the shared tree
+PRD.md

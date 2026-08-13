@@ -19,6 +19,7 @@ import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
 import Dialog, { DialogButton } from '../ui/Dialog';
+import { useT } from '../../i18n';
 import {
     GLOBAL,
     describe,
@@ -482,9 +483,7 @@ function AssistantConversation({
                                 {t('assistant.welcome')}
                             </h2>
                             <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-500">
-                                It reads this terminal, runs commands on their own channel, and can work
-                                across every host you have saved. Approvals default to ask-before-changes;
-                                switch modes from the composer chip or Settings.
+                                {t('assistant.welcomeNote')}
                             </p>
                         </div>
 
@@ -696,9 +695,10 @@ function AssistantConversation({
 
             {settings && !settings.acknowledgedApprovalWarning && (
                 <Dialog
-                    title="How approvals work"
-                    subtitle="The assistant can read live terminals and run commands on your hosts. By default it asks before anything that changes a system. Ask every time stops on reads too. Never ask runs tools without prompts (blocked commands are still refused)."
-                    onClose={() => changeSettings({ acknowledgedApprovalWarning: true })}
+                    title={t('assistant.approvalWarningTitle')}
+                    subtitle={t('assistant.approvalWarningBody')}
+                    // Escape / backdrop must not count as acknowledgement.
+                    onClose={() => {}}
                     icon={
                         <span className="w-9 h-9 rounded-xl flex items-center justify-center
                             bg-amber-50 dark:bg-amber-900/20 text-amber-500">
@@ -711,7 +711,7 @@ function AssistantConversation({
                             data-autofocus
                             onClick={() => changeSettings({ acknowledgedApprovalWarning: true })}
                         >
-                            Got it
+                            {t('assistant.approvalWarningGotIt')}
                         </DialogButton>
                     }
                 />

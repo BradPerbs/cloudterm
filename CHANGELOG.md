@@ -29,8 +29,11 @@ with [GitHub Releases](https://github.com/BradPerbs/cloudterm/releases).
 
 ### Fixed
 
-- Session log transcript files are opened synchronously in `start()` so
-  retention tests (and immediate `utime`) do not race the path.
+- Session log transcript files use a unique exclusive path per session so two
+  tabs in the same second cannot interleave into one file.
+- First-run approval warning only clears after **Got it** (not Escape / backdrop).
+- Assistant approval acknowledgement accepts only real booleans when loading
+  `assistant.json`.
 
 ## [1.3.0] - 2026-08-10
 

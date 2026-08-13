@@ -121,9 +121,10 @@ para leerlo y modificarlo.
 - **Trabaja en el terminal que ves**: los comandos se escriben en el panel y la
   salida se queda en tu historial, o se ejecutan en un canal oculto si lo
   prefieres
-- **Pregunta antes de cambiar nada** — tres modos de aprobación (cada
-  herramienta / solo cambios / nunca), aviso al primer uso y confirmación antes
-  de **Nunca preguntar**. Ver [docs/assistant-approvals.md](docs/assistant-approvals.md) (inglés)
+- **Los modos de aprobación controlan cuándo pregunta** — cada herramienta /
+  solo cambios / nunca (nunca auto-aprueba herramientas no bloqueadas), aviso
+  al primer uso y confirmación antes de **Nunca preguntar**. Ver
+  [docs/assistant-approvals.md](docs/assistant-approvals.md) (inglés)
 - **Apuntado donde tú digas**: la sesión que tienes delante, una que fijes, o
   todos los hosts que tengas guardados
 - **Herramientas en vez de suposiciones**: conectar un host guardado, leer y

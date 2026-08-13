@@ -421,7 +421,7 @@ export default {
         + '并向你展示确切的命令以及将要运行它的主机。这是默认设置。',
     'settings.assistant.approval.never.note': '任何操作都不会停下来等待批准，包括删除数据或重启服务的命令。'
         + '只有在你能承受把主机弄坏时才适合使用。开启前会先要求确认。',
-    'settings.assistant.approval.neverConfirmTitle': '关闭批准确认？',
+    'settings.assistant.approval.neverConfirmTitle': '关闭审批？',
     'settings.assistant.approval.neverConfirmMessage': '“从不询问”会让每个工具直接运行而不停下来——'
         + '包括在活动主机上删除数据或重启服务的命令。拦截列表中的命令仍会被拒绝。',
     'settings.assistant.localTools': '允许在这台电脑上使用工具',
@@ -944,7 +944,8 @@ export default {
     /* ---- Assistant panel ---- */
     'assistant.title': 'AI 助手',
     'assistant.welcome': '一起来打理你的服务器吧',
-    'assistant.welcomeNote': '它会读取这个终端，在独立通道上运行命令，并且可以在你保存的所有主机上工作。',
+    'assistant.welcomeNote': '它会读取这个终端，在独立通道上运行命令，并且可以在你保存的所有主机上工作。'
+        + '默认审批为更改前询问；可从输入框旁的芯片或设置中切换模式。',
     'assistant.createQuickPrompts': '创建快捷提问',
     'assistant.newConversation': '新对话',
     'assistant.chats': '对话',
@@ -991,8 +992,13 @@ export default {
     'assistant.approvalAlwaysHint': '每一次工具调用都会等你确认',
     'assistant.approvalWrites': '更改前询问',
     'assistant.approvalWritesHint': '读取操作自由进行',
-    'assistant.approvalNever': '放手模式',
+    'assistant.approvalNever': '从不询问',
     'assistant.approvalNeverHint': '什么都不会停下，包括删除',
+    'assistant.approvalWarningTitle': '审批如何运作',
+    'assistant.approvalWarningBody': '助手可以读取实时终端，并在你的主机上运行命令。默认会在任何会改变'
+        + '系统的操作前询问。“每次都询问”也会在读取时停下。“从不询问”会在不提示的情况下运行工具'
+        + '（拦截列表中的命令仍会被拒绝）。',
+    'assistant.approvalWarningGotIt': '知道了',
 
     'assistant.didListHosts': '已列出主机',
     'assistant.didListSessions': '已列出会话',

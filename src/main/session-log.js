@@ -1,6 +1,7 @@
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const activity = require('./activity');
 
 /**
@@ -286,7 +287,7 @@ function start(tabId, { hostName = '', address = '', hostId = '', protocol = '',
 
     const directory = current.directory || defaultDirectory();
     const startedAt = new Date();
-    const filePath = path.join(directory, `${slug(hostName || address)}_${stamp(startedAt)}.log`);
+    const baseName = `${slug(hostName || address)}_${stamp(startedAt)}`;
 
     try {
         fs.mkdirSync(directory, { recursive: true });
@@ -294,9 +295,24 @@ function start(tabId, { hostName = '', address = '', hostId = '', protocol = '',
         // Open synchronously so a returned path already exists on disk. The
         // stream open is otherwise async, and callers (and the retention
         // tests) treat the path as ready the moment start() returns.
-        // `a`, not `w`: two sessions to the same host within the same second
-        // would otherwise have the second silently truncate the first.
-        const fd = fs.openSync(filePath, 'a');
+        // Exclusive create (`wx`) plus a random suffix: two tabs that stamp
+        // the same second must not share or truncate one transcript.
+        let filePath;
+        let fd;
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const suffix = crypto.randomBytes(attempt === 0 ? 3 : 4).toString('hex');
+            filePath = path.join(directory, `${baseName}_${suffix}.log`);
+            try {
+                fd = fs.openSync(filePath, 'wx');
+                break;
+            } catch (error) {
+                if (error.code !== 'EEXIST') throw error;
+                fd = undefined;
+            }
+        }
+        if (fd === undefined) {
+            throw new Error('Could not create a unique session log path');
+        }
         const stream = fs.createWriteStream(null, { fd, encoding: 'utf8' });
         stream.on('error', (error) => {
             console.error(`Session log write failed for ${tabId}:`, error.message);

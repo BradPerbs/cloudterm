@@ -137,9 +137,10 @@ Whichever you choose, the agent:
   one it answers, without you pasting anything
 - **Works in the terminal you can see**: commands are typed into the pane and
   the output stays in your scrollback, or run on a hidden channel if you prefer
-- **Asks before it changes anything** — three approval modes (every tool /
-  changes only / never), a first-run warning, and a confirm step before
-  **Never ask**. See [assistant approvals](docs/assistant-approvals.md).
+- **Approval modes control when it asks** — every tool / changes only / never
+  (never auto-approves non-blocked tools), plus a first-run warning and a
+  confirm step before **Never ask**. See
+  [assistant approvals](docs/assistant-approvals.md).
 - **Pointed where you like**: the session in front, one you pin, or every host
   you have saved
 - **Tools instead of guesses**: connect a saved host, read and write files,

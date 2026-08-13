@@ -84,8 +84,17 @@ check('the first-run warning flag sanitizes and persists', () => {
     assert.strictEqual(settingsModule.get().acknowledgedApprovalWarning, false);
     settingsModule.set({ acknowledgedApprovalWarning: true });
     assert.strictEqual(settingsModule.get().acknowledgedApprovalWarning, true);
-    settingsModule.set({ acknowledgedApprovalWarning: 0 });
-    assert.strictEqual(settingsModule.get().acknowledgedApprovalWarning, false);
+
+    // Prove assistant.json survives a fresh module load, not only in-memory state.
+    const settingsPath = require.resolve(path.join(ROOT, 'ai', 'settings'));
+    delete require.cache[settingsPath];
+    const reloaded = require(settingsPath);
+    assert.strictEqual(reloaded.get().acknowledgedApprovalWarning, true);
+
+    // Non-booleans must not coerce into a truthy acknowledgement.
+    reloaded.set({ acknowledgedApprovalWarning: 0 });
+    assert.strictEqual(reloaded.get().acknowledgedApprovalWarning, false);
+    settingsModule.set({ acknowledgedApprovalWarning: false });
     // Leave it false for later checks that read the live settings object.
 });
 

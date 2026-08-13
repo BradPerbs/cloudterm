@@ -1121,9 +1121,10 @@ export default {
      * The assistant panel
      * ---------------------------------------------------------------- */
     'assistant.title': 'AI Agent',
-    'assistant.welcome': 'Let’s work on your servers',
+    'assistant.welcome': "Let's work on your servers",
     'assistant.welcomeNote': 'It reads this terminal, runs commands on their own channel, and can '
-        + 'work across every host you have saved.',
+        + 'work across every host you have saved. Approvals default to ask-before-changes; switch '
+        + 'modes from the composer chip or Settings.',
     'assistant.createQuickPrompts': 'Create quick prompts',
     'assistant.newConversation': 'New conversation',
     'assistant.chats': 'Chats',
@@ -1171,8 +1172,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Every tool call waits for you',
     'assistant.approvalWrites': 'Ask before changes',
     'assistant.approvalWritesHint': 'Reading runs freely',
-    'assistant.approvalNever': 'Yolo Mode',
+    'assistant.approvalNever': 'Never ask',
     'assistant.approvalNeverHint': 'Nothing stops, deletes included',
+    'assistant.approvalWarningTitle': 'How approvals work',
+    'assistant.approvalWarningBody': 'The assistant can read live terminals and run commands on '
+        + 'your hosts. By default it asks before anything that changes a system. Ask every time '
+        + 'stops on reads too. Never ask runs tools without prompts (blocked commands are still '
+        + 'refused).',
+    'assistant.approvalWarningGotIt': 'Got it',
 
     'assistant.didListHosts': 'Listed hosts',
     'assistant.didListSessions': 'Listed sessions',

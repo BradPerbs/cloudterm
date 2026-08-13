@@ -1082,7 +1082,8 @@ export default {
     'assistant.title': 'Agente de IA',
     'assistant.welcome': 'Vamos trabalhar nos seus servidores',
     'assistant.welcomeNote': 'Lê este terminal, corre comandos no canal deles, e pode trabalhar em '
-        + 'todos os anfitriões que tem guardados.',
+        + 'todos os anfitriões que tem guardados. As aprovações começam em perguntar-antes-de-'
+        + 'alterar; mude o modo no chip do compositor ou nas Definições.',
     'assistant.createQuickPrompts': 'Criar perguntas rápidas',
     'assistant.newConversation': 'Nova conversa',
     'assistant.chats': 'Conversas',
@@ -1130,8 +1131,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Todas as chamadas a ferramentas esperam por si',
     'assistant.approvalWrites': 'Perguntar antes de alterar',
     'assistant.approvalWritesHint': 'A leitura corre à vontade',
-    'assistant.approvalNever': 'Modo Yolo',
+    'assistant.approvalNever': 'Nunca perguntar',
     'assistant.approvalNeverHint': 'Nada para, incluindo o que apaga',
+    'assistant.approvalWarningTitle': 'Como funcionam as aprovações',
+    'assistant.approvalWarningBody': 'O assistente pode ler terminais ao vivo e correr comandos nos '
+        + 'seus anfitriões. Por predefinição pergunta antes de qualquer coisa que altere um '
+        + 'sistema. Perguntar sempre também para nas leituras. Nunca perguntar corre ferramentas '
+        + 'sem pedidos (comandos bloqueados continuam a ser recusados).',
+    'assistant.approvalWarningGotIt': 'Percebi',
 
     'assistant.didListHosts': 'Listou os anfitriões',
     'assistant.didListSessions': 'Listou as sessões',
