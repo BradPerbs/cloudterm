@@ -1,5 +1,7 @@
 import { useRef } from 'react';
 import { useTooltip } from '../ui/Tooltip';
+import { effortLabel } from '../../lib/ai-catalog';
+import { useT } from '../../i18n';
 
 /**
  * How hard to think, as a dial rather than a list.
@@ -40,7 +42,7 @@ const INSET = 12;
  */
 function Stop({ option, left, tone }) {
     const { triggerProps, tooltip } = useTooltip({
-        label: option.label,
+        label: effortLabel(option),
         placement: 'top',
     });
 
@@ -57,6 +59,7 @@ function Stop({ option, left, tone }) {
 }
 
 export default function EffortSlider({ options, value, onChange }) {
+    const t = useT();
     const trackRef = useRef(null);
 
     const found = options.findIndex(option => option.value === value);
@@ -119,11 +122,11 @@ export default function EffortSlider({ options, value, onChange }) {
                 ref={trackRef}
                 role="slider"
                 tabIndex={0}
-                aria-label="Effort"
+                aria-label={t('assistant.effort')}
                 aria-valuemin={0}
                 aria-valuemax={last}
                 aria-valuenow={index}
-                aria-valuetext={options[index].label}
+                aria-valuetext={effortLabel(options[index])}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}

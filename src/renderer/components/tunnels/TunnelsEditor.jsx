@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { PlusSignIcon, Edit02Icon, Delete02Icon } from 'hugeicons-react';
 import TunnelDialog from './TunnelDialog';
 import { describeTunnel, typeInfo } from '../../lib/tunnels';
+import { useT } from '../../i18n';
 
 let localId = 0;
 
@@ -14,6 +15,7 @@ let localId = 0;
  * the end of the row, since it is the only thing left on it.
  */
 export default function TunnelsEditor({ tunnels = [], onChange, labelled = true }) {
+    const t = useT();
     const [editing, setEditing] = useState(null);
 
     const handleSave = useCallback((tunnel) => {
@@ -42,7 +44,7 @@ export default function TunnelsEditor({ tunnels = [], onChange, labelled = true 
             <div className={`flex items-center ${labelled ? 'justify-between' : 'justify-end'}`}>
                 {labelled && (
                     <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        Port forwarding
+                        {t('tunnel.heading')}
                     </label>
                 )}
                 <button
@@ -51,14 +53,13 @@ export default function TunnelsEditor({ tunnels = [], onChange, labelled = true 
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-control transition-colors"
                 >
                     <PlusSignIcon size={13} strokeWidth={2.5} />
-                    Add
+                    {t('common.add')}
                 </button>
             </div>
 
             {tunnels.length === 0 ? (
                 <p className="text-xs text-gray-500 dark:text-gray-400 rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 px-3 py-3">
-                    Forward a port to reach a database or internal service through this host, or
-                    open a SOCKS proxy to browse from it.
+                    {t('tunnel.editorEmpty')}
                 </p>
             ) : (
                 <div className="flex flex-col gap-1.5">
@@ -84,14 +85,14 @@ export default function TunnelsEditor({ tunnels = [], onChange, labelled = true 
 
                             {tunnel.autoStart && (
                                 <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-surface-control text-gray-500 dark:text-neutral-400">
-                                    auto
+                                    {t('tunnel.autoBadge')}
                                 </span>
                             )}
 
                             <button
                                 type="button"
                                 onClick={() => setEditing(tunnel)}
-                                title="Edit"
+                                title={t('common.edit')}
                                 className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-surface-control transition-colors"
                             >
                                 <Edit02Icon size={12} strokeWidth={2} />
@@ -99,7 +100,7 @@ export default function TunnelsEditor({ tunnels = [], onChange, labelled = true 
                             <button
                                 type="button"
                                 onClick={() => handleDelete(tunnel.id)}
-                                title="Remove"
+                                title={t('common.remove')}
                                 className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
                                 <Delete02Icon size={12} strokeWidth={2} />

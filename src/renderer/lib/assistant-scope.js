@@ -23,6 +23,8 @@
  * back. Nothing in here knows about React, IPC, or how a row is drawn.
  */
 
+import { translate } from '../i18n';
+
 export const FOLLOW = 'follow';
 export const GLOBAL = 'global';
 export const TARGETS = 'targets';
@@ -106,7 +108,7 @@ export function prune(scope, openSessionIds) {
  */
 export function describeSession(session, fallback = '') {
     if (!session) return fallback;
-    const name = session.hostName || session.address || 'Current session';
+    const name = session.hostName || session.address || translate('assistant.currentSession');
     return session.ordinal > 0 ? `${name} #${session.ordinal}` : name;
 }
 
@@ -149,14 +151,21 @@ export function toWire(scope, activeSessionId) {
  * are no icons to lean on and a count is still the honest summary.
  */
 export function describe(scope, { sessions = [], hosts = [], activeSessionId = '' } = {}) {
-    if (scope.mode === GLOBAL) return { label: 'All hosts', sentence: 'any host' };
+    if (scope.mode === GLOBAL) {
+        return { label: translate('hosts.rootLabel'), sentence: translate('assistant.anyHost') };
+    }
+
+    const nothingOpen = () => ({
+        label: translate('assistant.noSessionOpen'),
+        sentence: translate('assistant.yourServers'),
+    });
 
     if (scope.mode === FOLLOW) {
         const session = sessions.find(entry => entry.sessionId === activeSessionId);
         // The two halves part company when there is nothing to name: the title
         // has to say why it is empty, and "Ask about No session open" does not
         // survive being read.
-        if (!session) return { label: 'No session open', sentence: 'your servers' };
+        if (!session) return nothingOpen();
         const name = describeSession(session);
         return { label: name, sentence: name };
     }
@@ -164,15 +173,17 @@ export function describe(scope, { sessions = [], hosts = [], activeSessionId = '
     const names = [
         ...scope.sessionIds.map(id => describeSession(
             sessions.find(session => session.sessionId === id),
-            'a closed session',
+            translate('assistant.closedSession'),
         )),
         ...scope.hostIds.map((id) => {
             const host = hosts.find(entry => entry.id === id);
-            return host?.name || host?.host || 'a saved host';
+            return host?.name || host?.host || translate('assistant.savedHost');
         }),
     ];
 
-    if (names.length === 0) return { label: 'No session open', sentence: 'your servers' };
+    if (names.length === 0) return nothingOpen();
     if (names.length === 1) return { label: names[0], sentence: names[0] };
-    return { label: `${names.length} servers`, sentence: `${names.length} servers` };
+
+    const many = translate('assistant.serverCount', { count: names.length });
+    return { label: many, sentence: many };
 }

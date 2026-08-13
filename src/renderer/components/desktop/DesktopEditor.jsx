@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { ViewIcon, ViewOffIcon } from 'hugeicons-react';
 import Checkbox from '../ui/Checkbox';
 import Field, { FIELD_CLASS } from '../ui/Field';
+import Select from '../ui/Select';
 import { IconButton } from '../ui/Button';
 
 /**
@@ -81,7 +82,7 @@ export default function DesktopEditor({
     const value = desktop && typeof desktop === 'object' && !Array.isArray(desktop) ? desktop : {};
     const protocol = PROTOCOLS.some(p => p.id === value.protocol) ? value.protocol : 'vnc';
     // Follows the protocol's own default, so an RDP host with nothing stored
-    // shows Direct — the transport it will actually use.
+    // shows Direct, the transport it will actually use.
     const transport = value.transport === 'direct' || value.transport === 'tunnel'
         ? value.transport
         : DEFAULT_TRANSPORTS[protocol];
@@ -306,15 +307,15 @@ export default function DesktopEditor({
                     </Field>
 
                     <Field label="Scaling" hint={scalingModes.find(mode => mode.id === scaling)?.hint}>
-                        <select
+                        <Select
                             value={scaling}
-                            onChange={(e) => set('scaling', e.target.value)}
+                            onChange={(next) => set('scaling', next)}
                             className={FIELD_CLASS}
-                        >
-                            {scalingModes.map(mode => (
-                                <option key={mode.id} value={mode.id}>{mode.label}</option>
-                            ))}
-                        </select>
+                            options={scalingModes.map(mode => ({
+                                value: mode.id,
+                                label: mode.label,
+                            }))}
+                        />
                     </Field>
 
                     {/* Both are RFB concepts with no RDP equivalent: a session is

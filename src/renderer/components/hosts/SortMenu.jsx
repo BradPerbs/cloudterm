@@ -3,6 +3,7 @@ import { Search01Icon, SortingAZ01Icon, Tick02Icon } from 'hugeicons-react';
 import MenuButton from '../ui/MenuButton';
 import Tag from '../ui/Tag';
 import { SORT_LABELS, SORT_MANUAL, SORT_NAME, SORT_NAME_DESC, SORT_RECENT } from '../../lib/organize';
+import { useT } from '../../i18n';
 
 const SORT_ORDER = [SORT_NAME, SORT_NAME_DESC, SORT_RECENT, SORT_MANUAL];
 
@@ -14,7 +15,7 @@ const SEARCHABLE_FROM = 8;
  *
  * The tag filter used to be a row of chips under the toolbar, which had two
  * problems. It only existed once something was tagged, so on a fresh collection
- * the feature was invisible — there was nothing on the page to suggest tags
+ * the feature was invisible: there was nothing on the page to suggest tags
  * could narrow it. And when it did exist it spent a whole row on every tag in
  * the collection, pushing the cards down for a control used occasionally.
  *
@@ -24,9 +25,9 @@ const SEARCHABLE_FROM = 8;
  * sight is a page that looks like it has lost hosts. The tags actually picked
  * are named again above the grid, where they can be dropped one at a time.
  *
- * Picking a sort closes the menu — it is one choice and it is made. Picking a
- * tag does not: filters are built up, and a menu that shut on the first tag
- * would have to be reopened for the second.
+ * Picking a sort closes the menu, since it is one choice and it is made.
+ * Picking a tag does not: filters are built up, and a menu that shut on the
+ * first tag would have to be reopened for the second.
  */
 export default function SortMenu({
     sort,
@@ -38,11 +39,12 @@ export default function SortMenu({
     onTagModeChange,
     onClearTags,
 }) {
+    const t = useT();
     const filtering = selectedTags.length > 0;
 
-    const label = `Sort: ${SORT_LABELS[sort]}`;
+    const label = t('hosts.sortLabel', { sort: t(SORT_LABELS[sort]) });
     const title = filtering
-        ? `${label} · filtered by ${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'}`
+        ? `${label} · ${t('hosts.filteredByTags', { count: selectedTags.length })}`
         : label;
 
     return (
@@ -55,7 +57,7 @@ export default function SortMenu({
         >
             {(close) => (
                 <>
-                    <SectionLabel>Sort</SectionLabel>
+                    <SectionLabel>{t('hosts.sort')}</SectionLabel>
 
                     {SORT_ORDER.map(mode => (
                         <Row
@@ -64,7 +66,7 @@ export default function SortMenu({
                             checked={mode === sort}
                             onClick={() => { close(); onSortChange(mode); }}
                         >
-                            <span className="flex-1 truncate font-medium">{SORT_LABELS[mode]}</span>
+                            <span className="flex-1 truncate font-medium">{t(SORT_LABELS[mode])}</span>
                         </Row>
                     ))}
 
@@ -93,13 +95,14 @@ export default function SortMenu({
 
 /** The tag half of the menu: what to narrow to, and how to combine two of them. */
 function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
+    const t = useT();
     const [query, setQuery] = useState('');
 
     const picked = useMemo(() => new Set(selected), [selected]);
 
     /**
      * What was picked when the menu opened, which is what the list is ordered
-     * by — not what is picked now.
+     * by, rather than what is picked now.
      *
      * Picked tags lead, because with thirty tags the ones already doing the
      * filtering must not be somewhere below a scroll. But re-sorting as they
@@ -140,15 +143,15 @@ function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
                                         onClick={() => onModeChange(entry)}
                                         aria-pressed={mode === entry}
                                         title={entry === 'all'
-                                            ? 'Hosts carrying every picked tag'
-                                            : 'Hosts carrying at least one picked tag'}
+                                            ? t('hosts.tagModeAllHint')
+                                            : t('hosts.tagModeAnyHint')}
                                         className={`h-[18px] px-1.5 text-[10px] font-bold uppercase transition-colors ${
                                             mode === entry
                                                 ? 'bg-gray-900 dark:bg-white text-white dark:text-black'
                                                 : 'text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        {entry}
+                                        {t(`hosts.tagMode.${entry}`)}
                                     </button>
                                 ))}
                             </div>
@@ -161,12 +164,12 @@ function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
                                 text-gray-400 dark:text-neutral-500
                                 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
-                            Clear
+                            {t('common.clear')}
                         </button>
                     </div>
                 )}
             >
-                Filter by tag
+                {t('hosts.filterByTag')}
             </SectionLabel>
 
             {tags.length > SEARCHABLE_FROM && (
@@ -181,9 +184,9 @@ function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
                         type="text"
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder={`Search ${tags.length} tags…`}
+                        placeholder={t('hosts.searchTagsPlaceholder', { count: tags.length })}
                         spellCheck={false}
-                        aria-label="Search tags"
+                        aria-label={t('hosts.searchTags')}
                         className="w-full h-7 pl-7 pr-2 rounded-lg text-[11px]
                             bg-gray-100 dark:bg-surface-base
                             text-gray-900 dark:text-white
@@ -196,7 +199,7 @@ function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
 
             {ordered.length === 0 ? (
                 <p className="px-2.5 py-3 text-[11px] text-center text-gray-400 dark:text-neutral-500">
-                    No tag matches “{query.trim()}”
+                    {t('hosts.noTagMatches', { query: query.trim() })}
                 </p>
             ) : (
                 <div className="max-h-[13rem] overflow-y-auto">
@@ -206,8 +209,8 @@ function TagSection({ tags, selected, mode, onToggle, onModeChange, onClear }) {
                             checked={picked.has(tag)}
                             onClick={() => onToggle(tag)}
                             title={picked.has(tag)
-                                ? `Stop filtering by “${tag}”`
-                                : `Filter by “${tag}”`}
+                                ? t('hosts.stopFilteringBy', { tag })
+                                : t('hosts.filterBy', { tag })}
                         >
                             <span className="flex-1 min-w-0 flex">
                                 <Tag tag={tag} />
@@ -240,8 +243,8 @@ function SectionLabel({ children, aside }) {
  * the answer.
  *
  * A picked row also keeps the fill that hovering gives it, because the chip
- * itself cannot say whether it is picked — it is the same solid colour either
- * way — and a column of thirty vivid pills needs the answer readable down the
+ * itself cannot say whether it is picked (it is the same solid colour either
+ * way) and a column of thirty vivid pills needs the answer readable down the
  * left edge rather than only at the tick column.
  *
  * The tick keeps its space when it is not shown, so ticking a row does not

@@ -16,6 +16,8 @@
  * row: whatever Claude Code is already set to use.
  */
 
+import { translate } from '../i18n';
+
 /**
  * The scale itself, low to high.
  *
@@ -28,15 +30,18 @@
  * Which of them are offered is never decided here. That comes from the model.
  */
 export const EFFORTS = [
-    { value: 'low', short: 'Low', label: 'Low' },
-    { value: 'medium', short: 'Medium', label: 'Medium' },
-    { value: 'high', short: 'High', label: 'High' },
-    { value: 'xhigh', short: 'Extra high', label: 'Extra high' },
-    { value: 'max', short: 'Max', label: 'Max' },
+    { value: 'low', labelKey: 'assistant.effortLow' },
+    { value: 'medium', labelKey: 'assistant.effortMedium' },
+    { value: 'high', labelKey: 'assistant.effortHigh' },
+    { value: 'xhigh', labelKey: 'assistant.effortXHigh' },
+    { value: 'max', labelKey: 'assistant.effortMax' },
     // Codex only, and only on its newest models. It appears when a model says
     // it has it, which is the same rule every other stop follows.
-    { value: 'ultra', short: 'Ultra', label: 'Ultra' },
+    { value: 'ultra', labelKey: 'assistant.effortUltra' },
 ];
+
+/** An effort stop with its name filled in, for the two places that draw one. */
+export const effortLabel = (stop) => (stop ? translate(stop.labelKey) : '');
 
 /** What each agent is called, for the one row that has to name it. */
 export const PROVIDER_NAMES = {
@@ -52,12 +57,12 @@ export const PROVIDER_NAMES = {
  * already made there.
  */
 function inheritRow(provider) {
-    const name = PROVIDER_NAMES[provider] || 'the agent';
+    const name = PROVIDER_NAMES[provider] || translate('settings.assistant.theAgent');
     return {
         value: '',
         short: name,
-        label: `${name} default`,
-        hint: `Whatever your installed ${name} uses`,
+        label: translate('assistant.agentDefault', { agent: name }),
+        hint: translate('assistant.agentDefaultHint', { agent: name }),
         effort: null,
     };
 }
@@ -95,7 +100,7 @@ export function modelRows(catalog, selected = '', provider = 'claude-code') {
             resolved: selected,
             short: selected,
             label: selected,
-            hint: known ? 'Not in this runtime\'s list' : '',
+            hint: known ? translate('assistant.notInRuntimeList') : '',
             effort: null,
         });
     }

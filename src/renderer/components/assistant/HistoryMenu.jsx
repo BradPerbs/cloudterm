@@ -1,5 +1,6 @@
 import { Clock01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
+import { useT } from '../../i18n';
 
 /**
  * The conversations the app still has, and the way back into one.
@@ -14,20 +15,22 @@ import PanelMenu from './PanelMenu';
  */
 
 /** Ages in this list are minutes and hours, not dates. */
-function when(timestamp) {
+function when(t, timestamp) {
     const age = Date.now() - timestamp;
-    if (!timestamp || age < 60_000) return 'just now';
+    if (!timestamp || age < 60_000) return t('monitor.justNow');
 
     const minutes = Math.floor(age / 60_000);
-    if (minutes < 60) return `${minutes} min ago`;
+    if (minutes < 60) return t('monitor.minutesAgo', { count: minutes });
 
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} h ago`;
+    if (hours < 24) return t('monitor.hoursAgo', { count: hours });
 
-    return `${Math.floor(hours / 24)} d ago`;
+    return t('monitor.daysAgo', { count: Math.floor(hours / 24) });
 }
 
 export default function HistoryMenu({ conversations, currentId, onOpen, onRemove, onRefresh }) {
+    const t = useT();
+
     // The current conversation is always in the list the main process keeps, so
     // the only way this is empty is a lookup that has not answered yet. A row
     // for what is on screen beats an empty popover.
@@ -41,7 +44,7 @@ export default function HistoryMenu({ conversations, currentId, onOpen, onRemove
             menuClassName="w-72"
             sections={[
                 {
-                    heading: 'Chats',
+                    heading: t('assistant.chats'),
                     value: currentId,
                     onChange: onOpen,
                     // No icon and no message count. Every row here is the same
@@ -49,8 +52,8 @@ export default function HistoryMenu({ conversations, currentId, onOpen, onRemove
                     // tells one chat from another is what was asked and when.
                     options: rows.map(conversation => ({
                         value: conversation.conversationId,
-                        label: conversation.title || 'New conversation',
-                        hint: when(conversation.updatedAt),
+                        label: conversation.title || t('assistant.newConversation'),
+                        hint: when(t, conversation.updatedAt),
                         onRemove: () => onRemove(conversation.conversationId),
                     })),
                 },
@@ -60,8 +63,8 @@ export default function HistoryMenu({ conversations, currentId, onOpen, onRemove
                     type="button"
                     aria-haspopup="menu"
                     aria-expanded={open}
-                    aria-label="Chat history"
-                    title="Chat history"
+                    aria-label={t('assistant.chatHistory')}
+                    title={t('assistant.chatHistory')}
                     onClick={() => {
                         if (!open) onRefresh?.();
                         toggle();

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown01Icon } from 'hugeicons-react';
 import CopyButton from '../ui/CopyButton';
+import { translate, useT } from '../../i18n';
 
 /**
  * One tool call, as a row in the transcript.
@@ -17,16 +18,16 @@ import CopyButton from '../ui/CopyButton';
  */
 
 const TITLES = {
-    list_hosts: 'Listed hosts',
-    list_sessions: 'Listed sessions',
-    read_terminal: 'Read the terminal',
-    run_command: 'Ran',
-    send_input: 'Typed',
-    list_directory: 'Listed',
-    read_file: 'Read',
-    write_file: 'Wrote',
-    connect_host: 'Connected to',
-    disconnect_session: 'Closed the session',
+    list_hosts: 'assistant.didListHosts',
+    list_sessions: 'assistant.didListSessions',
+    read_terminal: 'assistant.didReadTerminal',
+    run_command: 'assistant.didRun',
+    send_input: 'assistant.didType',
+    list_directory: 'assistant.didList',
+    read_file: 'assistant.didRead',
+    write_file: 'assistant.didWrite',
+    connect_host: 'assistant.didConnect',
+    disconnect_session: 'assistant.didDisconnect',
 };
 
 /** The dot carries the status, so the row height never changes with it. */
@@ -45,8 +46,8 @@ const DOTS = {
  * is identical: the same row, still naming the same command.
  */
 const REFUSED = {
-    denied: 'Declined',
-    expired: 'Timed out',
+    denied: 'assistant.declined',
+    expired: 'assistant.timedOut',
 };
 
 /** The one line that says what this call actually was. */
@@ -61,9 +62,17 @@ export function describeCall(name, input = {}) {
         case 'list_directory':
             return { mono: true, text: input.path || '' };
         case 'read_terminal':
-            return { mono: false, text: input.lines ? `last ${input.lines} lines` : 'recent output' };
+            return {
+                mono: false,
+                text: input.lines
+                    ? translate('assistant.lastLines', { count: input.lines })
+                    : translate('assistant.recentOutput'),
+            };
         case 'list_hosts':
-            return { mono: false, text: input.query ? `matching "${input.query}"` : '' };
+            return {
+                mono: false,
+                text: input.query ? translate('assistant.matching', { query: input.query }) : '',
+            };
         case 'connect_host':
             return { mono: false, text: input.hostId || '' };
         default: {
@@ -75,10 +84,14 @@ export function describeCall(name, input = {}) {
 }
 
 export default function ToolCall({ item }) {
+    const t = useT();
     const [open, setOpen] = useState(item.status === 'error');
     const summary = describeCall(item.name, item.input);
     const refused = REFUSED[item.approval?.status];
-    const title = refused || TITLES[item.name] || (item.local ? item.name : item.name.replace(/_/g, ' '));
+    const known = refused || TITLES[item.name];
+    const title = known
+        ? t(known)
+        : (item.local ? item.name : item.name.replace(/_/g, ' '));
     const expandable = Boolean(item.result);
 
     return (

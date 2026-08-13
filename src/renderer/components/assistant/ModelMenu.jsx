@@ -2,7 +2,15 @@ import { useMemo } from 'react';
 import { ArrowDown01Icon, Loading03Icon, Refresh01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 import EffortSlider from './EffortSlider';
-import { modelRows, modelRow, effortStops, nearestEffort, isDiscovered } from '../../lib/ai-catalog';
+import {
+    modelRows,
+    modelRow,
+    effortStops,
+    effortLabel,
+    nearestEffort,
+    isDiscovered,
+} from '../../lib/ai-catalog';
+import { useT } from '../../i18n';
 
 /**
  * The model and how hard it should think, as one chip in the composer.
@@ -31,11 +39,13 @@ import { modelRows, modelRow, effortStops, nearestEffort, isDiscovered } from '.
  * here is the button to ask again.
  */
 function ModelNote({ loading, onRefresh }) {
+    const t = useT();
+
     if (loading) {
         return (
             <div className="flex items-center gap-2 px-2.5 h-9 text-[11px] text-gray-500 dark:text-neutral-400">
                 <Loading03Icon size={13} strokeWidth={2} className="shrink-0 animate-spin" />
-                Reading the model list...
+                {t('assistant.readingModels')}
             </div>
         );
     }
@@ -50,12 +60,13 @@ function ModelNote({ loading, onRefresh }) {
                 hover:text-gray-900 dark:hover:text-white"
         >
             <Refresh01Icon size={13} strokeWidth={2} className="shrink-0" />
-            No models reported. Try again
+            {t('assistant.noModels')}
         </button>
     );
 }
 
 export default function ModelMenu({ settings, models, loading, onRefresh, onChange }) {
+    const t = useT();
     const rows = useMemo(
         () => modelRows(models, settings.model, settings.provider),
         [models, settings.model, settings.provider]
@@ -74,7 +85,7 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
 
     const sections = [
         {
-            heading: 'Model',
+            heading: t('assistant.model'),
             // Nothing under the rows once the list is there: the rows are the
             // answer, and a refresh button under a working menu is furniture.
             note: discovered ? null : <ModelNote loading={loading} onRefresh={onRefresh} />,
@@ -97,11 +108,11 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
     // changing one, and the panel has a settings page for saying things.
     if (stops.length > 1) {
         sections.push({
-            heading: 'Effort',
+            heading: t('assistant.effort'),
             // The tick a row would have carried, moved to the heading: the
             // slider shows where you are on the scale but not what that
             // position is called.
-            aside: effort?.label,
+            aside: effortLabel(effort),
             content: (
                 <EffortSlider
                     options={stops}
@@ -124,7 +135,7 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
                     aria-haspopup="menu"
                     aria-expanded={open}
                     onClick={toggle}
-                    title="Model and effort"
+                    title={t('assistant.modelAndEffort')}
                     className={`h-7 pl-2 pr-1.5 rounded-xl flex items-center gap-1 transition-colors
                         text-[11px] outline-none focus-visible:ring-2
                         focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
@@ -134,7 +145,7 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
                                 + 'hover:text-gray-700 dark:hover:text-gray-200'}`}
                 >
                     <span className="font-medium">{model.short}</span>
-                    {effort && <span className="opacity-60">{effort.short}</span>}
+                    {effort && <span className="opacity-60">{effortLabel(effort)}</span>}
                     <ArrowDown01Icon
                         size={11}
                         strokeWidth={2}

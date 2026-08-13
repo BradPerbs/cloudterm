@@ -25,14 +25,14 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 const APPROVALS = [
     {
         value: 'always',
-        label: 'Ask every time',
-        hint: 'Every tool call waits for you',
+        labelKey: 'assistant.approvalAlways',
+        hintKey: 'assistant.approvalAlwaysHint',
         icon: <SecurityCheckIcon size={14} strokeWidth={1.5} />,
     },
     {
         value: 'writes',
-        label: 'Ask before changes',
-        hint: 'Reading runs freely',
+        labelKey: 'assistant.approvalWrites',
+        hintKey: 'assistant.approvalWritesHint',
         icon: <Shield01Icon size={14} strokeWidth={1.5} />,
     },
     {

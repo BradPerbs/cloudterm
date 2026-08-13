@@ -5,13 +5,14 @@ import Checkbox from '../ui/Checkbox';
 import Tag from '../ui/Tag';
 import { FIELD_CLASS } from '../ui/Field';
 import { MAX_TAG_LENGTH, normalizeTag } from '../../lib/tags';
+import { useT } from '../../i18n';
 
 /**
  * Tag several hosts at once.
  *
  * The awkward part of tagging a selection is that the hosts in it do not agree:
  * eight of the twelve are already "prod". So each tag is a checkbox with three
- * starting positions — on all of them, on some, on none — and the third is the
+ * starting positions (on all of them, on some, on none) and the third is the
  * one the design turns on:
  *
  *   on all     unticking it takes the tag off all of them
@@ -27,6 +28,7 @@ import { MAX_TAG_LENGTH, normalizeTag } from '../../lib/tags';
  * rest of the list first.
  */
 export default function TagSelectionDialog({ hosts, allTags, onApply, onCancel }) {
+    const t = useT();
     // tag -> true (on all of them) | false (on none of them). Absent means
     // untouched, which for a mixed tag means "leave them as they are".
     const [desired, setDesired] = useState(() => new Map());
@@ -126,8 +128,8 @@ export default function TagSelectionDialog({ hosts, allTags, onApply, onCancel }
     return (
         <Dialog
             width="30rem"
-            title="Tag hosts"
-            subtitle={`${total} host${total === 1 ? '' : 's'} selected. Part-ticked tags are on some of them, and stay that way unless you touch them.`}
+            title={t('hosts.tagTitle')}
+            subtitle={t('hosts.tagSubtitle', { what: t('hosts.count', { count: total }) })}
             onClose={busy ? undefined : onCancel}
             icon={
                 <span className="w-9 h-9 rounded-xl flex items-center justify-center
@@ -137,9 +139,11 @@ export default function TagSelectionDialog({ hosts, allTags, onApply, onCancel }
             }
             footer={
                 <>
-                    <DialogButton onClick={onCancel} disabled={busy}>Cancel</DialogButton>
+                    <DialogButton onClick={onCancel} disabled={busy}>{t('common.cancel')}</DialogButton>
                     <DialogButton variant="primary" onClick={apply} disabled={nothingToDo || busy}>
-                        {busy ? 'Applying…' : `Apply${summary ? ` ${summary}` : ''}`}
+                        {busy
+                            ? t('hosts.applying')
+                            : `${t('common.apply')}${summary ? ` ${summary}` : ''}`}
                     </DialogButton>
                 </>
             }
@@ -156,16 +160,16 @@ export default function TagSelectionDialog({ hosts, allTags, onApply, onCancel }
                     }}
                     onBlur={commitDraft}
                     maxLength={MAX_TAG_LENGTH}
-                    placeholder="New tag…"
+                    placeholder={t('hosts.newTagPlaceholder')}
                     spellCheck={false}
-                    aria-label="New tag"
+                    aria-label={t('hosts.newTag')}
                     data-autofocus
                     className={FIELD_CLASS}
                 />
 
                 {rows.length === 0 ? (
                     <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                        No tags yet. Type one above to start.
+                        {t('hosts.noTagsYet')}
                     </p>
                 ) : (
                     <div className="flex flex-col max-h-[42vh] overflow-y-auto -mx-1 px-1">
@@ -191,10 +195,10 @@ export default function TagSelectionDialog({ hosts, allTags, onApply, onCancel }
                                     </span>
 
                                     <span className="shrink-0 text-[11px] tabular-nums text-gray-400 dark:text-neutral-500">
-                                        {state === 'add' && on < total && 'will be added'}
-                                        {state === 'remove' && on > 0 && 'will be removed'}
-                                        {state === 'all' && 'on all'}
-                                        {state === 'some' && `on ${on} of ${total}`}
+                                        {state === 'add' && on < total && t('hosts.tagWillAdd')}
+                                        {state === 'remove' && on > 0 && t('hosts.tagWillRemove')}
+                                        {state === 'all' && t('hosts.tagOnAll')}
+                                        {state === 'some' && t('hosts.tagOnSome', { on, total })}
                                     </span>
                                 </div>
                             );

@@ -4,6 +4,7 @@ import SettingsPage from '../ui/SettingsPage';
 import SettingCard from '../ui/SettingCard';
 import SettingRow, { DIVIDED } from '../ui/SettingRow';
 import Toggle from '../ui/Toggle';
+import Select from '../../ui/Select';
 import { toastOptions } from '../../../lib/toast';
 import { LANGUAGES, setLanguage, translate, useLanguage, useT } from '../../../i18n';
 
@@ -107,23 +108,30 @@ export default function GeneralPage() {
                     title={t('settings.general.language')}
                     description={t('settings.general.languageDesc')}
                     control={
-                        <select
+                        <Select
                             id="app-language"
                             aria-label={t('settings.general.language')}
                             value={language}
-                            onChange={(event) => changeLanguage(event.target.value)}
-                            className="h-9 px-3 rounded-xl text-sm bg-white dark:bg-neutral-800
+                            onChange={changeLanguage}
+                            options={LANGUAGES.map(entry => {
+                                const label = entry.label === entry.english
+                                    ? entry.label
+                                    : `${entry.label} (${entry.english})`;
+
+                                // Tagged with its own language so the shell
+                                // picks the right face for it, as the native
+                                // options were.
+                                return {
+                                    value: entry.id,
+                                    search: label,
+                                    label: <span lang={entry.tag}>{label}</span>,
+                                };
+                            })}
+                            className="w-56 h-9 px-3 rounded-xl text-sm bg-white dark:bg-neutral-800
                                 border border-gray-300 dark:border-neutral-700
                                 text-gray-900 dark:text-gray-100 outline-none
                                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25"
-                        >
-                            {LANGUAGES.map(entry => (
-                                <option key={entry.id} value={entry.id} lang={entry.tag}>
-                                    {entry.label}
-                                    {entry.label === entry.english ? '' : ` (${entry.english})`}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     }
                 />
 

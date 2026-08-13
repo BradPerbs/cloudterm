@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Dialog, { DialogButton } from '../ui/Dialog';
 import ColorField from '../ui/ColorField';
+import Select from '../ui/Select';
 import {
     APP_COLOR_FIELDS,
     APP_COLOR_PRESETS,
@@ -122,18 +123,21 @@ export default function AppColorsDialog({ colors, onSave, onClose }) {
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 shrink-0">
                         {t('common.startFrom')}
                     </span>
-                    <select
+                    <Select
                         value={preset}
-                        onChange={(event) => startFrom(event.target.value)}
-                        className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm border border-gray-300
+                        onChange={startFrom}
+                        containerClassName="flex-1"
+                        className="w-full px-3 py-2 rounded-xl text-sm border border-gray-300
                             dark:border-surface-control bg-white dark:bg-neutral-800 text-gray-900 dark:text-white
                             outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
-                    >
-                        <option value="">{t('common.keepCurrentColors')}</option>
-                        {APP_COLOR_PRESETS.map(option => (
-                            <option key={option.id} value={option.id}>{option.label}</option>
-                        ))}
-                    </select>
+                        options={[
+                            { value: '', label: t('common.keepCurrentColors') },
+                            ...APP_COLOR_PRESETS.map(option => ({
+                                value: option.id,
+                                label: option.label,
+                            })),
+                        ]}
+                    />
                 </label>
 
                 {/* One colour, and the ramp is rebuilt around it: the shortcut

@@ -30,6 +30,13 @@ const SERVER_NAME = 'remote';
 /** The levels the app can store, so nothing is offered that cannot be saved. */
 const EFFORT_LEVELS = new Set(require('../settings').EFFORTS);
 
+function envValue(env, ...names) {
+    for (const name of names) {
+        if (env?.[name]) return env[name];
+    }
+    return '';
+}
+
 /**
  * Where the Codex desktop app keeps its CLI.
  *
@@ -37,35 +44,178 @@ const EFFORT_LEVELS = new Set(require('../settings').EFFORTS);
  * and cannot be written down. The newest one wins, which is the same rule the
  * app itself follows.
  */
-function findCodex() {
-    const roots = [
-        path.join(os.homedir(), 'AppData', 'Local', 'OpenAI', 'Codex', 'bin'),
-        path.join(os.homedir(), '.codex', 'bin'),
-        path.join(os.homedir(), 'Library', 'Application Support', 'OpenAI', 'Codex', 'bin'),
-        path.join(os.homedir(), '.local', 'share', 'openai', 'codex', 'bin'),
+function codexAppRoots({ platform = process.platform, env = process.env, home = os.homedir() } = {}) {
+    const paths = platform === 'win32' ? path.win32 : path.posix;
+    const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData')
+        || paths.join(home, 'AppData', 'Local');
+
+    return [
+        paths.join(localAppData, 'OpenAI', 'Codex', 'bin'),
+        paths.join(home, '.codex', 'bin'),
+        paths.join(home, 'Library', 'Application Support', 'OpenAI', 'Codex', 'bin'),
+        paths.join(home, '.local', 'share', 'openai', 'codex', 'bin'),
     ];
-    const binary = process.platform === 'win32' ? 'codex.exe' : 'codex';
+}
+
+/**
+ * Every folder a standalone Codex CLI can land in.
+ *
+ * The desktop app is not the only way to get one. The official install script,
+ * npm, Homebrew, Scoop and Chocolatey each put a `codex` somewhere else, and
+ * until this existed a machine that installed it any of those ways was told
+ * Codex was not on it at all.
+ *
+ * PATH leads, because someone who arranged their own PATH has already said
+ * which copy they mean. The named folders are for the packaged app, whose PATH
+ * is whatever the desktop session handed it and is often close to empty.
+ */
+function codexRoots({ platform = process.platform, env = process.env, home = os.homedir() } = {}) {
+    const windows = platform === 'win32';
+    const paths = windows ? path.win32 : path.posix;
+    const roots = String(envValue(env, 'PATH', 'Path', 'path'))
+        .split(windows ? ';' : ':')
+        .filter(Boolean);
+
+    // The app's own folders again, for a binary sitting directly in one rather
+    // than in a hashed subfolder of it.
+    roots.push(...codexAppRoots({ platform, env, home }));
+
+    if (windows) {
+        const appData = envValue(env, 'APPDATA', 'AppData');
+        const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData');
+        const chocolatey = envValue(env, 'ChocolateyInstall', 'CHOCOLATEYINSTALL');
+        const scoop = envValue(env, 'SCOOP', 'Scoop') || paths.join(home, 'scoop');
+
+        roots.push(
+            appData && paths.join(appData, 'npm'),
+            paths.join(scoop, 'shims'),
+            localAppData && paths.join(localAppData, 'Programs', 'codex'),
+            chocolatey && paths.join(chocolatey, 'bin')
+        );
+    } else {
+        roots.push(
+            paths.join(home, '.local', 'bin'),
+            paths.join(home, 'bin'),
+            paths.join(home, '.bun', 'bin'),
+            paths.join(home, '.npm-global', 'bin'),
+            '/opt/homebrew/bin',
+            '/usr/local/bin',
+            '/usr/bin'
+        );
+    }
+
+    return [...new Set(roots.filter(Boolean))];
+}
+
+/**
+ * The real executable behind an npm install on Windows.
+ *
+ * `npm i -g @openai/codex` leaves a `codex.cmd` shim, and a shim is not
+ * something this can hand over: the SDK spawns the path with no shell, as does
+ * `app-server` further down, and Node refuses to spawn a `.cmd` that way. The
+ * binary the shim would have reached is in the platform package sitting beside
+ * it, so this walks `node_modules/@openai/codex-*\/vendor/<triple>/bin` and
+ * takes that. The triple is read rather than written down, since it differs by
+ * architecture and by libc.
+ */
+function vendoredCodex(root, { readdirSync, statSync, paths, binary }) {
+    const scope = paths.join(root, 'node_modules', '@openai');
+    let packages = [];
+    try {
+        packages = readdirSync(scope, { withFileTypes: true });
+    } catch {
+        return '';
+    }
+
+    for (const entry of packages) {
+        if (!entry.isDirectory() || !entry.name.startsWith('codex-')) continue;
+        const vendor = paths.join(scope, entry.name, 'vendor');
+        let triples = [];
+        try {
+            triples = readdirSync(vendor, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const triple of triples) {
+            if (!triple.isDirectory()) continue;
+            const candidate = paths.join(vendor, triple.name, 'bin', binary);
+            try {
+                statSync(candidate);
+                return candidate;
+            } catch {
+                // Not this one.
+            }
+        }
+    }
+    return '';
+}
+
+/**
+ * The Codex CLI, wherever this machine happens to keep it.
+ *
+ * The desktop app's copy is preferred when there is one: it updates itself, and
+ * its sign-in is the one the desktop session is already using. Everything after
+ * that is for the machines that never installed the app.
+ */
+function findCodex(options = {}) {
+    const platform = options.platform || process.platform;
+    const env = options.env || process.env;
+    const home = options.home || os.homedir();
+    const readdirSync = options.readdirSync || fs.readdirSync;
+    const statSync = options.statSync || fs.statSync;
+    const accessSync = options.accessSync || fs.accessSync;
+    const paths = platform === 'win32' ? path.win32 : path.posix;
+    const binary = platform === 'win32' ? 'codex.exe' : 'codex';
+
+    const runnable = (candidate) => {
+        try {
+            accessSync(candidate, platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    };
 
     let best = null;
-    for (const root of roots) {
+    for (const root of codexAppRoots({ platform, env, home })) {
         let entries = [];
         try {
-            entries = fs.readdirSync(root, { withFileTypes: true });
+            entries = readdirSync(root, { withFileTypes: true });
         } catch {
             continue;
         }
         for (const entry of entries) {
             if (!entry.isDirectory()) continue;
-            const candidate = path.join(root, entry.name, binary);
+            const candidate = paths.join(root, entry.name, binary);
             try {
-                const stat = fs.statSync(candidate);
+                const stat = statSync(candidate);
                 if (!best || stat.mtimeMs > best.at) best = { path: candidate, at: stat.mtimeMs };
             } catch {
                 // Not this one.
             }
         }
     }
-    return best?.path || '';
+    if (best) return best.path;
+
+    let shim = '';
+    for (const root of codexRoots({ platform, env, home })) {
+        const direct = paths.join(root, binary);
+        if (runnable(direct)) return direct;
+
+        if (platform === 'win32') {
+            const vendored = vendoredCodex(root, { readdirSync, statSync, paths, binary });
+            if (vendored) return vendored;
+
+            // Last resort only, for the reason `vendoredCodex` gives. Better to
+            // fail saying which file could not be started than to say Codex is
+            // not here when it plainly is.
+            if (!shim) {
+                const cmd = paths.join(root, 'codex.cmd');
+                if (runnable(cmd)) shim = cmd;
+            }
+        }
+    }
+    return shim;
 }
 
 let sdkPromise = null;
@@ -118,7 +268,8 @@ async function start({
 
     const binary = findCodex();
     if (!binary) {
-        throw new Error('Codex is not installed on this machine, or its CLI could not be found');
+        throw new Error('The Codex CLI could not be found on this machine. Install the Codex app, '
+            + 'or install the CLI and make sure its executable is on PATH.');
     }
 
     const { url, token } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
@@ -294,10 +445,17 @@ function translate(event, onEvent) {
 function describeFailure(error) {
     const message = error?.message || String(error);
     if (/not logged in|unauthor|401/i.test(message)) {
-        return 'Codex is not signed in on this machine. Open the Codex app and sign in, then try again.';
+        return 'Codex is not signed in on this machine. Sign in with the Codex app, or run "codex login" '
+            + 'in a terminal, then try again.';
+    }
+    // Windows refuses to spawn a .cmd without a shell, which is the shim an npm
+    // install leaves behind when its platform package is missing alongside it.
+    if (/EINVAL/i.test(message)) {
+        return 'The Codex CLI on this machine is a script shim that cannot be started directly. '
+            + 'Reinstall Codex, or put a real codex executable on PATH.';
     }
     if (/ENOENT|not found/i.test(message)) {
-        return 'The Codex CLI could not be started. Check that the Codex app is installed.';
+        return 'The Codex CLI could not be started. Check that Codex is installed and on PATH.';
     }
     return message;
 }
@@ -407,4 +565,4 @@ function describeModels(rows) {
     return models.length ? models : null;
 }
 
-module.exports = { start, listModels, findCodex, SERVER_NAME };
+module.exports = { start, listModels, findCodex, codexAppRoots, codexRoots, SERVER_NAME };

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Delete02Icon, Tick02Icon } from 'hugeicons-react';
 import { useTooltip } from '../ui/Tooltip';
+import { useT } from '../../i18n';
 
 /**
  * A labelled dropdown for the assistant panel.
@@ -129,6 +130,7 @@ function CheckBox({ checked }) {
  * full-width row inside a content-sized box is a row that collapses.
  */
 function Row({ option, section, checked, onPick }) {
+    const t = useT();
     const { triggerProps, tooltip } = useTooltip({
         label: option.tooltip,
         hint: option.tooltipHint,
@@ -202,8 +204,8 @@ function Row({ option, section, checked, onPick }) {
             {option.onRemove && (
                 <button
                     type="button"
-                    aria-label={`Delete ${option.label}`}
-                    title="Delete"
+                    aria-label={t('common.deleteNamed', { name: option.label })}
+                    title={t('common.delete')}
                     onClick={(event) => {
                         event.stopPropagation();
                         option.onRemove();

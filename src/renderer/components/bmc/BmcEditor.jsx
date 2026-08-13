@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { ViewIcon, ViewOffIcon } from 'hugeicons-react';
 import Checkbox from '../ui/Checkbox';
 import Field, { FIELD_CLASS } from '../ui/Field';
+import Select from '../ui/Select';
 import { IconButton } from '../ui/Button';
 
 /**
@@ -183,15 +184,15 @@ export default function BmcEditor({
                         label="Firmware"
                         hint={VENDORS.find(option => option.id === vendor)?.hint}
                     >
-                        <select
+                        <Select
                             value={vendor}
-                            onChange={(e) => set('vendor', e.target.value)}
+                            onChange={(next) => set('vendor', next)}
                             className={FIELD_CLASS}
-                        >
-                            {VENDORS.map(option => (
-                                <option key={option.id} value={option.id}>{option.label}</option>
-                            ))}
-                        </select>
+                            options={VENDORS.map(option => ({
+                                value: option.id,
+                                label: option.label,
+                            }))}
+                        />
                     </Field>
 
                     {/* A path is the exception rather than the rule: every board

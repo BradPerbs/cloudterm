@@ -12,6 +12,7 @@ import Disclosure from './ui/Disclosure';
 import TagInput from './ui/TagInput';
 import StoredSecretHint from './ui/StoredSecretHint';
 import Field, { FIELD_CLASS, MONO_FIELD_CLASS } from './ui/Field';
+import Select from './ui/Select';
 import { HOST_KINDS, DEFAULT_PORTS, DEFAULT_SERIAL, hostKind } from '../lib/protocols';
 import { monitorSupport, defaultCheckPort } from '../lib/monitor';
 import { nameProxy, proxyRoute } from '../lib/proxies';
@@ -550,19 +551,19 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                                 No SSH keys found. Add keys in the Keychain page first.
                             </div>
                         ) : (
-                            <select
+                            <Select
                                 value={formData.keychainKeyId}
-                                onChange={(e) => handleChange('keychainKeyId', e.target.value)}
+                                onChange={(next) => handleChange('keychainKeyId', next)}
                                 className={FIELD_CLASS}
                                 required
-                            >
-                                <option value="">Select a key…</option>
-                                {keys.map(key => (
-                                    <option key={key.id} value={key.id}>
-                                        {key.name} ({key.type})
-                                    </option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'Select a key…' },
+                                    ...keys.map(key => ({
+                                        value: key.id,
+                                        label: `${key.name} (${key.type})`,
+                                    })),
+                                ]}
+                            />
                         )}
                     </Field>
                 )}
@@ -760,18 +761,19 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                                 ? 'Dialled first; this host is then reached over a channel on it. The session inside stays encrypted end to end, so the relay carries bytes it cannot read.'
                                 : 'For a host with no route from this machine, name the bastion that does have one.'}
                         >
-                            <select
+                            <Select
                                 value={formData.jumpHostId}
-                                onChange={(e) => handleChange('jumpHostId', e.target.value)}
+                                onChange={(next) => handleChange('jumpHostId', next)}
                                 className={FIELD_CLASS}
-                            >
-                                <option value="">Connect directly</option>
-                                {jumpOptions.map(candidate => (
-                                    <option key={candidate.id} value={candidate.id}>
-                                        {candidate.name}{candidate.host ? ` (${candidate.host})` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'Connect directly' },
+                                    ...jumpOptions.map(candidate => ({
+                                        value: candidate.id,
+                                        label: candidate.name
+                                            + (candidate.host ? ` (${candidate.host})` : ''),
+                                    })),
+                                ]}
+                            />
                             {/* Only once there is something the picker did not
                                 already say. One hop is what was just chosen; two
                                 came from that hop's own record, and that is the
@@ -812,18 +814,18 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                                     No proxies saved. Add one on the Proxies page first.
                                 </div>
                             ) : (
-                                <select
+                                <Select
                                     value={formData.proxyId}
-                                    onChange={(e) => handleChange('proxyId', e.target.value)}
+                                    onChange={(next) => handleChange('proxyId', next)}
                                     className={FIELD_CLASS}
-                                >
-                                    <option value="">Dial straight out</option>
-                                    {proxies.map(candidate => (
-                                        <option key={candidate.id} value={candidate.id}>
-                                            {nameProxy(candidate)}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={[
+                                        { value: '', label: 'Dial straight out' },
+                                        ...proxies.map(candidate => ({
+                                            value: candidate.id,
+                                            label: nameProxy(candidate),
+                                        })),
+                                    ]}
+                                />
                             )}
 
                             {/* Same rule as the jump chain: only say it when the

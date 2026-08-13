@@ -7,24 +7,26 @@
  * record again before a driver or a socket ever sees it.
  */
 
+import { translate } from '../i18n';
+
 export const PROTOCOLS = [
     {
         id: 'ssh',
         label: 'SSH',
-        summary: 'Encrypted shell, and everything built on it',
-        detail: 'Files, port forwarding and a remote desktop are all channels on an SSH connection, so they are only offered here.',
+        summaryKey: 'protocol.ssh.summary',
+        detailKey: 'protocol.ssh.detail',
     },
     {
         id: 'telnet',
         label: 'Telnet',
-        summary: 'A plain socket to a device with no SSH',
-        detail: 'Sends everything, passwords included, in the clear. For a console server, a PDU or a switch that has never had an SSH daemon.',
+        summaryKey: 'protocol.telnet.summary',
+        detailKey: 'protocol.telnet.detail',
     },
     {
         id: 'serial',
-        label: 'Serial',
-        summary: 'A console cable on this machine',
-        detail: 'No network at all. The settings have to match the device exactly: a wrong baud rate prints garbage rather than reporting an error.',
+        labelKey: 'protocol.serial',
+        summaryKey: 'protocol.serial.summary',
+        detailKey: 'protocol.serial.detail',
     },
 ];
 
@@ -32,7 +34,7 @@ export const PROTOCOLS = [
  * What the host editor's first question offers.
  *
  * Not the same list as PROTOCOLS, and the difference is the point. The three
- * above are session *transports* — what the shell pane runs on, and what the
+ * above are session *transports*: what the shell pane runs on, and what the
  * record stores in `protocol`. "Desktop" is not one of those: it is a host with
  * no shell at all, which the record has always expressed as
  * `desktop.only`.
@@ -49,17 +51,26 @@ export const HOST_KINDS = [
     ...PROTOCOLS,
     {
         id: 'desktop',
-        label: 'Desktop',
-        summary: 'RDP or VNC, with no shell behind it',
-        detail: 'Opens straight into the remote desktop and never dials SSH. For a Windows box, which usually has no SSH server on it.',
+        labelKey: 'protocol.desktop',
+        summaryKey: 'protocol.desktop.summary',
+        detailKey: 'protocol.desktop.detail',
     },
     {
         id: 'ipmi',
         label: 'IPMI',
-        summary: 'A service processor, and nothing behind it',
-        detail: 'Opens straight into the BMC\'s own web interface and never dials the machine. For an iDRAC, iLO or Supermicro board in front of a host this app has no session on.',
+        summaryKey: 'protocol.ipmi.summary',
+        detailKey: 'protocol.ipmi.detail',
     },
 ];
+
+/**
+ * A kind's own name, in the app's language.
+ *
+ * `SSH`, `Telnet` and `IPMI` are the protocols' names and stay as they are in
+ * every language; `Serial` and `Desktop` are ordinary words describing what the
+ * host is, and those carry a key.
+ */
+export const kindLabel = (kind) => (kind?.labelKey ? translate(kind.labelKey) : kind?.label || '');
 
 /**
  * Which of those a saved record is.
@@ -82,11 +93,11 @@ export function hostKind(host) {
 export const DEFAULT_PORTS = { ssh: 22, telnet: 23 };
 
 export const protocolLabel = (protocol) =>
-    PROTOCOLS.find(entry => entry.id === (protocol || 'ssh'))?.label || 'SSH';
+    kindLabel(PROTOCOLS.find(entry => entry.id === (protocol || 'ssh'))) || 'SSH';
 
 /**
- * The rates worth listing. Any number is accepted on the record — an adapter
- * will run at 31250 for MIDI — but these are what a console is configured at,
+ * The rates worth listing. Any number is accepted on the record (an adapter
+ * will run at 31250 for MIDI) but these are what a console is configured at,
  * and 115200 and 9600 are very nearly all of it.
  */
 export const BAUD_RATES = [
@@ -97,23 +108,25 @@ export const DATA_BITS = [5, 6, 7, 8];
 export const STOP_BITS = [1, 1.5, 2];
 
 export const PARITIES = [
-    { id: 'none', label: 'None' },
-    { id: 'even', label: 'Even' },
-    { id: 'odd', label: 'Odd' },
-    { id: 'mark', label: 'Mark' },
-    { id: 'space', label: 'Space' },
+    { id: 'none', labelKey: 'serial.parityNone' },
+    { id: 'even', labelKey: 'serial.parityEven' },
+    { id: 'odd', labelKey: 'serial.parityOdd' },
+    { id: 'mark', labelKey: 'serial.parityMark' },
+    { id: 'space', labelKey: 'serial.paritySpace' },
 ];
 
 export const FLOW_CONTROLS = [
-    { id: 'none', label: 'None' },
-    { id: 'rtscts', label: 'Hardware (RTS/CTS)' },
-    { id: 'xonxoff', label: 'Software (XON/XOFF)' },
+    { id: 'none', labelKey: 'serial.flowNone' },
+    { id: 'rtscts', labelKey: 'serial.flowHardware' },
+    { id: 'xonxoff', labelKey: 'serial.flowSoftware' },
 ];
 
+// The names are the control codes themselves, the same in every language; the
+// hints are the ordinary prose that says which device wants which.
 export const NEWLINES = [
-    { id: 'cr', label: 'CR', hint: 'Network gear, most consoles' },
-    { id: 'lf', label: 'LF', hint: 'A Linux getty' },
-    { id: 'crlf', label: 'CR LF', hint: 'Some embedded monitors' },
+    { id: 'cr', label: 'CR', hintKey: 'serial.newlineCrHint' },
+    { id: 'lf', label: 'LF', hintKey: 'serial.newlineLfHint' },
+    { id: 'crlf', label: 'CR LF', hintKey: 'serial.newlineCrLfHint' },
 ];
 
 export const DEFAULT_SERIAL = {
@@ -130,7 +143,7 @@ export const DEFAULT_SERIAL = {
 };
 
 /**
- * `115200 8N1` — the form every piece of console documentation is written in,
+ * `115200 8N1`, the form every piece of console documentation is written in,
  * and the fastest way to check a setting against the label on a device.
  */
 export function describeLine(serial = {}) {
