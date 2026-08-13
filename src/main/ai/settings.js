@@ -95,6 +95,10 @@ const DEFAULTS = {
     // of things nobody here asked for is filler, and the useful ones are the
     // ones a particular person asks their particular fleet over and over.
     quickPrompts: [],
+    // Whether the first-run warning about approval modes has been dismissed.
+    // False until the person has seen that tools act on live sessions and that
+    // "never ask" runs mutating tools without prompts.
+    acknowledgedApprovalWarning: false,
 };
 
 const stateFile = () => path.join(app.getPath('userData'), 'assistant.json');
@@ -147,6 +151,9 @@ function sanitize(raw) {
                 .map(entry => String(entry || '').replace(/\s+/g, ' ').trim().slice(0, 300))
                 .filter(Boolean)
                 .slice(0, 12);
+        }
+        if (typeof raw.acknowledgedApprovalWarning === 'boolean') {
+            next.acknowledgedApprovalWarning = raw.acknowledgedApprovalWarning;
         }
     }
     return next;

@@ -219,9 +219,23 @@ const body = (text) => text.split('\n').filter(line => !line.startsWith('#')).jo
         await settle();
 
         const name = path.basename(filePath);
-        assert.ok(/^db-primary-2_\d{4}-\d{2}-\d{2}_\d{6}\.log$/.test(name), `unexpected name: ${name}`);
+        assert.ok(
+            /^db-primary-2_\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f]+\.log$/.test(name),
+            `unexpected name: ${name}`
+        );
     });
 
+    await checkAsync('gives each session its own transcript file', async () => {
+        const first = sessionLog.start('tab-2a', { hostName: 'same-host', address: 'x' });
+        const second = sessionLog.start('tab-2b', { hostName: 'same-host', address: 'x' });
+        sessionLog.close('tab-2a');
+        sessionLog.close('tab-2b');
+        await settle();
+
+        assert.ok(first && second, 'both sessions opened a log');
+        assert.notStrictEqual(first, second, 'concurrent sessions must not share a path');
+        assert.ok(fs.existsSync(first) && fs.existsSync(second), 'both files exist');
+    });
     await checkAsync('reassembles a sequence split across two writes', async () => {
         const filePath = sessionLog.start('tab-3', { hostName: 'split', address: 'x' });
 

@@ -75,6 +75,8 @@ everyone, and the whole source is here to read and change.
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Getting started](#getting-started)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 - [Community](#community)
 - [Contributors](#contributors)
 - [Tech stack](#tech-stack)
@@ -135,8 +137,10 @@ Whichever you choose, the agent:
   one it answers, without you pasting anything
 - **Works in the terminal you can see**: commands are typed into the pane and
   the output stays in your scrollback, or run on a hidden channel if you prefer
-- **Asks before it changes anything**, with an allow list for the commands that
-  only look, and a stricter or looser mode when you want one
+- **Approval modes control when it asks** — every tool / changes only / never
+  (never auto-approves non-blocked tools), plus a first-run warning and a
+  confirm step before **Never ask**. See
+  [assistant approvals](docs/assistant-approvals.md).
 - **Pointed where you like**: the session in front, one you pin, or every host
   you have saved
 - **Tools instead of guesses**: connect a saved host, read and write files,
@@ -297,6 +301,12 @@ winget install CloudBlast.CloudTerm
 
 Or browse [all GitHub releases](https://github.com/BradPerbs/cloudterm/releases).
 
+> **Windows SmartScreen / VirusTotal:** Installers are **unsigned** while a
+> code-signing certificate is being procured. This can trigger SmartScreen or
+> heuristic scanner warnings (often 1–3 vendors on VirusTotal). See
+> [docs/security.md](docs/security.md) for details and what to expect after
+> signing is enabled.
+
 ### Build from source
 
 ```bash
@@ -316,6 +326,14 @@ Build a portable executable into `dist/`:
 npm run build
 ```
 
+Run the unit test suite before opening a pull request:
+
+```bash
+npm test
+```
+
+The same suite runs on every pull request via GitHub Actions (`.github/workflows/ci.yml`).
+
 ### Shortcuts
 
 | | | | |
@@ -325,6 +343,28 @@ npm run build
 | `Ctrl+Shift+B` | Broadcast input | `Alt+Shift+Z` | Zoom pane |
 | `Ctrl+Shift+C` / `V` | Copy and paste | `Ctrl+Shift+W` | Close pane |
 | `Ctrl+Shift+A` | AI agent | `Alt+Arrows` | Move between panes |
+
+<a name="documentation"></a>
+## Documentation
+
+| Doc | What it covers |
+| --- | --- |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [PRD.md](PRD.md) | Product scope and roadmap |
+| [docs/assistant-approvals.md](docs/assistant-approvals.md) | AI approval modes and defaults |
+| [docs/rdp-credentials.md](docs/rdp-credentials.md) | RDP password handling (CredSSP exception) |
+| [docs/ime-composition.md](docs/ime-composition.md) | CJK IME positioning (known limitation) |
+| [docs/winget.md](docs/winget.md) | Publishing to Windows Package Manager |
+| [docs/security.md](docs/security.md) | Signing status, SmartScreen/VirusTotal, npm audit |
+
+Full index: [docs/README.md](docs/README.md).
+
+<a name="contributing"></a>
+## Contributing
+
+1. Fork and clone the repo, then `npm install` and `npm run dev`.
+2. Run `npm test` — CI runs the same suite on every pull request.
+3. Open a pull request against `main`.
 
 <a name="community"></a>
 ## Community

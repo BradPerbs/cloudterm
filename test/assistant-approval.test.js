@@ -74,6 +74,28 @@ console.log('\nassistant approvals');
 check('the default is to ask before anything that changes a system', () => {
     assert.strictEqual(defaults.approval, 'writes');
     assert.strictEqual(defaults.allowLocalTools, false, 'local tools are off out of the box');
+    assert.strictEqual(
+        defaults.acknowledgedApprovalWarning, false,
+        'the first-run approval warning is pending until dismissed'
+    );
+});
+
+check('the first-run warning flag sanitizes and persists', () => {
+    assert.strictEqual(settingsModule.get().acknowledgedApprovalWarning, false);
+    settingsModule.set({ acknowledgedApprovalWarning: true });
+    assert.strictEqual(settingsModule.get().acknowledgedApprovalWarning, true);
+
+    // Prove assistant.json survives a fresh module load, not only in-memory state.
+    const settingsPath = require.resolve(path.join(ROOT, 'ai', 'settings'));
+    delete require.cache[settingsPath];
+    const reloaded = require(settingsPath);
+    assert.strictEqual(reloaded.get().acknowledgedApprovalWarning, true);
+
+    // Non-booleans must not coerce into a truthy acknowledgement.
+    reloaded.set({ acknowledgedApprovalWarning: 0 });
+    assert.strictEqual(reloaded.get().acknowledgedApprovalWarning, false);
+    settingsModule.set({ acknowledgedApprovalWarning: false });
+    // Leave it false for later checks that read the live settings object.
 });
 
 check('every tool declares whether it only reads', () => {
@@ -266,7 +288,11 @@ check('an unknown tool is never auto approved', () => {
 });
 
 check('"never ask" really does mean never', () => {
-    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'rm -rf /' }, open), true);
+    // Blocked commands stay refused under never; see the check above. What
+    // "never" means is everything else runs without a prompt — including
+    // mutating tools and tools the catalog does not know yet.
+    assert.strictEqual(tools.isAutoApproved('run_command', { command: 'rm /tmp/one-file' }, open), true);
+    assert.strictEqual(tools.isAutoApproved('send_input', { text: 'systemctl restart nginx' }, open), true);
     assert.strictEqual(tools.isAutoApproved('some_new_tool', {}, open), true);
 });
 

@@ -452,15 +452,20 @@ export default {
     'settings.assistant.approval': 'Perguntar antes de correr',
     'settings.assistant.approval.always': 'Todas as ações',
     'settings.assistant.approval.writes': 'Só alterações',
-    'settings.assistant.approval.never': 'Nunca',
+    'settings.assistant.approval.never': 'Nunca perguntar',
     'settings.assistant.approval.always.note': 'Todas as chamadas a ferramentas esperam por si, '
         + 'incluindo ler um ficheiro ou o terminal. É minucioso, mas uma investigação longa '
         + 'transforma-se em muitos cliques.',
     'settings.assistant.approval.writes.note': 'A leitura corre à vontade. Tudo o que altere um '
-        + 'sistema para e mostra-lhe o comando exato e o anfitrião onde correria.',
+        + 'sistema para e mostra-lhe o comando exato e o anfitrião onde correria. Esta é a '
+        + 'predefinição.',
     'settings.assistant.approval.never.note': 'Nada para à espera de aprovação, incluindo comandos '
         + 'que apagam dados ou reiniciam serviços. Só faz sentido para anfitriões que pode dar-se '
-        + 'ao luxo de estragar.',
+        + 'ao luxo de estragar. Ativar isto pede confirmação primeiro.',
+    'settings.assistant.approval.neverConfirmTitle': 'Desligar aprovações?',
+    'settings.assistant.approval.neverConfirmMessage': 'Nunca perguntar corre todas as ferramentas '
+        + 'sem parar — incluindo comandos que apagam dados ou reiniciam serviços em anfitriões '
+        + 'ativos. Os comandos bloqueados continuam a ser recusados.',
     'settings.assistant.localTools': 'Permitir ferramentas neste computador',
     'settings.assistant.localToolsDesc': 'Deixa o assistente ler e escrever ficheiros locais e '
         + 'correr comandos locais. Desligado por predefinição: o painel serve para gerir '
@@ -1077,7 +1082,8 @@ export default {
     'assistant.title': 'Agente de IA',
     'assistant.welcome': 'Vamos trabalhar nos seus servidores',
     'assistant.welcomeNote': 'Lê este terminal, corre comandos no canal deles, e pode trabalhar em '
-        + 'todos os anfitriões que tem guardados.',
+        + 'todos os anfitriões que tem guardados. As aprovações começam em perguntar-antes-de-'
+        + 'alterar; mude o modo no chip do compositor ou nas Definições.',
     'assistant.createQuickPrompts': 'Criar perguntas rápidas',
     'assistant.newConversation': 'Nova conversa',
     'assistant.chats': 'Conversas',
@@ -1125,8 +1131,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Todas as chamadas a ferramentas esperam por si',
     'assistant.approvalWrites': 'Perguntar antes de alterar',
     'assistant.approvalWritesHint': 'A leitura corre à vontade',
-    'assistant.approvalNever': 'Modo Yolo',
+    'assistant.approvalNever': 'Nunca perguntar',
     'assistant.approvalNeverHint': 'Nada para, incluindo o que apaga',
+    'assistant.approvalWarningTitle': 'Como funcionam as aprovações',
+    'assistant.approvalWarningBody': 'O assistente pode ler terminais ao vivo e correr comandos nos '
+        + 'seus anfitriões. Por predefinição pergunta antes de qualquer coisa que altere um '
+        + 'sistema. Perguntar sempre também para nas leituras. Nunca perguntar corre ferramentas '
+        + 'sem pedidos (comandos bloqueados continuam a ser recusados).',
+    'assistant.approvalWarningGotIt': 'Percebi',
 
     'assistant.didListHosts': 'Listou os anfitriões',
     'assistant.didListSessions': 'Listou as sessões',

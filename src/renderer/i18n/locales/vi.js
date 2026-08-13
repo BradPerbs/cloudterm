@@ -438,15 +438,20 @@ export default {
     'settings.assistant.approval': 'Hỏi trước khi chạy',
     'settings.assistant.approval.always': 'Mọi thao tác',
     'settings.assistant.approval.writes': 'Chỉ khi thay đổi',
-    'settings.assistant.approval.never': 'Không bao giờ',
+    'settings.assistant.approval.never': 'Không bao giờ hỏi',
     'settings.assistant.approval.always.note': 'Mọi lần gọi công cụ đều chờ bạn, kể cả khi chỉ đọc '
         + 'một tệp hay đọc terminal. Rất chắc chắn, nhưng một cuộc điều tra dài sẽ thành rất nhiều '
         + 'lần bấm.',
     'settings.assistant.approval.writes.note': 'Thao tác đọc chạy tự do. Bất cứ thứ gì thay đổi hệ '
-        + 'thống đều dừng lại và cho bạn xem đúng lệnh đó cùng máy chủ nó sẽ chạy trên.',
+        + 'thống đều dừng lại và cho bạn xem đúng lệnh đó cùng máy chủ nó sẽ chạy trên. Đây là '
+        + 'mặc định.',
     'settings.assistant.approval.never.note': 'Không có gì dừng lại chờ phê duyệt, kể cả các lệnh '
         + 'xoá dữ liệu hay khởi động lại dịch vụ. Chỉ nên dùng với máy chủ mà bạn chấp nhận được '
-        + 'việc nó hỏng.',
+        + 'việc nó hỏng. Bật chế độ này sẽ hỏi xác nhận trước.',
+    'settings.assistant.approval.neverConfirmTitle': 'Tắt phê duyệt?',
+    'settings.assistant.approval.neverConfirmMessage': 'Không bao giờ hỏi sẽ chạy mọi công cụ mà '
+        + 'không dừng — kể cả lệnh xoá dữ liệu hoặc khởi động lại dịch vụ trên máy đang dùng. Lệnh '
+        + 'trong danh sách chặn vẫn bị từ chối.',
     'settings.assistant.localTools': 'Cho phép dùng công cụ trên máy này',
     'settings.assistant.localToolsDesc': 'Cho phép trợ lý đọc ghi tệp cục bộ và chạy lệnh cục bộ. '
         + 'Mặc định tắt: bảng này dùng để quản lý máy chủ, còn máy của chính bạn là một phạm vi '
@@ -1029,7 +1034,8 @@ export default {
     'assistant.title': 'Trợ lý AI',
     'assistant.welcome': 'Cùng làm việc trên máy chủ của bạn nào',
     'assistant.welcomeNote': 'Nó đọc terminal này, chạy lệnh trên kênh riêng, và có thể làm việc '
-        + 'trên mọi máy chủ bạn đã lưu.',
+        + 'trên mọi máy chủ bạn đã lưu. Phê duyệt mặc định là hỏi trước khi thay đổi; đổi chế độ '
+        + 'từ chip trên khung soạn hoặc trong Cài đặt.',
     'assistant.createQuickPrompts': 'Tạo câu hỏi nhanh',
     'assistant.newConversation': 'Cuộc trò chuyện mới',
     'assistant.chats': 'Cuộc trò chuyện',
@@ -1076,8 +1082,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Mọi lần gọi công cụ đều chờ bạn',
     'assistant.approvalWrites': 'Hỏi trước khi thay đổi',
     'assistant.approvalWritesHint': 'Thao tác đọc chạy tự do',
-    'assistant.approvalNever': 'Chế độ thả cửa',
+    'assistant.approvalNever': 'Không bao giờ hỏi',
     'assistant.approvalNeverHint': 'Không gì dừng lại, kể cả lệnh xoá',
+    'assistant.approvalWarningTitle': 'Cách phê duyệt hoạt động',
+    'assistant.approvalWarningBody': 'Trợ lý có thể đọc terminal đang chạy và thực thi lệnh trên '
+        + 'máy chủ của bạn. Mặc định nó hỏi trước mọi thứ làm thay đổi hệ thống. Hỏi mọi lúc cũng '
+        + 'dừng cả thao tác đọc. Không bao giờ hỏi chạy công cụ không hỏi (lệnh bị chặn vẫn bị '
+        + 'từ chối).',
+    'assistant.approvalWarningGotIt': 'Đã hiểu',
 
     'assistant.didListHosts': 'Đã liệt kê máy chủ',
     'assistant.didListSessions': 'Đã liệt kê phiên',

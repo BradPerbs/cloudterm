@@ -492,13 +492,18 @@ export default {
     'settings.assistant.approval': 'Ask before running',
     'settings.assistant.approval.always': 'Every action',
     'settings.assistant.approval.writes': 'Changes only',
-    'settings.assistant.approval.never': 'Never',
+    'settings.assistant.approval.never': 'Never ask',
     'settings.assistant.approval.always.note': 'Every tool call waits for you, including reading a '
         + 'file or the terminal. Thorough, but a long investigation becomes a lot of clicking.',
     'settings.assistant.approval.writes.note': 'Reading runs freely. Anything that changes a system '
-        + 'stops and shows you the exact command and the host it would run on.',
+        + 'stops and shows you the exact command and the host it would run on. This is the default.',
     'settings.assistant.approval.never.note': 'Nothing stops for approval, including commands that '
-        + 'delete data or restart services. Only sensible for hosts you can afford to break.',
+        + 'delete data or restart services. Only sensible for hosts you can afford to break. '
+        + 'Turning this on asks for confirmation first.',
+    'settings.assistant.approval.neverConfirmTitle': 'Turn off approvals?',
+    'settings.assistant.approval.neverConfirmMessage': 'Never ask runs every tool without stopping — '
+        + 'including commands that delete data or restart services on live hosts. Blocked commands '
+        + 'are still refused.',
     'settings.assistant.localTools': 'Allow tools on this computer',
     'settings.assistant.localToolsDesc': 'Lets the assistant read and write local files and run '
         + 'local commands. Off by default: the panel is for managing servers, and your own machine '
@@ -1116,9 +1121,10 @@ export default {
      * The assistant panel
      * ---------------------------------------------------------------- */
     'assistant.title': 'AI Agent',
-    'assistant.welcome': 'Let’s work on your servers',
+    'assistant.welcome': "Let's work on your servers",
     'assistant.welcomeNote': 'It reads this terminal, runs commands on their own channel, and can '
-        + 'work across every host you have saved.',
+        + 'work across every host you have saved. Approvals default to ask-before-changes; switch '
+        + 'modes from the composer chip or Settings.',
     'assistant.createQuickPrompts': 'Create quick prompts',
     'assistant.newConversation': 'New conversation',
     'assistant.chats': 'Chats',
@@ -1166,8 +1172,14 @@ export default {
     'assistant.approvalAlwaysHint': 'Every tool call waits for you',
     'assistant.approvalWrites': 'Ask before changes',
     'assistant.approvalWritesHint': 'Reading runs freely',
-    'assistant.approvalNever': 'Yolo Mode',
+    'assistant.approvalNever': 'Never ask',
     'assistant.approvalNeverHint': 'Nothing stops, deletes included',
+    'assistant.approvalWarningTitle': 'How approvals work',
+    'assistant.approvalWarningBody': 'The assistant can read live terminals and run commands on '
+        + 'your hosts. By default it asks before anything that changes a system. Ask every time '
+        + 'stops on reads too. Never ask runs tools without prompts (blocked commands are still '
+        + 'refused).',
+    'assistant.approvalWarningGotIt': 'Got it',
 
     'assistant.didListHosts': 'Listed hosts',
     'assistant.didListSessions': 'Listed sessions',

@@ -97,10 +97,12 @@ may come back with questions on the pull request itself.
 
 Two things that come up:
 
-- The installer is not code signed. That is allowed, and plenty of packages in
-  winget are the same, but SmartScreen and occasionally the pipeline's own
-  scanner have opinions about unsigned installers and the review can stall on
-  it. Reply on the pull request if it does.
+- The installer is not code signed (**Windows certificate pending procurement**).
+  CI is wired to sign automatically once `WIN_CSC_LINK` is configured — see
+  [security.md](security.md). That is allowed in winget, and plenty of packages
+  are the same, but SmartScreen and occasionally the pipeline's own scanner
+  have opinions about unsigned installers and the review can stall on it. Reply
+  on the pull request if it does.
 - The publisher name has to be one you can claim. `CloudBlast` is fine here.
   It is also permanent in practice: the identifier is the directory name, the
   thing people type, and what every already-installed copy is matched against,

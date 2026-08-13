@@ -4,6 +4,7 @@ import {
     PlusSignIcon,
     ArrowUp01Icon,
     StopCircleIcon,
+    Alert02Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
@@ -17,6 +18,7 @@ import ScopeMenu from './ScopeMenu';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
+import Dialog, { DialogButton } from '../ui/Dialog';
 import { useT } from '../../i18n';
 import {
     GLOBAL,
@@ -690,13 +692,35 @@ function AssistantConversation({
                     </div>
                 </div>
             </div>
+
+            {settings && !settings.acknowledgedApprovalWarning && (
+                <Dialog
+                    title={t('assistant.approvalWarningTitle')}
+                    subtitle={t('assistant.approvalWarningBody')}
+                    // Escape / backdrop must not count as acknowledgement.
+                    onClose={() => {}}
+                    icon={
+                        <span className="w-9 h-9 rounded-xl flex items-center justify-center
+                            bg-amber-50 dark:bg-amber-900/20 text-amber-500">
+                            <Alert02Icon size={20} strokeWidth={2} />
+                        </span>
+                    }
+                    footer={
+                        <DialogButton
+                            variant="primary"
+                            data-autofocus
+                            onClick={() => changeSettings({ acknowledgedApprovalWarning: true })}
+                        >
+                            {t('assistant.approvalWarningGotIt')}
+                        </DialogButton>
+                    }
+                />
+            )}
         </>
     );
 }
 
 /**
- * The column the assistant lives in, open or shut.
- *
  * One element that changes width, not two swapped for each other: a swap has
  * nothing to animate between, and the rail is the same column with everything
  * but the button clipped off. That is how the sidebar opens on the other side
