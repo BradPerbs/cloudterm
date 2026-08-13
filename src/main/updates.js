@@ -1,6 +1,8 @@
 const { app, net, shell } = require('electron');
 const { spawnSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 /**
@@ -41,6 +43,10 @@ const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
 // enterprise deployment -- where a notice the user cannot act on is only noise.
 const DISABLED = process.env.CLOUDBLAST_UPDATE_DISABLED === '1';
 
+// The console, resolved the way the account module resolves it, so a
+// self-hosted panel is pointed at once and everything follows.
+const CONSOLE_BASE = (process.env.CLOUDBLAST_API_URL || 'https://console.cloudblast.io').replace(/\/+$/, '');
+
 const SCHEMA_VERSION = 1;
 
 /*
@@ -64,6 +70,10 @@ const AUTO_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // A launch check, but not *during* the launch: the first seconds belong to the
 // window and to the sessions being restored into it.
 const LAUNCH_DELAY_MS = 30 * 1000;
+
+// Same reasoning, and kept clear of the release check so the two are never in
+// flight together on a slow connection.
+const CHECK_IN_DELAY_MS = 12 * 1000;
 
 const REQUEST_TIMEOUT_MS = 15 * 1000;
 
@@ -106,9 +116,12 @@ function load() {
             // Kept on disk so the limit survives a restart. Reopening the app
             // to get ten more checks would make it a suggestion.
             manual: Array.isArray(raw.manual) ? raw.manual.filter(Number.isFinite) : [],
+            // Minted on first run by `checkIn`. Validated on the way in so an
+            // edited file cannot put anything else in the field.
+            client: /^[a-f0-9]{32}$/.test(raw.client || '') ? raw.client : '',
         };
     } catch {
-        state = { etag: '', checkedAt: null, latest: null, dismissed: '', manual: [] };
+        state = { etag: '', checkedAt: null, latest: null, dismissed: '', manual: [], client: '' };
     }
 
     return state;
@@ -846,8 +859,62 @@ function dismiss(version) {
     return status();
 }
 
+/**
+ * Which version this install is running, reported to the console once per
+ * launch. The release side has no other way to know what is still out there,
+ * and "how many are still on 1.2" is the question that decides whether an old
+ * build can stop being supported.
+ *
+ * The id is 16 random bytes minted here on first run and kept in updates.json.
+ * Nothing about it is derived from the machine, the account or the hostname, and
+ * it travels with the version, the platform and the locale and nothing else. No
+ * host, address, key or account is in this, and the console stores no IP against
+ * it. Off with CLOUDBLAST_NO_PING=1 or the DO_NOT_TRACK convention.
+ *
+ * Best effort throughout: one attempt, no retry, the reply is not read, and a
+ * failure is not something the user hears about.
+ */
+async function checkIn() {
+    if (process.env.CLOUDBLAST_NO_PING === '1' || process.env.DO_NOT_TRACK === '1') return;
+
+    const current = load();
+
+    if (!current.client) {
+        current.client = crypto.randomBytes(16).toString('hex');
+        persist();
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+        await net.fetch(`${CONSOLE_BASE}/api/public/desktop/ping`, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                install_id: current.client,
+                app_version: app.getVersion(),
+                platform: process.platform,
+                arch: process.arch,
+                os_version: os.release(),
+                locale: app.getLocale(),
+            }),
+        });
+    } catch {
+        // Offline, behind a firewall that says no, or the console is down. All
+        // three are the ordinary state of a desktop app and none are an error.
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
 function start(notify) {
     notifier = notify;
+
+    // Ahead of the release check and well behind the window, on a timer of its
+    // own so nothing waits on it.
+    setTimeout(() => { checkIn(); }, CHECK_IN_DELAY_MS).unref?.();
 
     if (DISABLED) return;
 
