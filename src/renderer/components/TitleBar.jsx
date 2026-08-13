@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
     ArrowRight01Icon,
@@ -17,6 +17,7 @@ import { TITLE_BAR_HEIGHT } from '../lib/layout';
 import { IS_MAC } from '../lib/platform';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { useTabDrag } from '../hooks/useTabDrag';
+import { collapseTab, finishTabOpen, openTab, resizeTab, setTabSize, spinPlus } from '../lib/tabMotion';
 import ContextMenu from './ui/ContextMenu';
 import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
@@ -160,10 +161,11 @@ function AppMenu() {
 }
 
 /**
- * One tab in the strip. Sizing and the open/close animations live in
- * `.session-tab` in input.css; `closing` renders the tab as it was at the
- * moment of the click: in place, no longer clickable, collapsing out of the
- * strip so its neighbours take the space back rather than jumping into it.
+ * One tab in the strip. Its width, and the movements for opening, closing and
+ * taking focus, are GSAP's, from `lib/tabMotion`; `closing` renders the tab as
+ * it was at the moment of the click: in place, no longer clickable, collapsing
+ * out of the strip so its neighbours take the space back rather than jumping
+ * into it.
  */
 function SessionTab({
     tab,
@@ -183,27 +185,97 @@ function SessionTab({
     const isLauncher = tab.type === 'launcher';
     const color = tabColor(tab.color);
 
+    /** Whichever element the tab is: a button, or the field it is renamed in. */
+    const tabRef = useRef(null);
+
     /**
-     * The collapse normally reports its own end, but a window that is hidden or
-     * covered has its animations frozen by the compositor, and the event would
-     * not arrive until the user came back to it, leaving closed tabs sitting
-     * in the strip. This is the outside date by which the tab goes either way.
+     * The tab arriving in the strip: it takes its width outright, and then
+     * opens from nothing onto it.
+     *
+     * GSAP writes that width inline, which is the point of doing it here at
+     * all. A stylesheet rule keyed on `[data-active]` lands the new width the
+     * moment React commits the attribute, which is before any tween could have
+     * started from the old one.
+     *
+     * Mount only, so `active` is read as it stood when the tab opened and the
+     * cleanup belongs to the tab going rather than to anything changing about
+     * it.
+     *
+     * StrictMode mounts, unmounts and remounts, so the arrival has to be
+     * undoable, and undoing it means landing the tab at its full size rather
+     * than merely stopping the tween: a killed tween leaves behind whatever it
+     * last wrote, and the second mount would take a tab holding the first
+     * frame of an opening animation for a tab that is meant to look like that.
      */
-    useEffect(() => {
-        if (!closing) return;
-        const timer = setTimeout(() => onExited(tab.id), 600);
-        return () => clearTimeout(timer);
-    }, [closing, tab.id, onExited]);
+    useLayoutEffect(() => {
+        const node = tabRef.current;
+        if (!node || closing) return undefined;
+
+        setTabSize(node, active);
+        openTab(node);
+        return () => finishTabOpen(node);
+    }, []);
+
+    /**
+     * Focus moving on or off the tab, which is a change of width. Tweened from
+     * wherever the tab currently is, so clicking along the strip picks up from
+     * what is on screen rather than restarting.
+     *
+     * `shownActive` is what keeps this off the tab's first render, where the
+     * width has just been set outright and a tween to the same place would
+     * overwrite the opening one and strand it.
+     */
+    const shownActive = useRef(active);
+
+    useLayoutEffect(() => {
+        const node = tabRef.current;
+        if (!node || closing || shownActive.current === active) return;
+        shownActive.current = active;
+        resizeTab(node, active);
+    }, [active, closing]);
+
+    /**
+     * Collapsing out of the strip.
+     *
+     * `onExited` is reached through a ref so this is keyed on the close alone.
+     * Rebuilt because the callback came back with a new identity, it would kill
+     * the collapse partway and start it again.
+     */
+    const exit = useRef(onExited);
+    exit.current = onExited;
+
+    /**
+     * The tween reports its own end. The timer is the outside date by which the
+     * tab goes either way: a window that is hidden or covered has its frames
+     * throttled, and a collapse that never reported back would leave a closed
+     * tab sitting in the strip with no width, and no way to close it again.
+     */
+    useLayoutEffect(() => {
+        if (!closing) return undefined;
+
+        const tween = collapseTab(tabRef.current, () => exit.current(tab.id));
+        const timer = setTimeout(() => exit.current(tab.id), 600);
+
+        return () => {
+            tween?.kill();
+            clearTimeout(timer);
+        };
+    }, [closing, tab.id]);
 
     // A tab being renamed is a text field, not a button: it takes the keyboard,
     // and Escape has to reach it rather than whatever is behind.
     if (renaming) {
         return (
             <div
+                ref={tabRef}
                 className="tab-item session-tab flex items-center gap-2 px-3 py-2 rounded-xl text-xs
                     font-medium relative z-10 app-no-drag bg-gray-900/[0.08] dark:bg-surface-control
                     ring-1 ring-gray-900/20 dark:ring-white/25"
                 data-tab={tab.id}
+                // The field is a different element from the button, so it never
+                // carries an inline width. This is what sizes it, through the
+                // matching rules in input.css.
+                data-active={active ? 'true' : 'false'}
             >
                 {color && (
                     <span
@@ -240,6 +312,7 @@ function SessionTab({
 
     return (
         <button
+            ref={tabRef}
             className={`tab-item session-tab flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium cursor-pointer group relative z-10 overflow-hidden app-no-drag ${
                 active
                     ? 'bg-gray-900/[0.08] dark:bg-surface-control text-gray-900 dark:text-white'
@@ -272,11 +345,6 @@ function SessionTab({
                 event.preventDefault();
                 onMenu(tab, event.clientX, event.clientY);
             }}
-            // Name-checked: any animation inside the tab bubbles its end up
-            // here, and only the collapse means the tab is finished with.
-            onAnimationEnd={closing
-                ? (e) => { if (e.animationName === 'tab-collapse') onExited(tab.id); }
-                : undefined}
         >
             {/* The remote OS identifies the tab; until the
                 session is up it dims and pulses, which is
@@ -536,6 +604,9 @@ function TitleBar({
 
     /** The strip itself, which the drag measures the tabs against. */
     const stripRef = useRef(null);
+
+    /** The plus, which turns into the tab it is about to open. */
+    const plusRef = useRef(null);
 
     const { carrying, preview, tabProps } = useTabDrag({
         containerRef: stripRef,
@@ -945,8 +1016,13 @@ function TitleBar({
                         className="tab-add flex items-center justify-center w-8 h-8 rounded-xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-900/[0.06] dark:hover:bg-surface-control transition-colors app-no-drag shrink-0"
                         onClick={onNewSession}
                         title={t('newTab.title')}
+                        // Pointer events rather than `:hover`, since the turn is
+                        // GSAP's now. The colours behind it are still the
+                        // stylesheet's, through `transition-colors`.
+                        onPointerEnter={() => spinPlus(plusRef.current, true)}
+                        onPointerLeave={() => spinPlus(plusRef.current, false)}
                     >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <svg ref={plusRef} className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <path d="M12 5v14M5 12h14" />
                         </svg>
                     </button>

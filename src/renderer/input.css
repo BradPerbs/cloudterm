@@ -1470,21 +1470,26 @@ body.org-banding * {
 }
 
 /* Tab strip ---------------------------------------------------------------
-   A tab's width is set by max-width rather than by its share of the strip, so
-   every change to the strip is something CSS can interpolate: the focused tab
-   takes the extra room, its neighbours give it back, and both ends of the move
-   are a transition instead of a jump. flex-grow carries the same weighting for
-   the case where the strip is crowded enough that the share bites before the
-   max-width does. See src/renderer/components/TitleBar.jsx */
+   A tab's width is set by max-width rather than by its share of the strip: the
+   focused tab takes the extra room and its neighbours give it back. flex-grow
+   carries the same weighting for the case where the strip is crowded enough
+   that the share bites before the max-width does.
+
+   Moving between the two is GSAP's, in src/renderer/lib/tabMotion.js, which
+   holds the same numbers and writes them inline. They are here for the moment
+   before a tab's first tween has run, and for a tab being renamed, which is a
+   different element and never gets an inline width. A rule keyed on
+   [data-active] would otherwise land the new width the moment React commits
+   the attribute, which is before any tween could start from the old one.
+
+   Colour is still eased from here: it is driven by :hover and by Tailwind's own
+   classes, which GSAP has no way into, and it is a paint rather than a layout.
+   See src/renderer/components/TitleBar.jsx */
 .session-tab {
     flex: 1 1 0%;
     min-width: 52px;
     max-width: 130px;
-    animation: tab-open 0.26s cubic-bezier(0.16, 1, 0.3, 1);
     transition:
-        max-width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
-        min-width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
-        flex-grow 0.26s cubic-bezier(0.16, 1, 0.3, 1),
         background-color 0.15s ease-out,
         color 0.15s ease-out;
 }
@@ -1497,40 +1502,16 @@ body.org-banding * {
     max-width: 172px;
 }
 
-/* Opening a tab. The far end of the animation is left implicit so it lands on
-   whatever width the rules above give this tab, which depends on it opening
-   focused, and on how much room the rest of the strip has left. */
-@keyframes tab-open {
-    from {
-        max-width: 0;
-        min-width: 0;
-        padding-left: 0;
-        padding-right: 0;
-        opacity: 0;
-    }
-}
-
-/* Closing one. The tab holds its place while it collapses, so the strip takes
-   the space back over the same beat rather than snapping shut under the
-   pointer that just clicked. */
-@keyframes tab-collapse {
-    to {
-        max-width: 0;
-        min-width: 0;
-        padding-left: 0;
-        padding-right: 0;
-        opacity: 0;
-    }
-}
-
+/* A tab on its way out. It holds its place while `collapseTab` takes the width
+   off it, so the strip takes the space back over the same beat rather than
+   snapping shut under the pointer that just clicked. */
 .session-tab[data-closing="true"] {
-    animation: tab-collapse 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     pointer-events: none;
 }
 
 /* A tab being carried along the strip. It is placed by the pointer on every
-   frame, so the width transitions above must not also have a say in where it
-   is; putting it down hands it back to the strip's own rules.
+   frame, so nothing on it should be easing towards anywhere else; putting it
+   down hands it back to the strip's own rules.
 
    Lifted with a drop-shadow rather than a box-shadow: a coloured tab already
    carries one of those inline for its ring, and an inline rule wins over this
@@ -1560,25 +1541,17 @@ body.tab-dragging .session-tab {
     pointer-events: none;
 }
 
-/* The plus turns into the tab it is about to open. */
-.tab-add svg {
-    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.tab-add:hover svg {
-    transform: rotate(90deg);
-}
-
+/* The plus turns into the tab it is about to open. `spinPlus` does the turn,
+   off the button's own pointer events; this is the press underneath it, which
+   has never been a movement with a duration. */
 .tab-add:active {
     transform: scale(0.9);
 }
 
+/* Only the colours are left to answer for here. Everything the strip moves is
+   GSAP's, and tabMotion.js asks this same question for itself. */
 @media (prefers-reduced-motion: reduce) {
-
-    .session-tab,
-    .session-tab[data-closing="true"],
-    .tab-add svg {
-        animation-duration: 0.01ms;
+    .session-tab {
         transition-duration: 0.01ms;
     }
 }

@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { prefersReducedMotion } from '../lib/motion';
+import {
+    finishTabOpen,
+    holdTab,
+    slideTab,
+    stopTabSlide,
+    tabShift,
+} from '../lib/tabMotion';
 
 /**
  * Carrying a tab along the strip.
@@ -39,6 +47,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
  *
  * The order is published as state so the strip re-renders in it. Committing it
  * is the caller's business; until they do, the preview is what the user sees.
+ *
+ * The movement itself is GSAP's, from `lib/tabMotion`, which is also where the
+ * durations and the curves live. This file works out what should move where;
+ * that one puts it there. Everything here works in layout positions, which is a
+ * tab's rect minus whatever `tabShift` says it is currently pushed by: measuring
+ * the rect alone would mean measuring the animations too, and a strip that
+ * rearranged itself from half-finished positions would wander.
  */
 
 /** How far a press has to travel along the strip before it stops being a click. */
@@ -53,33 +68,8 @@ const START_THRESHOLD = 5;
  */
 const SWAP_MARGIN = 6;
 
-/** The slide a displaced tab makes towards the place it has been given. */
-const SLIDE_MS = 200;
-const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
-
 /** Tabs in the strip. A tab mid-close is a ghost of one, and holds no slot. */
 const TABS = '[data-tab]:not([data-closing])';
-
-const prefersReducedMotion = () =>
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-
-/**
- * How far a tab is currently pushed sideways, by this file's own inline
- * transform or by a slide still in flight, whichever is on it.
- *
- * Everything here works in layout positions, which is what a rect minus this
- * is. Measuring the rect alone would mean measuring the animations too, and a
- * strip that rearranged itself from half-finished positions would wander.
- */
-function shiftOf(node) {
-    const { transform } = getComputedStyle(node);
-    if (!transform || transform === 'none') return 0;
-    try {
-        return new DOMMatrixReadOnly(transform).m41;
-    } catch {
-        return 0;
-    }
-}
 
 export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
     /** The tab in hand, if any. */
@@ -125,34 +115,17 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
         const next = new Map();
         const nodes = [...container.querySelectorAll(TABS)];
 
-        /**
-         * A tab moving in or out of a group hangs off a different element once
-         * it is inside the outline, so React builds it again, and a tab built
-         * again plays the animation for one being opened. It is not being
-         * opened, it is being carried past, so that is called off here.
-         *
-         * Before anything is measured, and in a sweep of its own: `tab-open`
-         * animates the tab's width from nothing, so a tab still playing it
-         * measures collapsed and every tab after it in the row is measured
-         * somewhere it is not about to be.
-         *
-         * Called off here rather than turned off in the stylesheet, which is
-         * where this started. A rule that sets `animation: none` while a tab is
-         * in hand changes `animation-name` back the moment it is put down, and
-         * a name that changes is a new animation: the whole strip would play
-         * the opening animation at once, every time a drag ended.
-         */
+        // A tab carried in or out of a group is built again by React, and a tab
+        // built again plays the animation for one being opened. That is called
+        // off before anything is measured, and in a sweep of its own, for the
+        // reasons `finishTabOpen` gives.
         if (animate) {
-            for (const node of nodes) {
-                for (const animation of node.getAnimations()) {
-                    if (animation.animationName === 'tab-open') animation.cancel();
-                }
-            }
+            for (const node of nodes) finishTabOpen(node);
         }
 
         for (const node of nodes) {
             const id = node.dataset.tab;
-            const shift = shiftOf(node);
+            const shift = tabShift(node);
             const left = node.getBoundingClientRect().left - shift - base;
             next.set(id, left);
 
@@ -163,21 +136,18 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
             // painted, so the tab does not blink back to its slot and out.
             if (id === carryingRef.current) {
                 const held = drag.current;
-                if (held?.wanted != null) {
-                    node.style.transform = `translateX(${held.wanted - base - left}px)`;
-                }
+                if (held?.wanted != null) holdTab(node, held.wanted - base - left);
                 continue;
             }
 
             const before = places.current.get(id);
 
-            // The tab that was being carried is put down by this branch. The
-            // offset it was held at has to go before a slide is animated over
-            // it, or it would snap back to it the moment the slide ends.
-            if (node.style.transform) node.style.transform = '';
-            for (const animation of node.getAnimations()) {
-                if (animation.tabSlide) animation.cancel();
-            }
+            // The tab that was being carried is put down by this branch. A
+            // slide still in flight goes first, since it is the thing writing
+            // the offset, and then the offset itself: left on, it is what the
+            // tab would snap back to the moment a new slide ended.
+            stopTabSlide(node);
+            if (shift) holdTab(node, 0);
 
             if (!animate || still || before === undefined) continue;
 
@@ -185,11 +155,7 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
             // Sub-pixel drift from a reflow is not movement worth animating.
             if (Math.abs(delta) < 1) continue;
 
-            const slide = node.animate(
-                [{ transform: `translateX(${delta}px)` }, { transform: 'translateX(0)' }],
-                { duration: SLIDE_MS, easing: EASING },
-            );
-            slide.tabSlide = true;
+            slideTab(node, delta);
         }
 
         places.current = next;
@@ -198,8 +164,8 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
     /**
      * The strip as it has just been drawn. Tabs slide only while one is being
      * carried, or on the pass that puts it down: a tab opening or closing has
-     * its own animation in the stylesheet, and two of them over the same
-     * movement read as a fault.
+     * a tween of its own, and two of them over the same movement read as a
+     * fault.
      */
     const rendered = preview ? preview.ids : tabs.map(tab => tab.id);
     const orderKey = `${rendered.join('|')}|${carrying || ''}|${preview?.groupId || ''}`;
@@ -231,7 +197,7 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
 
         for (const node of container.querySelectorAll(TABS)) {
             const rect = node.getBoundingClientRect();
-            const left = rect.left - shiftOf(node);
+            const left = rect.left - tabShift(node);
             if (node.dataset.tab === current.id) {
                 carried = {
                     node,
@@ -264,7 +230,7 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
         // Kept, not just applied: a reparented tab arrives with no transform on
         // it, and the pass that reparents it puts this back before it is seen.
         current.wanted = wanted;
-        carried.node.style.transform = `translateX(${wanted - carried.left}px)`;
+        holdTab(carried.node, wanted - carried.left);
 
         const middle = wanted + carried.width / 2;
 
@@ -432,7 +398,7 @@ export function useTabDrag({ containerRef, tabs, onReorder, enabled = true }) {
             wanted: null,
             // Where along the tab it was taken hold of, so it stays under that
             // same point of the pointer however far it travels.
-            grab: event.clientX - (node.getBoundingClientRect().left - shiftOf(node)),
+            grab: event.clientX - (node.getBoundingClientRect().left - tabShift(node)),
             started: false,
             detach: () => {
                 window.removeEventListener('pointermove', onMove, true);

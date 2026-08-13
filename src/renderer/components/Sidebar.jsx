@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useLayoutEffect, useRef } from 'react';
 import {
     ServerStack03Icon,
     SecurityIcon,
@@ -7,7 +7,7 @@ import {
     Archive02Icon,
     Settings01Icon,
 } from 'hugeicons-react';
-import { APP_GUTTER, SIDEBAR_WIDTH } from '../lib/layout';
+import { setSidebar, slideSidebar } from '../lib/panelMotion';
 import SidebarAccount from './SidebarAccount';
 import { useT } from '../i18n';
 
@@ -44,27 +44,39 @@ const NAV_ITEMS = [
 function Sidebar({ activeNav, onNavChange, isTerminalView }) {
     const t = useT();
 
-    // The shell supplies the left gutter, so the nav items line up with the
-    // burger button above them. The sidebar only owns the gap to the content
-    // panel, which collapses with it, keeping the terminal flush with the bar.
-    const sidebarStyle = isTerminalView
-        ? {
-            width: '0px',
-            paddingRight: '0',
-            opacity: '0',
-            overflow: 'hidden'
+    const navRef = useRef(null);
+
+    /**
+     * The state the sidebar has been drawn in, so the first render lays it out
+     * rather than animating it from itself to itself, and so StrictMode's
+     * second mount does not read as the sidebar having been asked to move.
+     */
+    const shown = useRef(!isTerminalView);
+
+    /**
+     * Opening and shutting is GSAP's, from `lib/panelMotion`, which also holds
+     * the width the sidebar opens to. Nothing is set here in a `style` prop:
+     * a re-render mid-slide would write the far end of the movement straight
+     * onto the element and the column would jump there.
+     */
+    useLayoutEffect(() => {
+        const node = navRef.current;
+        if (!node) return;
+
+        const open = !isTerminalView;
+        if (shown.current === open) {
+            setSidebar(node, open);
+            return;
         }
-        : {
-            width: `${SIDEBAR_WIDTH}px`,
-            paddingRight: `${APP_GUTTER}px`,
-            opacity: '1'
-        };
+        shown.current = open;
+        slideSidebar(node, open);
+    }, [isTerminalView]);
 
     return (
         <nav
             id="sidebar"
-            className="bg-gray-100 dark:bg-surface-base flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden"
-            style={sidebarStyle}
+            ref={navRef}
+            className="bg-gray-100 dark:bg-surface-base flex flex-col shrink-0 overflow-hidden"
         >
             <div className="flex flex-col gap-1 flex-1 min-h-0">
                 {NAV_ITEMS.map((item) => (

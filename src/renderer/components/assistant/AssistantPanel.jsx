@@ -11,6 +11,7 @@ import Markdown from '../../lib/markdown';
 import useAssistant from '../../hooks/useAssistant';
 import useTypewriter from '../../hooks/useTypewriter';
 import { APP_GUTTER, PANE_HEADER_HEIGHT } from '../../lib/layout';
+import { revealAssistant, setAssistantWidth } from '../../lib/panelMotion';
 import ToolCall from './ToolCall';
 import ApprovalRequest from './ApprovalRequest';
 import ScopeMenu from './ScopeMenu';
@@ -55,19 +56,6 @@ const MAX_WIDTH = 720;
 
 /** Wide enough to centre a 32px button, and no wider. */
 const RAIL_WIDTH = 40;
-
-/**
- * The open and shut motion.
- *
- * The sidebar does the same thing on the other side of the window, so this is
- * its easing (tailwind's `ease-in-out`) at roughly half the duration. The
- * sidebar is a place you go and stay; this is a panel you flick in and out of
- * mid-sentence while reading the terminal, and 300ms of that gets old fast.
- * Short enough to feel like the column simply widened, long enough that the
- * eye follows the edge rather than being handed a new layout.
- */
-const REVEAL_MS = 180;
-const REVEAL_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 /**
  * The card, matching `#main-content`'s 16px radius and surface.
@@ -711,6 +699,10 @@ function AssistantConversation({
  * It is pinned to the right edge for the same reason the sidebar's items are
  * pinned to the left: whatever is already on screen should stay where it is
  * while the rest arrives beside it.
+ *
+ * The movement itself is GSAP's, from `lib/panelMotion`, which is also where
+ * the sidebar's is and where the curve both share is written down. The width
+ * is GSAP's to write, so it is not in a `style` prop here.
  */
 export default function AssistantPanel({
     open,
@@ -725,9 +717,9 @@ export default function AssistantPanel({
 }) {
     const t = useT();
 
-    // The width the column is actually drawn at. It lags `open` by a couple of
-    // frames on the way in, which is what gives the transition an old value to
-    // start from.
+    // Which of the two states the column is drawn in. Not the same thing as
+    // `open` while the panel is on its way, since the card has to be there to
+    // be revealed and has to stay there long enough to be collapsed.
     const [wide, setWide] = useState(open);
 
     // The card, which outlives `open` by the length of the slide so there is
@@ -736,45 +728,86 @@ export default function AssistantPanel({
     const [mounted, setMounted] = useState(open);
 
     // True from the moment `open` changes until the column has arrived. It
-    // carries the transition and the clip, and a settled column has neither:
-    // the resize handle has to move the edge on the frame it is dragged, and
-    // the menus inside the card have to be able to cast a shadow past it.
+    // carries the clip, and a settled column has none: the resize handle has to
+    // move the edge on the frame it is dragged, and the menus inside the card
+    // have to be able to cast a shadow past it.
     const [sliding, setSliding] = useState(false);
+
+    /** The column, and the two things that cross fade inside it. */
+    const columnRef = useRef(null);
+    const railRef = useRef(null);
+    const cardRef = useRef(null);
 
     // The state the column has been told about, so the first render does not
     // animate from itself to itself.
     const drawn = useRef(open);
 
+    /**
+     * All of it at once, where this used to spend two frames painting the
+     * column at its old width so that a CSS transition had something to start
+     * from. GSAP reads the width off the column as it stands, so there is
+     * nothing to wait for.
+     */
     useEffect(() => {
-        if (drawn.current === open) return undefined;
+        if (drawn.current === open) return;
         drawn.current = open;
 
         setSliding(true);
+        setWide(open);
         if (open) setMounted(true);
-
-        /**
-         * Two frames: one to paint the column where it is now, one to send it
-         * where it is going. Both in the same paint and it jumps instead of
-         * sliding. Both handles are cancelled, because StrictMode's second
-         * mount would otherwise leave the first one's inner frame running.
-         */
-        let inner = 0;
-        const outer = requestAnimationFrame(() => {
-            inner = requestAnimationFrame(() => setWide(open));
-        });
-
-        // The two frames plus the slide, with a frame in hand.
-        const landed = setTimeout(() => {
-            setSliding(false);
-            if (!open) setMounted(false);
-        }, REVEAL_MS + 50);
-
-        return () => {
-            cancelAnimationFrame(outer);
-            cancelAnimationFrame(inner);
-            clearTimeout(landed);
-        };
     }, [open]);
+
+    /**
+     * The movement, run once the column has been rendered in its new state:
+     * opening mounts the card in the same commit, and it has to be there
+     * before there is anything to fade in.
+     *
+     * `shown` tells a reveal from the two other reasons this runs, both of
+     * which want the width outright and no movement at all: the first render,
+     * and the resize handle dragging the edge of a panel already open. It is
+     * also what makes StrictMode's second mount harmless.
+     */
+    const shown = useRef(wide);
+
+    /**
+     * The reveal in flight. Dropped before another starts, because a panel
+     * flicked shut halfway open would otherwise leave the first one to report
+     * an arrival that is no longer happening, and the clip would come off in
+     * the middle of the second slide.
+     */
+    const reveal = useRef(null);
+
+    useLayoutEffect(() => {
+        const column = columnRef.current;
+        if (!column) return;
+
+        if (shown.current === wide) {
+            // Not while a reveal has the column: a width arriving from anywhere
+            // else mid-slide would put the edge at the far end of a movement
+            // that is still playing.
+            if (!sliding) setAssistantWidth(column, wide ? width : RAIL_WIDTH);
+            return;
+        }
+        shown.current = wide;
+
+        reveal.current?.kill();
+        reveal.current = revealAssistant({
+            column,
+            rail: railRef.current,
+            card: cardRef.current,
+            width: wide ? width : RAIL_WIDTH,
+            open: wide,
+            onComplete: () => {
+                setSliding(false);
+                if (!wide) setMounted(false);
+            },
+        });
+    }, [wide, width, sliding]);
+
+    // A reveal outliving the panel would go on writing to elements that are no
+    // longer anywhere. Unmount only: killing it on any other change would strip
+    // the clip off a slide that is still running.
+    useEffect(() => () => reveal.current?.kill(), []);
 
     /** The grab strip, which lives in the gutter between the two cards. */
     const startResize = useCallback((event) => {
@@ -802,11 +835,10 @@ export default function AssistantPanel({
 
     return (
         <div
+            ref={columnRef}
             className="relative shrink-0 bg-gray-100 dark:bg-surface-base"
             style={{
-                width: (wide ? width : RAIL_WIDTH) + APP_GUTTER,
                 paddingLeft: APP_GUTTER,
-                transition: sliding ? `width ${REVEAL_MS}ms ${REVEAL_EASE}` : undefined,
                 overflow: sliding ? 'hidden' : 'visible',
             }}
         >
@@ -832,13 +864,12 @@ export default function AssistantPanel({
                 fade in place instead of one sliding out from under the other. */}
             {(!wide || sliding) && (
                 <div
+                    ref={railRef}
                     className="absolute right-0 top-0 flex items-center justify-center"
                     style={{
                         width: RAIL_WIDTH,
                         height: PANE_HEADER_HEIGHT,
-                        opacity: wide ? 0 : 1,
                         pointerEvents: wide ? 'none' : 'auto',
-                        transition: `opacity ${REVEAL_MS}ms ${REVEAL_EASE}`,
                     }}
                 >
                     <HeaderButton
@@ -853,15 +884,14 @@ export default function AssistantPanel({
 
             {mounted && (
                 <aside
+                    ref={cardRef}
                     className={`absolute inset-y-0 right-0 flex flex-col ${CARD}`}
                     style={{
                         width,
-                        opacity: wide ? 1 : 0,
                         // Nothing to click on a panel that is on its way in or
                         // out, and the half of it hanging outside the clip is
                         // not there to be aimed at.
                         pointerEvents: wide ? 'auto' : 'none',
-                        transition: `opacity ${REVEAL_MS}ms ${REVEAL_EASE}`,
                     }}
                 >
                     <AssistantConversation
