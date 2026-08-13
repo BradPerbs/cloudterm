@@ -719,7 +719,8 @@ function AssistantConversation({
         </>
     );
 }
- *
+
+/**
  * One element that changes width, not two swapped for each other: a swap has
  * nothing to animate between, and the rail is the same column with everything
  * but the button clipped off. That is how the sidebar opens on the other side

@@ -29,4 +29,8 @@ jobs:
 
       - run: npm ci
 
+      # Production deps only: dev-only tools (Vite/esbuild) may still report
+      # advisories that do not affect the packaged app.
+      - run: npm audit --omit=dev --audit-level=high
+
       - run: npm test
