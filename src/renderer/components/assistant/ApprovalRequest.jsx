@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Alert02Icon, Cancel01Icon, Edit02Icon, Tick02Icon } from 'hugeicons-react';
 import Button from '../ui/Button';
 import CopyButton from '../ui/CopyButton';
+import TargetStack from './TargetStack';
 import { describeCall } from './ToolCall';
+import { approvalMarks, groupTargets } from '../../lib/approvals';
 import { useT } from '../../i18n';
 
 /**
@@ -14,17 +16,29 @@ import { useT } from '../../i18n';
  * font, wrapped rather than truncated: an approval you cannot read to the end
  * of is not an approval.
  *
- * The host is named for the same reason. "Run this?" is a different question
- * depending on whether the answer runs on a staging box or on the machine the
- * business is sitting on, and the panel is often pointed somewhere other than
- * the tab in front.
+ * Where it will run is the other half of the question. "Run this?" is a
+ * different question depending on whether the answer lands on a staging box or
+ * on the machine the business is sitting on, and the panel is often pointed
+ * somewhere other than the tab in front. That is drawn rather than spelled out,
+ * with the panel header's own tiles: the OS, the name the tab strip uses, and
+ * the address on hover. A card is a thing you read in a hurry, and an icon and
+ * a short name are read faster than `ubuntu@10.0.14.22`.
  *
- * There is one card, not two. The transcript already had a row for the call
- * itself, so a question about that call arriving as a second card said the
- * same command twice and left the user comparing them to check they were the
- * same thing. The question lands on the row that is already there, and the
- * row goes back to reporting the call once it is answered. See the
- * `approval-request` case in `useAssistant`.
+ * It takes a group of calls, not one, and usually the group has a single member.
+ * The same command sent to three servers is one decision, and the model asks it
+ * as three tool calls: as three cards it was the same text three times, told
+ * apart only by a hostname, and answering it three times is not more consent
+ * than answering it once. `lib/approvals` decides what counts as the same
+ * question, including the calls that have been issued but have not asked yet,
+ * and every server the answer will reach is named on the card before it is
+ * given. `useAssistant` is what carries that answer to the ones still queued.
+ *
+ * The card is pinned above the composer rather than sitting in the transcript,
+ * because the transcript moves: text streaming in underneath a question pushes
+ * its buttons out from under the pointer, and the two answers are next to each
+ * other. It stays where it is put until it is answered. The transcript keeps
+ * nothing in its place meanwhile, so the command is still on screen exactly
+ * once, and the answered call takes its row there as usual.
  *
  * No colour wash. This was a yellow box with yellow text on it, which reads as
  * an error rather than a question and, worse, tinted the command itself: the
@@ -32,8 +46,8 @@ import { useT } from '../../i18n';
  * it to read. The card is neutral and simply sits above the tool rows around
  * it, lifted by a ring and a shadow rather than by hue, and the amber is spent
  * on the 6px dot, which is what the transcript already uses to mean "waiting".
- * The shape is the tool row's: a 32px header line with a dot, a title and the
- * host, so answering it collapses the card onto the line it already had.
+ * The shape is the tool row's: a 32px header line with a dot, a title and where
+ * it goes, so answering it collapses the card onto a line of that same shape.
  *
  * The answers are a list, one per row, rather than buttons in a line. Three of
  * them do not fit across a 340px panel, and they are not a form's actions:
@@ -94,13 +108,18 @@ function Choice({ icon, label, onClick }) {
     );
 }
 
-export default function ApprovalRequest({ item, onRespond }) {
+export default function ApprovalRequest({ group, sessions = [], onRespond }) {
     const t = useT();
     // What to say instead of yes or no. Held here rather than in the hook: it
     // is worth nothing the moment this question is answered, and a card that
     // is one of twenty in a transcript should not be putting anything in the
     // conversation's state to hold a half-typed sentence.
     const [note, setNote] = useState(null);
+
+    // Every call in the group is the same call bar its session, so the one at
+    // the front speaks for all of them everywhere except the header.
+    const item = group.items[0];
+    if (!item) return null;
 
     const summary = describeCall(item.name, item.input);
     const settled = SETTLED[item.status];
@@ -129,9 +148,32 @@ export default function ApprovalRequest({ item, onRespond }) {
         );
     }
 
+    // Where this is going, as the tab strip would draw it. Not memoised: it is
+    // a handful of lookups over the open sessions, and the names it builds are
+    // translated, so a cached list would go stale on a change of language.
+    const marks = approvalMarks(groupTargets(group), sessions);
+
+    /**
+     * The answer covers exactly what the card showed.
+     *
+     * A queued call whose session could not be resolved draws no tile, so it is
+     * dropped from the answer and asks for itself when its turn comes. Nothing
+     * this card could not name is consented to on it. The calls already asking
+     * are never dropped: they have to be answered either way.
+     */
+    const drawn = new Set(marks.map(mark => mark.key));
+    const answering = {
+        ...group,
+        queued: group.queued.filter(entry => drawn.has(entry.id)),
+    };
+
+    // One answer for the whole card. They are the same question, so a partial
+    // answer is not a state this card can leave the conversation in.
+    const answer = (approved, message = '') => onRespond(answering, approved, message);
+
     const sendNote = () => {
         const text = (note || '').trim();
-        if (text) onRespond(item.requestId, false, text);
+        if (text) answer(false, text);
     };
 
     return (
@@ -140,19 +182,37 @@ export default function ApprovalRequest({ item, onRespond }) {
             ring-1 ring-black/[0.07] dark:ring-white/[0.10]">
 
             {/* The tool row's header, held still: same height, same dot, same
-                title weight. The host is the other half of the question, so it
-                takes the rest of the line and truncates from the end. */}
+                title weight. Where the call is going is the other half of the
+                question, so it takes the rest of the line and truncates from
+                the end.
+
+                Tiles first, then a name for one server or a count for several,
+                which is the panel header's own arrangement. The names live on
+                the tiles rather than in the text, which is what lets one card
+                say "3 servers" and still answer "which three" without growing a
+                second line. The tooltip opens upwards: this card is pinned near
+                the bottom of the panel, and a label dropping out of the header
+                would land on the command underneath it. */}
             <div className="h-8 px-2.5 flex items-center gap-2
                 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
                 <span className="text-[11px] font-semibold text-gray-900 dark:text-white shrink-0">
                     {title}
                 </span>
-                {item.host && (
+                {marks.length > 0 ? (
+                    <span className="min-w-0 flex items-center gap-1.5">
+                        <TargetStack marks={marks} placement="top" />
+                        <span className="min-w-0 truncate text-[11px] text-gray-500 dark:text-gray-500">
+                            {marks.length === 1
+                                ? marks[0].name
+                                : t('assistant.serverCount', { count: marks.length })}
+                        </span>
+                    </span>
+                ) : item.host ? (
                     <span className="min-w-0 truncate text-[11px] text-gray-500 dark:text-gray-500">
                         {t('assistant.onHost', { host: item.host })}
                     </span>
-                )}
+                ) : null}
             </div>
 
             <div className="p-2 space-y-2">
@@ -201,12 +261,12 @@ export default function ApprovalRequest({ item, onRespond }) {
                         <Choice
                             icon={<Tick02Icon size={14} strokeWidth={2.5} />}
                             label={t('assistant.allow')}
-                            onClick={() => onRespond(item.requestId, true)}
+                            onClick={() => answer(true)}
                         />
                         <Choice
                             icon={<Cancel01Icon size={13} strokeWidth={2.5} />}
                             label={t('assistant.decline')}
-                            onClick={() => onRespond(item.requestId, false)}
+                            onClick={() => answer(false)}
                         />
                         {/* A no with a reason attached. The text goes back as
                             the tool's own result, which is the one thing the

@@ -405,6 +405,12 @@ function requestApproval(conversation, { toolName, name, input, local }) {
             local: Boolean(local),
             readOnly: Boolean(definition?.readOnly),
             input,
+            // Both, because they answer different questions. The id is what the
+            // panel resolves against the sessions it can see, so a card can
+            // draw the server the way the tab strip does, with its OS and the
+            // name it goes by. The name is what is left when that lookup fails:
+            // a session closed since, or a transcript read back from disk.
+            sessionId: info ? info.sessionId : '',
             host: info ? (info.hostName || info.address) : '',
         });
     });

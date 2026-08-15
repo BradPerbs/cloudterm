@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { questionKey } from '../lib/approvals';
 
 /**
  * One assistant conversation, as the panel sees it.
@@ -30,12 +31,25 @@ function applyEvent(state, event) {
     let busy = state.busy;
     let costUsd = state.costUsd;
 
-    const findRunningTool = (name) => {
+    /**
+     * The row a question belongs to.
+     *
+     * By session first, because the same command sent to three servers is three
+     * rows of the same tool with the same title, and the last one started is not
+     * the one being asked about. A row carrying a question already is not
+     * running, so no two questions can land on the same row. The last row of
+     * that tool is the fallback for a call that named no session, which is the
+     * ordinary single-server case.
+     */
+    const findRunningTool = (name, session) => {
+        let fallback = -1;
         for (let index = items.length - 1; index >= 0; index -= 1) {
             const item = items[index];
-            if (item.kind === 'tool' && item.name === name && item.status === 'running') return index;
+            if (item.kind !== 'tool' || item.name !== name || item.status !== 'running') continue;
+            if (session && item.input?.session === session) return index;
+            if (fallback < 0) fallback = index;
         }
-        return -1;
+        return fallback;
     };
 
     switch (event.type) {
@@ -113,17 +127,20 @@ function applyEvent(state, event) {
                 input: event.input || {},
                 local: event.local,
                 readOnly: event.readOnly,
+                sessionId: event.sessionId || '',
                 host: event.host,
                 status: 'pending',
                 feedback: '',
             };
 
-            // The question belongs to the call, so it lands on the row that
-            // call already has rather than arriving as a second card printing
-            // the same command underneath the first. The row is marked waiting
-            // rather than running while it stands, so the panel does not claim
-            // work is happening while it is actually stopped on a question.
-            const index = findRunningTool(event.name);
+            // The question belongs to the call, so it is attached to the row
+            // that call already has rather than living beside it. The panel
+            // draws its card from this and holds the row back while it stands,
+            // so the command is on screen once; answering it puts the row back
+            // with the answer recorded on it. The row is marked waiting rather
+            // than running meanwhile, so nothing claims work is happening while
+            // it is actually stopped on a question.
+            const index = findRunningTool(event.name, event.input?.session);
             if (index >= 0) {
                 items[index] = { ...items[index], status: 'waiting', approval };
             } else {
@@ -229,6 +246,14 @@ function applyEvent(state, event) {
     return { ...state, items, draft, busy, costUsd };
 }
 
+/**
+ * What ends a turn, and with it any answer being held for calls that were
+ * emitted but never asked. Consent does not cross a turn: whatever the model
+ * was doing when it was told yes is over, and the next thing it tries is a new
+ * question even if it is spelled the same way.
+ */
+const ENDS_TURN = new Set(['result', 'error', 'interrupted', 'closed', 'user-message']);
+
 const INITIAL = {
     items: [],
     draft: emptyDraft(),
@@ -258,6 +283,22 @@ export default function useAssistant({
     const [failure, setFailure] = useState('');
     const [conversations, setConversations] = useState([]);
     const conversationRef = useRef('');
+
+    /**
+     * Answers given for calls that have not asked yet.
+     *
+     * A card covers every call the model has already emitted asking the same
+     * thing, and names each of their servers on it, because "run this on those
+     * three" is one decision. An agent that runs its tool calls one at a time
+     * only asks about the second once the first has been answered, so the
+     * answer waits here for it: question key -> the verdict and the exact set of
+     * sessions it was given for.
+     *
+     * Deliberately narrow. It matches only a call whose tool, arguments and
+     * target were all on the card that was answered, and it is dropped the
+     * moment the turn ends. Anything else asks.
+     */
+    const held = useRef(new Map());
 
     // Kept in a ref as well so the event subscription, which is set up once,
     // can filter on the current id without being torn down and rebuilt every
@@ -314,15 +355,52 @@ export default function useAssistant({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled]);
 
+    /**
+     * Answer one approval, in the transcript and over IPC.
+     *
+     * The card is marked locally straight away. It is the thing the user just
+     * clicked, and waiting for the round trip to grey it out reads as a dropped
+     * click.
+     */
+    const settle = useCallback((requestId, approved, message) => {
+        setState(previous => applyEvent(previous, {
+            type: 'approval-settled',
+            requestId,
+            status: approved ? 'approved' : 'denied',
+            feedback: approved ? '' : message,
+            at: Date.now(),
+        }));
+        window.api.ai.approve(
+            requestId,
+            approved,
+            approved ? '' : (message || 'The user declined that.')
+        );
+    }, []);
+
     /* The live stream. */
     useEffect(() => {
         if (!enabled) return undefined;
         const off = window.api.ai.onEvent(({ conversationId: id, event }) => {
             if (id !== conversationRef.current) return;
             setState(previous => applyEvent(previous, event));
+
+            if (ENDS_TURN.has(event.type)) {
+                held.current.clear();
+                return;
+            }
+
+            // A question already answered on a card that named this server.
+            // Applied after the event above, so the transcript has the row
+            // before it is told the row has been answered.
+            if (event.type === 'approval-request') {
+                const answer = held.current.get(questionKey(event));
+                if (answer && event.sessionId && answer.sessions.has(event.sessionId)) {
+                    settle(event.requestId, answer.approved, answer.message);
+                }
+            }
         });
         return off;
-    }, [enabled]);
+    }, [enabled, settle]);
 
     /* Follow the pane the panel is pointed at, or the set it is pinned to. */
     useEffect(() => {
@@ -348,30 +426,27 @@ export default function useAssistant({
     }, [conversationId]);
 
     /**
-     * Answer one approval.
+     * Answer one card, which is one question however many calls it covers.
      *
      * `message` is what to do instead, when the user turned the call down with
      * something to say. It goes back as the tool's own result, so the model
      * reads it as the answer to the call it just made rather than as a new
      * instruction that arrived from nowhere.
+     *
+     * The calls still queued behind this question are not answered here, since
+     * they have not asked yet. The verdict is held for them under the servers
+     * the card named, and applied as each one arrives. See `held`.
      */
-    const respond = useCallback((requestId, approved, message = '') => {
-        // Marked locally straight away. The card is the thing the user just
-        // clicked, and waiting for the round trip to grey it out reads as a
-        // dropped click.
-        setState(previous => applyEvent(previous, {
-            type: 'approval-settled',
-            requestId,
-            status: approved ? 'approved' : 'denied',
-            feedback: approved ? '' : message,
-            at: Date.now(),
-        }));
-        window.api.ai.approve(
-            requestId,
-            approved,
-            approved ? '' : (message || 'The user declined that.')
-        );
-    }, []);
+    const respond = useCallback((group, approved, message = '') => {
+        if (group.queued.length > 0) {
+            held.current.set(group.key, {
+                approved,
+                message,
+                sessions: new Set(group.queued.map(entry => entry.sessionId)),
+            });
+        }
+        for (const approval of group.items) settle(approval.requestId, approved, message);
+    }, [settle]);
 
     /** What the history menu lists. Asked for rather than pushed. */
     const refreshConversations = useCallback(async () => {
@@ -393,6 +468,9 @@ export default function useAssistant({
      * and can be resumed. Only the running query is given up.
      */
     const reset = useCallback(async () => {
+        // Whatever was being held for the old conversation's last turn belongs
+        // to a conversation nobody is looking at any more.
+        held.current.clear();
         if (conversationId) await window.api.ai.park(conversationId);
         const created = await window.api.ai.start(targetRef.current);
         setConversationId(created.conversationId);
@@ -403,6 +481,7 @@ export default function useAssistant({
     /** Go back to an earlier conversation, replaying it through the reducer. */
     const open = useCallback(async (id) => {
         if (!id || id === conversationId) return;
+        held.current.clear();
         const past = await window.api.ai.history(id);
         if (!past?.found) {
             await refreshConversations();
@@ -420,6 +499,7 @@ export default function useAssistant({
      */
     const remove = useCallback(async (id) => {
         if (!id) return;
+        held.current.clear();
         await window.api.ai.close(id);
         if (id === conversationId) {
             const created = await window.api.ai.start(targetRef.current);

@@ -19,6 +19,7 @@ import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
 import { useT } from '../../i18n';
+import { groupApprovals } from '../../lib/approvals';
 import {
     GLOBAL,
     describe,
@@ -384,6 +385,14 @@ function AssistantConversation({
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;
     const quickPrompts = settings?.quickPrompts || [];
 
+    /**
+     * The questions waiting on an answer, folded so that one command sent to
+     * several servers is one card. See `lib/approvals`. These are drawn in the
+     * dock above the composer rather than in the transcript, so the transcript
+     * skips them where they would otherwise fall.
+     */
+    const asking = useMemo(() => groupApprovals(assistant.items), [assistant.items]);
+
     return (
         <>
             {/* Header. The scope is the title, so the thing you read to know
@@ -534,22 +543,23 @@ function AssistantConversation({
                         return <Markdown key={item.id} text={item.text} />;
                     }
                     if (item.kind === 'tool') {
-                        // A call waiting on an answer is the same row,
-                        // opened up into the question. One card, not a row
-                        // and a card repeating each other.
-                        if (item.approval?.status === 'pending') {
-                            return (
-                                <ApprovalRequest
-                                    key={item.id}
-                                    item={item.approval}
-                                    onRespond={assistant.respond}
-                                />
-                            );
-                        }
+                        // A call waiting on an answer is not here at all: it
+                        // is the card pinned above the composer, and drawing
+                        // the row as well would put the same command on
+                        // screen twice. It takes its place in the transcript
+                        // the moment it is answered.
+                        if (item.approval?.status === 'pending') return null;
                         return <ToolCall key={item.id} item={item} />;
                     }
                     if (item.kind === 'approval') {
-                        return <ApprovalRequest key={item.id} item={item} onRespond={assistant.respond} />;
+                        if (item.status === 'pending') return null;
+                        return (
+                            <ApprovalRequest
+                                key={item.id}
+                                group={{ key: item.id, items: [item], queued: [] }}
+                                onRespond={assistant.respond}
+                            />
+                        );
                     }
                     return <Notice key={item.id} item={item} />;
                 })}
@@ -560,7 +570,10 @@ function AssistantConversation({
                     <StreamingText text={assistant.draft.text} onReveal={keepAtBottom} />
                 )}
 
-                {assistant.busy && !assistant.draft.text && (
+                {/* Not while a question is standing: the turn is still open, so
+                    `busy` is true, but nothing is happening and the thing to
+                    look at is the card below. */}
+                {assistant.busy && !assistant.draft.text && asking.length === 0 && (
                     <div className="flex items-center gap-2 h-8 px-2.5 text-[11px]
                         text-gray-500 dark:text-gray-500">
                         <span className="flex gap-1" aria-hidden="true">
@@ -575,6 +588,37 @@ function AssistantConversation({
                     </div>
                 )}
             </div>
+
+            {/* The questions, pinned.
+                Out of the transcript and held against the composer, because a
+                card in the flow moves: the model goes on writing underneath it,
+                a tool row lands, the scroller follows the bottom, and Allow
+                arrives where Decline was half a second ago. These two buttons
+                are 6px apart and one of them runs something on a server, so the
+                card does not get to move while it is being read.
+
+                Above the composer rather than below it: the composer is the one
+                thing on the panel whose position people learn, and a card that
+                pushes it down the moment a question arrives moves the target
+                they are already typing at.
+
+                Its own scroller, with a hairline above it that says the
+                transcript ends there. Several questions can stand at once, and
+                the panel is not allowed to lose its reply and its composer to a
+                stack of them. */}
+            {asking.length > 0 && (
+                <div className={`shrink-0 max-h-[55%] overflow-y-auto px-3 pt-3 pb-1 space-y-2
+                    border-t ${HAIRLINE}`}>
+                    {asking.map(group => (
+                        <ApprovalRequest
+                            key={group.key}
+                            group={group}
+                            sessions={sessions}
+                            onRespond={assistant.respond}
+                        />
+                    ))}
+                </div>
+            )}
 
             {/* Composer.
                 The input takes the whole width and its controls sit on a
