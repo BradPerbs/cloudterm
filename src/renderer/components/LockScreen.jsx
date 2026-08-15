@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LockPasswordIcon, ViewIcon, ViewOffSlashIcon } from 'hugeicons-react';
+import useEnter from '../hooks/useEnter';
 import { APP_GUTTER } from '../lib/layout';
 
 /**
@@ -16,6 +17,9 @@ export default function LockScreen({ onUnlocked }) {
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const inputRef = useRef(null);
+
+    /** The card fades up rather than being there. See lib/enterMotion. */
+    const formRef = useEnter('fade');
 
     useEffect(() => {
         inputRef.current?.focus();
@@ -51,7 +55,7 @@ export default function LockScreen({ onUnlocked }) {
             className="h-full flex items-center justify-center bg-gray-100 dark:bg-surface-base app-drag"
             style={{ padding: APP_GUTTER }}
         >
-            <form onSubmit={submit} className="app-no-drag animate-fade-in w-full max-w-[16rem] flex flex-col items-center">
+            <form ref={formRef} onSubmit={submit} className="app-no-drag w-full max-w-[16rem] flex flex-col items-center">
                 {/* The whole heading is this mark: no app name, no instruction. */}
                 <LockPasswordIcon size={30} strokeWidth={1.5} className="text-gray-900 dark:text-white" />
 

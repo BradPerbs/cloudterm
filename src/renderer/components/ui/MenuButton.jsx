@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTooltip } from './Tooltip';
+import { useEnterOn } from '../../hooks/useEnter';
 
 /**
  * A `ContextMenu` item list, in the shape this dropdown takes.
@@ -62,6 +63,10 @@ export default function MenuButton({
     const [position, setPosition] = useState(null);
     const buttonRef = useRef(null);
     const menuRef = useRef(null);
+
+    // The menu is rendered on a condition rather than mounted, so the entrance
+    // is asked for each time it opens. See lib/enterMotion.
+    useEnterOn(menuRef, open && 'dialog');
 
     // Nothing to explain once the menu is showing, and a bubble over its first
     // item would be covering the answer.
@@ -157,7 +162,6 @@ export default function MenuButton({
                         bg-white dark:bg-surface-raised
                         border border-gray-200 dark:border-surface-control
                         shadow-xl shadow-black/10 dark:shadow-black/40
-                        animate-dialog-in
                         ${children ? menuClassName : `min-w-[220px] p-1 ${menuClassName}`}`}
                     style={{
                         top: position?.top ?? -9999,

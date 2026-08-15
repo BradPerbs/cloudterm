@@ -1,4 +1,5 @@
 import { OsIcon } from '../../lib/os-icons';
+import useEnter from '../../hooks/useEnter';
 
 /**
  * The screen a session shows while it is coming up.
@@ -22,12 +23,15 @@ export default function ConnectingSplash({
     className = '',
     style,
 }) {
+    /** Comes up rather than being there. See lib/enterMotion. */
+    const splashRef = useEnter('connect');
+
     return (
         <div
             className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-300 ${className}`}
             style={style}
         >
-            <div className="connect-fade-in flex flex-col items-center">
+            <div ref={splashRef} className="flex flex-col items-center">
                 {/* Host badge with halos breathing outward */}
                 <div className="relative flex items-center justify-center w-24 h-24">
                     <span

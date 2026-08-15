@@ -1,48 +1,54 @@
-import { memo, useState, useEffect, useCallback, useRef } from 'react';
+import { memo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { FileImportIcon, FingerPrintIcon, ViewIcon, ViewOffIcon } from 'hugeicons-react';
 import toast from 'react-hot-toast';
 import { toastOptions } from '../lib/toast';
 import Sheet from './ui/Sheet';
 import Button, { IconButton } from './ui/Button';
 import Field, { FIELD_CLASS, MONO_FIELD_CLASS } from './ui/Field';
+import { foldSection } from '../lib/enterMotion';
 
-// Animated collapse component for smooth reveal/hide
+/**
+ * A section that folds open and shut.
+ *
+ * The movement is GSAP's, from lib/enterMotion, which measures the natural
+ * height itself. That is what took the scaffolding out of here: an animation
+ * frame spent waiting for the content to exist so it could be measured into
+ * state, a height held in state from then on, and a timer set to the length of
+ * the transition to decide when the section could stop being rendered. The
+ * tween reports its own end, and hands `height: auto` back at it, so a block
+ * that grows a line afterwards is not clipped to the height it had when it
+ * opened.
+ */
 function AnimatedCollapse({ isOpen, children }) {
-    const contentRef = useRef(null);
-    const [height, setHeight] = useState(0);
-    const [isVisible, setIsVisible] = useState(false);
+    const boxRef = useRef(null);
+
+    // The section outlives `isOpen` by the length of the fold, so there is
+    // something on screen to collapse.
+    const [mounted, setMounted] = useState(isOpen);
+
+    // The state the section is drawn in, so the first render does not fold it
+    // open from itself, and StrictMode's second mount does not either.
+    const shown = useRef(isOpen);
 
     useEffect(() => {
-        if (isOpen) {
-            setIsVisible(true);
-            // Wait for content to render, then measure and animate
-            requestAnimationFrame(() => {
-                if (contentRef.current) {
-                    setHeight(contentRef.current.scrollHeight);
-                }
-            });
-        } else {
-            setHeight(0);
-            // Delay hiding until animation completes
-            const timer = setTimeout(() => setIsVisible(false), 250);
-            return () => clearTimeout(timer);
-        }
+        if (isOpen) setMounted(true);
     }, [isOpen]);
 
-    if (!isVisible && !isOpen) return null;
+    useLayoutEffect(() => {
+        const node = boxRef.current;
+        if (!node || shown.current === isOpen) return;
+        shown.current = isOpen;
+
+        foldSection(node, isOpen, () => {
+            if (!isOpen) setMounted(false);
+        });
+    }, [isOpen, mounted]);
+
+    if (!mounted) return null;
 
     return (
-        <div
-            style={{
-                height: height,
-                opacity: isOpen ? 1 : 0,
-                overflow: 'hidden',
-                transition: 'height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease',
-            }}
-        >
-            <div ref={contentRef}>
-                {children}
-            </div>
+        <div ref={boxRef} style={{ overflow: 'hidden' }}>
+            {children}
         </div>
     );
 }

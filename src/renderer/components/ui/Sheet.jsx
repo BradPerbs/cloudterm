@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Cancel01Icon } from 'hugeicons-react';
+import { setSheetAway, slideSheet } from '../../lib/panelMotion';
 
 /**
  * A card that rises from the bottom and rests over the page it came from.
@@ -21,21 +22,6 @@ import { Cancel01Icon } from 'hugeicons-react';
 
 /** How much of the page is left showing above the sheet. */
 const TOP_OFFSET = 20;
-
-/**
- * Entering and leaving are not the same motion.
- *
- * Arriving is the sheet being put in front of you: it should cover most of the
- * distance immediately and then settle, which is what a hard ease-*out* does.
- * Leaving is the sheet getting out of the way, so it eases *in* (barely moves
- * at first, then drops away) and takes less time, because nobody wants to
- * watch something they have already dismissed.
- */
-const ENTER_MS = 380;
-const ENTER_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
-
-const EXIT_MS = 220;
-const EXIT_EASE = 'cubic-bezier(0.5, 0, 0.75, 0)';
 
 /**
  * Focus without letting the browser scroll to find the target.
@@ -59,45 +45,46 @@ const focusQuietly = (element) => element?.focus?.({ preventScroll: true });
  * end of it. Any change counts, so a counter is the usual thing to pass.
  */
 export default function Sheet({ title, subtitle, footer, onClose, dismiss, children }) {
-    const [visible, setVisible] = useState(false);
     const panelRef = useRef(null);
+    const scrimRef = useRef(null);
+
     // Guards the exit: a second Escape while it is already sliding out would
     // queue a second onClose.
     const closing = useRef(false);
 
+    /**
+     * Out and back. The exit reports its own end, so the caller unmounts as the
+     * card lands rather than on a timer set just short of a transition.
+     */
     const close = useCallback(() => {
         if (closing.current) return;
         closing.current = true;
-        setVisible(false);
-        // Just short of the transition, so the caller unmounts as the card
-        // lands rather than leaving an empty frame behind it.
-        setTimeout(onClose, EXIT_MS - 20);
+
+        slideSheet({
+            card: panelRef.current,
+            scrim: scrimRef.current,
+            open: false,
+            onComplete: onClose,
+        });
     }, [onClose]);
 
     /**
-     * Two frames: one to mount at the off-screen transform, one to transition
-     * away from it. A single frame lands both in the same paint and the card
-     * appears instead of rising.
+     * Put where it comes from, then sent where it is going. Both in one layout
+     * effect, because GSAP reads the card as it stands rather than needing a
+     * painted frame at the old value first: this is where the pair of nested
+     * animation frames used to be, and the state they existed to flip.
      *
-     * Both handles are cancelled, not just the outer one. React's development
-     * StrictMode mounts, unmounts and remounts every component, so a nested
-     * frame left running belongs to the discarded mount and fires against it.
+     * StrictMode mounts, unmounts and remounts, so the rise is dropped on the
+     * way out and simply played again by the second mount.
      */
-    useEffect(() => {
-        let cancelled = false;
-        let inner = 0;
-
-        const outer = requestAnimationFrame(() => {
-            inner = requestAnimationFrame(() => {
-                if (!cancelled) setVisible(true);
-            });
+    useLayoutEffect(() => {
+        setSheetAway(panelRef.current, scrimRef.current);
+        const rise = slideSheet({
+            card: panelRef.current,
+            scrim: scrimRef.current,
+            open: true,
         });
-
-        return () => {
-            cancelled = true;
-            cancelAnimationFrame(outer);
-            cancelAnimationFrame(inner);
-        };
+        return () => rise.kill();
     }, []);
 
     // The token the sheet was mounted under. Only a change means anything; the
@@ -165,14 +152,9 @@ export default function Sheet({ title, subtitle, footer, onClose, dismiss, child
                 that makes this read as stacked rather than as a new screen, and
                 a heavy scrim buries it. */}
             <div
+                ref={scrimRef}
                 onClick={close}
                 className="absolute inset-0 bg-black/20"
-                style={{
-                    opacity: visible ? 1 : 0,
-                    transition: visible
-                        ? `opacity ${ENTER_MS}ms ${ENTER_EASE}`
-                        : `opacity ${EXIT_MS}ms ${EXIT_EASE}`,
-                }}
             />
 
             <div
@@ -183,10 +165,6 @@ export default function Sheet({ title, subtitle, footer, onClose, dismiss, child
                     rounded-t-2xl overflow-hidden"
                 style={{
                     top: TOP_OFFSET,
-                    transform: visible ? 'translateY(0)' : 'translateY(100%)',
-                    transition: visible
-                        ? `transform ${ENTER_MS}ms ${ENTER_EASE}`
-                        : `transform ${EXIT_MS}ms ${EXIT_EASE}`,
                     // Promoted to its own compositor layer, so the whole form
                     // subtree and the shadow below are rasterised once and only
                     // moved after that. Without it every frame of the slide

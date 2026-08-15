@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy01Icon, Refresh01Icon, Tick01Icon } from 'hugeicons-react';
+import { useEnterOn } from '../../hooks/useEnter';
 import { OsIcon } from '../../lib/os-icons';
 import ConnectingSplash from './ConnectingSplash';
 
@@ -363,6 +364,17 @@ export default function SessionScreen({
     className = '',
     style,
 }) {
+    const faceRef = useRef(null);
+
+    /**
+     * Comes up as the screen stops dialling and starts asking something. Keyed
+     * on that rather than on the mount, because a pane that came up connecting
+     * has no face yet for the ref to land on. The faces after the first share
+     * one element, so moving between them does not replay it, which is what
+     * the stylesheet did too. See lib/enterMotion.
+     */
+    useEnterOn(faceRef, state === 'connecting' ? null : 'connect');
+
     // Still dialling: the screen it has always been, halos and all.
     if (state === 'connecting') {
         return (
@@ -406,7 +418,7 @@ export default function SessionScreen({
                 body.onEscape();
             }}
         >
-            <div className="connect-fade-in m-auto w-full max-w-[26rem] flex flex-col items-center text-center">
+            <div ref={faceRef} className="m-auto w-full max-w-[26rem] flex flex-col items-center text-center">
                 <Mark os={os} distro={distro} />
 
                 <h2 className="mt-5 text-[15px] font-semibold">{body.heading}</h2>

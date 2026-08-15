@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reorderList, resolveDropMode } from '../lib/organize';
+import { flyGhostHome, holdGhost, liftGhost } from '../lib/cardMotion';
 
 /**
  * Picking a card up and putting it down.
@@ -41,13 +42,6 @@ const SPRING_DELAY = 650;
  * the cursor mid-flight; without this the list flickers between two orders.
  */
 const REORDER_COOLDOWN = 140;
-
-const SETTLE_MS = 200;
-const ABSORB_MS = 220;
-const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
-
-const prefersReducedMotion = () =>
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 const escapeId = (value) => (window.CSS?.escape ? window.CSS.escape(value) : value);
 
@@ -249,8 +243,7 @@ export function useCardDrag({
         if (!current?.started) return;
 
         const { x, y } = current.pointer;
-        current.layer.style.transform =
-            `translate3d(${x - current.offsetX}px, ${y - current.offsetY}px, 0)`;
+        holdGhost(current.layer, x - current.offsetX, y - current.offsetY);
 
         autoScroll(y);
         hitTest(x, y);
@@ -266,7 +259,7 @@ export function useCardDrag({
         layer.className = 'org-drag-layer';
         layer.style.width = `${rect.width}px`;
         layer.style.height = `${rect.height}px`;
-        layer.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`;
+        holdGhost(layer, rect.left, rect.top);
 
         const ghost = current.node.cloneNode(true);
         ghost.removeAttribute('data-card-id');
@@ -288,9 +281,12 @@ export function useCardDrag({
 
         document.body.appendChild(layer);
 
-        // The lift is a class with a transition rather than a keyframe, so
-        // putting the card down plays the same movement in reverse.
-        requestAnimationFrame(() => ghost.classList.add('org-ghost-lifted'));
+        // Taken up off the page. Tweened rather than swapped between two
+        // classes, so putting the card down plays the same movement in reverse
+        // from wherever it had reached. The shadow stays a class, since it is
+        // the one part with a colour that has to answer to the theme.
+        ghost.classList.add('org-ghost-lifted');
+        liftGhost(ghost, true);
         document.body.classList.add('org-dragging');
 
         current.started = true;
@@ -307,30 +303,12 @@ export function useCardDrag({
     /** Fly the ghost to wherever the card has ended up, then drop it. */
     const settle = useCallback((current, destination) => {
         const { layer, ghost } = current;
+
+        // Put down as it travels, which is the pick-up run backwards.
         ghost.classList.remove('org-ghost-lifted');
+        liftGhost(ghost, false);
 
-        const to = `translate3d(${destination.left}px, ${destination.top}px, 0)`;
-
-        if (prefersReducedMotion()) {
-            layer.remove();
-            return Promise.resolve();
-        }
-
-        const animation = layer.animate(
-            [
-                { transform: layer.style.transform, opacity: 1 },
-                destination.absorb
-                    ? { transform: `${to} scale(0.3)`, opacity: 0 }
-                    : { transform: to, opacity: 1 },
-            ],
-            {
-                duration: destination.absorb ? ABSORB_MS : SETTLE_MS,
-                easing: EASING,
-                fill: 'forwards',
-            },
-        );
-
-        return animation.finished.catch(() => {}).then(() => layer.remove());
+        return flyGhostHome(layer, destination);
     }, []);
 
     const end = useCallback(async (cancelled) => {

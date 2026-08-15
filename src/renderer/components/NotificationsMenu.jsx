@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useEnterOn } from '../hooks/useEnter';
 import { Notification03Icon } from 'hugeicons-react';
 import useUpdate from '../hooks/useUpdate';
 import Tooltip from './ui/Tooltip';
@@ -67,6 +68,10 @@ export default function NotificationsMenu({ items = [], onMarkAllRead }) {
     const [pos, setPos] = useState(null);
     const btnRef = useRef(null);
     const panelRef = useRef(null);
+
+    // Rendered on a condition rather than mounted, so the entrance is asked
+    // for each time it opens. See lib/enterMotion.
+    useEnterOn(panelRef, open && 'fade');
 
     // `open` is the panel's own state above, so the browser handoff is renamed
     // rather than shadowed.
@@ -207,7 +212,7 @@ export default function NotificationsMenu({ items = [], onMarkAllRead }) {
                     role="dialog"
                     aria-label="Notifications"
                     className="fixed p-1 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200
-                        dark:border-neutral-700 shadow-xl z-[9999] animate-fade-in app-no-drag"
+                        dark:border-neutral-700 shadow-xl z-[9999] app-no-drag"
                     style={{
                         top: pos?.top ?? -9999,
                         right: pos?.right ?? EDGE,

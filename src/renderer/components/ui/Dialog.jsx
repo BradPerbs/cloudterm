@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { TITLE_BAR_BOTTOM } from '../../lib/layout';
+import useEnter, { useEnterOn } from '../../hooks/useEnter';
 
 /**
  * Centred modal shell shared by the SFTP dialogs. Escape closes, focus is
@@ -9,6 +10,10 @@ import { TITLE_BAR_BOTTOM } from '../../lib/layout';
  */
 export default function Dialog({ title, subtitle, icon, onClose, children, footer, width = '28rem' }) {
     const cardRef = useRef(null);
+
+    // The scrim arrives, the card comes up out of it. See lib/enterMotion.
+    const scrimRef = useEnter('fade');
+    useEnterOn(cardRef, 'dialog');
 
     useEffect(() => {
         const handleKey = (event) => {
@@ -57,13 +62,14 @@ export default function Dialog({ title, subtitle, icon, onClose, children, foote
             aria-label={title}
         >
             <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-[3px] animate-fade-in"
+                ref={scrimRef}
+                className="absolute inset-0 bg-black/40 backdrop-blur-[3px]"
                 onClick={onClose}
             />
 
             <div
                 ref={cardRef}
-                className="relative w-full bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control rounded-2xl shadow-2xl flex flex-col max-h-full animate-dialog-in"
+                className="relative w-full bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control rounded-2xl shadow-2xl flex flex-col max-h-full"
                 style={{ maxWidth: width }}
             >
                 <div className="flex items-start gap-3 p-5 pb-4">

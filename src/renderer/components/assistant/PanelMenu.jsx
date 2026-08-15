@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Delete02Icon, Tick02Icon } from 'hugeicons-react';
 import { useTooltip } from '../ui/Tooltip';
+import { useEnterOn } from '../../hooks/useEnter';
 import { useT } from '../../i18n';
 
 /**
@@ -232,6 +233,11 @@ export default function PanelMenu({
 }) {
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef(null);
+    const menuRef = useRef(null);
+
+    // Rendered on a condition rather than mounted, so the entrance is asked
+    // for each time it opens. See lib/enterMotion.
+    useEnterOn(menuRef, open && 'dialog');
 
     useEffect(() => {
         if (!open) return undefined;
@@ -266,9 +272,10 @@ export default function PanelMenu({
 
             {open && (
                 <div
+                    ref={menuRef}
                     role="menu"
                     className={`absolute ${place} ${menuClassName} z-40 rounded-xl
-                        max-h-80 flex flex-col animate-dialog-in
+                        max-h-80 flex flex-col
                         bg-white dark:bg-surface-raised
                         border border-gray-200 dark:border-surface-control
                         shadow-xl shadow-black/10 dark:shadow-black/40`}

@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useEnterOn } from '../../hooks/useEnter';
 
 /**
  * Tooltips for the app's icon-only controls.
@@ -32,12 +33,13 @@ const EDGE = 8;
 const ARROW_INSET = 12;
 
 // Each side grows out of the trigger rather than drifting in from a fixed
-// direction. Read by the `tooltip-in` keyframes in input.css.
+// direction. The origin is the bubble's own, so it is left in the style prop;
+// the offset is what it travels, so it is handed to `useEnterOn`.
 const ENTRANCE = {
-    top: { transformOrigin: 'bottom center', '--tip-x': '0px', '--tip-y': '4px' },
-    bottom: { transformOrigin: 'top center', '--tip-x': '0px', '--tip-y': '-4px' },
-    left: { transformOrigin: 'right center', '--tip-x': '4px', '--tip-y': '0px' },
-    right: { transformOrigin: 'left center', '--tip-x': '-4px', '--tip-y': '0px' },
+    top: { origin: 'bottom center', x: 0, y: 4 },
+    bottom: { origin: 'top center', x: 0, y: -4 },
+    left: { origin: 'right center', x: 4, y: 0 },
+    right: { origin: 'left center', x: -4, y: 0 },
 };
 
 // The arrow is a rotated square; only the two edges facing away from the bubble
@@ -116,6 +118,11 @@ function TooltipBubble({ label, hint, placement, trigger }) {
 
     const side = position?.side || placement;
 
+    // Read on mount, so this is the side asked for rather than the side the
+    // measuring above may have flipped it to. The two only differ when the
+    // bubble did not fit, and by then it has already started coming out.
+    useEnterOn(bubbleRef, 'tooltip', { x: ENTRANCE[side].x, y: ENTRANCE[side].y });
+
     return createPortal(
         <div
             ref={bubbleRef}
@@ -126,7 +133,7 @@ function TooltipBubble({ label, hint, placement, trigger }) {
             // large surfaces that have to sit clearly above the page, whereas
             // this is a chip the size of its own text, and the same drop under
             // it reads as a smudge rather than a lift.
-            className="tooltip-bubble fixed z-[10000] pointer-events-none
+            className="fixed z-[10000] pointer-events-none
                 flex items-center gap-2 px-2.5 py-1.5 rounded-lg
                 bg-white dark:bg-surface-raised
                 border border-gray-200 dark:border-surface-control
@@ -139,7 +146,7 @@ function TooltipBubble({ label, hint, placement, trigger }) {
                 // Rendered once before it is measured, so hold it back for that
                 // frame rather than letting it show up in the wrong place.
                 visibility: position ? 'visible' : 'hidden',
-                ...ENTRANCE[side],
+                transformOrigin: ENTRANCE[side].origin,
             }}
         >
             <span

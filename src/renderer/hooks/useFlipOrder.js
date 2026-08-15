@@ -1,8 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-
-/** Long enough to read as movement, short enough not to lag behind the pointer. */
-const DURATION = 220;
-const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+import { slideCard } from '../lib/cardMotion';
 
 /**
  * Slide cards between their old and new positions whenever the order changes.
@@ -11,7 +8,8 @@ const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
  * already put every card in its new place, so each one is offset back to where
  * it was and then animated to zero. React is not involved in the movement at
  * all: a reorder costs one measure pass and a compositor-only transform per
- * card, which is what keeps it smooth with a folder full of them.
+ * card, which is what keeps it smooth with a folder full of them. The tween
+ * itself is GSAP's, from `lib/cardMotion`, as the tab strip's is.
  *
  * Positions are held relative to the container's scrolled content rather than
  * the viewport. Measured against the viewport, scrolling the list would read as
@@ -80,10 +78,7 @@ export function useFlipOrder(containerRef, orderKey, { enabled = true, resetKey 
             // Sub-pixel drift from a reflow is not movement worth animating.
             if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
 
-            card.animate(
-                [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
-                { duration: DURATION, easing: EASING },
-            );
+            slideCard(card, dx, dy);
         }
 
         previous.current = next;

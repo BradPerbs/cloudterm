@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react';
 import { Cancel01Icon, Delete02Icon, FolderAddIcon, FolderTransferIcon, Tag01Icon } from 'hugeicons-react';
+import useEnter from '../../hooks/useEnter';
 import Button, { IconButton } from '../ui/Button';
 import { useT } from '../../i18n';
 
@@ -58,6 +59,14 @@ function describe(t, hosts, folders) {
 
 function SelectionBar({ hostCount, folderCount, onMove, onGroup, onTag, onDelete, onClear }) {
     const t = useT();
+
+    /**
+     * Rises into place, because it appears under the cursor rather than where
+     * the pointer is looking, and something that simply exists on the next
+     * frame reads as a repaint rather than an answer. See lib/enterMotion,
+     * which also holds the centring across the movement.
+     */
+    const barRef = useEnter('selection');
     const total = hostCount + folderCount;
     const mixture = describe(t, hostCount, folderCount);
     const roomy = useRoomForLabels();
@@ -92,7 +101,7 @@ function SelectionBar({ hostCount, folderCount, onMove, onGroup, onTag, onDelete
     ].filter(Boolean);
 
     return (
-        <div className="org-selection-bar absolute bottom-4 left-1/2 -translate-x-1/2 z-20
+        <div ref={barRef} className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20
             flex flex-nowrap items-center gap-1.5 pl-4 pr-2 py-2 rounded-2xl
             bg-white dark:bg-surface-raised
             border border-gray-200 dark:border-surface-control shadow-2xl">

@@ -1,4 +1,5 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import { slideThumb } from '../../lib/enterMotion';
 import { useTooltip } from './Tooltip';
 
 const SIZES = {
@@ -32,8 +33,22 @@ export default function SegmentedControl({
 }) {
     const { height, pad, text, gap } = SIZES[size] || SIZES.md;
     const listRef = useRef(null);
+    const thumbRef = useRef(null);
 
     const activeIndex = segments.findIndex(segment => segment.value === value);
+
+    /**
+     * The thumb's place is GSAP's, so it is not in a `style` prop: a re-render
+     * mid-slide would write the far end of the movement straight onto it. The
+     * first draw puts it where it belongs without animating, so a control that
+     * opens on its second segment does not slide there from the first.
+     */
+    const shown = useRef(null);
+
+    useLayoutEffect(() => {
+        slideThumb(thumbRef.current, activeIndex, shown.current !== null);
+        shown.current = activeIndex;
+    }, [activeIndex]);
 
     /** Arrow keys walk the tablist, skipping anything disabled. */
     const handleKeyDown = useCallback((event) => {
@@ -68,18 +83,13 @@ export default function SegmentedControl({
             {/* The thumb. One segment wide, moved by whole multiples of itself,
                 so the transform stays exact at any segment count. */}
             <span
+                ref={thumbRef}
                 aria-hidden="true"
                 className="absolute top-[3px] bottom-[3px] left-[3px] rounded-[7px]
                     bg-white dark:bg-surface-control
                     shadow-[0_1px_2px_rgba(0,0,0,0.07)]
-                    ring-1 ring-black/[0.04] dark:ring-white/[0.06]
-                    transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]
-                    motion-reduce:transition-none"
-                style={{
-                    width: `calc((100% - 6px) / ${segments.length})`,
-                    transform: `translateX(${Math.max(activeIndex, 0) * 100}%)`,
-                    opacity: activeIndex < 0 ? 0 : 1,
-                }}
+                    ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
+                style={{ width: `calc((100% - 6px) / ${segments.length})` }}
             />
 
             {segments.map((segment) => (

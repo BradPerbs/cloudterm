@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search01Icon, ArrowLeft01Icon, Alert02Icon } from 'hugeicons-react';
+import { useEnterOn } from '../../hooks/useEnter';
 import { PANE_OVERLAY_TOP } from '../../lib/layout';
 import { useSnippets } from '../../hooks/useSnippets';
 import {
@@ -105,6 +106,9 @@ export default function SnippetPalette({ hostId, hostName, onInsert, onClose }) 
     const [filling, setFilling] = useState(null);
     const [values, setValues] = useState({});
     const panelRef = useRef(null);
+
+    /** Fades in over the pane rather than appearing. See lib/enterMotion. */
+    useEnterOn(panelRef, 'fade');
     const inputRef = useRef(null);
 
     /**
@@ -234,7 +238,7 @@ export default function SnippetPalette({ hostId, hostName, onInsert, onClose }) 
             className="absolute right-3 z-30 w-[26rem] max-w-[calc(100%-1.5rem)] flex flex-col
                 rounded-xl bg-white/97 dark:bg-surface-raised/97 backdrop-blur
                 border border-gray-200 dark:border-surface-control shadow-xl
-                overflow-hidden animate-fade-in"
+                overflow-hidden"
             role="dialog"
             aria-label="Snippets"
             onKeyDown={handleKeyDown}

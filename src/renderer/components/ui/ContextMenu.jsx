@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useEnterOn } from '../../hooks/useEnter';
 
 /**
  * Right-click menu. Items are `{ label, icon, onClick, danger, disabled }`,
@@ -53,12 +54,15 @@ export default function ContextMenu({ x, y, items, onClose }) {
         };
     }, [onClose]);
 
+    // Comes down from where it was asked for. See lib/enterMotion.
+    useEnterOn(ref, 'menu');
+
     const visible = items.filter(Boolean);
 
     return createPortal(
         <div
             ref={ref}
-            className="fixed z-[300] min-w-[190px] p-1 rounded-xl bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control shadow-2xl context-menu"
+            className="fixed z-[300] min-w-[190px] p-1 rounded-xl bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control shadow-2xl"
             style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}
             onMouseDown={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}

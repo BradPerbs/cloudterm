@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown01Icon, Tick02Icon } from 'hugeicons-react';
+import { useEnterOn } from '../../hooks/useEnter';
 
 /** How tall the list may get before it starts scrolling. */
 const MAX_MENU_HEIGHT = 288;
@@ -55,6 +56,10 @@ export default function Select({
     const menuRef = useRef(null);
     const rowsRef = useRef([]);
     const typed = useRef({ term: '', at: 0 });
+
+    // The list is rendered on a condition rather than mounted, so the entrance
+    // is asked for each time it opens. See lib/enterMotion.
+    useEnterOn(menuRef, open && 'dialog');
 
     const selectedIndex = useMemo(
         () => options.findIndex(option => String(option.value) === String(value ?? '')),
@@ -308,7 +313,7 @@ export default function Select({
                         bg-white dark:bg-surface-raised
                         border border-gray-200 dark:border-surface-control
                         shadow-xl shadow-black/10 dark:shadow-black/40
-                        animate-dialog-in ${menuClassName}`}
+                        ${menuClassName}`}
                     style={{
                         left: position?.left ?? -9999,
                         top: position?.top,

@@ -18,6 +18,8 @@ import { IS_MAC } from '../lib/platform';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { useTabDrag } from '../hooks/useTabDrag';
 import { collapseTab, finishTabOpen, openTab, resizeTab, setTabSize, spinPlus } from '../lib/tabMotion';
+import { useEnterOn } from '../hooks/useEnter';
+import { playRipple } from '../lib/enterMotion';
 import ContextMenu from './ui/ContextMenu';
 import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
@@ -54,9 +56,8 @@ function useRippleEffect() {
 
             target.appendChild(ripple);
 
-            ripple.addEventListener('animationend', () => {
-                ripple.remove();
-            });
+            // Spreads and takes itself away again. See lib/enterMotion.
+            playRipple(ripple);
         };
 
         document.addEventListener('mousedown', createRipple);
@@ -68,6 +69,10 @@ function AppMenu() {
     const t = useT();
     const [open, setOpen] = useState(false);
     const menuRef = useRef(null);
+
+    // Rendered on a condition rather than mounted, so the entrance is asked
+    // for each time it opens. See lib/enterMotion.
+    useEnterOn(menuRef, open && 'fade');
     const btnRef = useRef(null);
 
     const close = useCallback(() => setOpen(false), []);
@@ -130,7 +135,7 @@ function AppMenu() {
             {open && createPortal(
                 <div
                     ref={menuRef}
-                    className="fixed w-52 p-1 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 shadow-xl z-[9999] animate-fade-in"
+                    className="fixed w-52 p-1 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 shadow-xl z-[9999]"
                     style={{ top: pos.top, left: pos.left }}
                 >
                     {menuItems.map((item, i) =>

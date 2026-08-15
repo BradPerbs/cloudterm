@@ -36,6 +36,13 @@ const EASE_REVEAL = cubicBezier(0.4, 0, 0.2, 1);
 const SIDEBAR_MS = 300;
 const ASSISTANT_MS = 180;
 
+/** The sheet, which is put in front of you and then gets out of the way. */
+const SHEET_IN_MS = 380;
+const SHEET_OUT_MS = 220;
+
+const EASE_SHEET_IN = cubicBezier(0.16, 1, 0.3, 1);
+const EASE_SHEET_OUT = cubicBezier(0.5, 0, 0.75, 0);
+
 /**
  * The sidebar, which collapses to nothing rather than to a rail.
  *
@@ -106,4 +113,41 @@ export function revealAssistant({ column, rail, card, width, open, onComplete })
     if (card) reveal.to(card, { opacity: open ? 1 : 0, ...move }, 0);
 
     return reveal;
+}
+
+/** The sheet where it starts: off the bottom, with nothing over the page yet. */
+export function setSheetAway(card, scrim) {
+    if (card) gsap.set(card, { yPercent: 100 });
+    if (scrim) gsap.set(scrim, { opacity: 0 });
+}
+
+/**
+ * A sheet rising over the page it came from, and dropping back off it.
+ *
+ * Entering and leaving are not the same motion. Arriving is the sheet being put
+ * in front of you: it covers most of the distance immediately and then settles,
+ * which is what a hard ease-out does. Leaving is the sheet getting out of the
+ * way, so it eases in, barely moving at first and then dropping away, and takes
+ * less time, because nobody wants to watch something they have already
+ * dismissed.
+ *
+ * The scrim travels on the same timeline, so the caller has one thing to wait
+ * on rather than a timer set to match whichever of two transitions is longer.
+ *
+ * `yPercent` rather than a pixel offset: the sheet is as tall as the region it
+ * covers, and a window resized mid-slide would otherwise leave it short.
+ */
+export function slideSheet({ card, scrim, open, onComplete }) {
+    const move = {
+        duration: seconds(open ? SHEET_IN_MS : SHEET_OUT_MS),
+        ease: open ? EASE_SHEET_IN : EASE_SHEET_OUT,
+        overwrite: 'auto',
+    };
+
+    const sheet = gsap.timeline({ onComplete });
+
+    sheet.to(card, { yPercent: open ? 0 : 100, ...move }, 0);
+    if (scrim) sheet.to(scrim, { opacity: open ? 1 : 0, ...move }, 0);
+
+    return sheet;
 }

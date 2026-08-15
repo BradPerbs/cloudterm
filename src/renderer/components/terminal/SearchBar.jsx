@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Search01Icon, ArrowUp01Icon, ArrowDown01Icon, Cancel01Icon } from 'hugeicons-react';
+import useEnter from '../../hooks/useEnter';
 import { PANE_OVERLAY_TOP } from '../../lib/layout';
 import Tooltip from '../ui/Tooltip';
 
@@ -64,6 +65,9 @@ const TOGGLES = [
 
 function SearchBar({ addon, background, onClose }) {
     const inputRef = useRef(null);
+
+    /** Fades in over the pane rather than appearing. See lib/enterMotion. */
+    const barRef = useEnter('fade');
     const [query, setQuery] = useState('');
     const [options, setOptions] = useState({
         caseSensitive: false,
@@ -175,12 +179,13 @@ function SearchBar({ addon, background, onClose }) {
 
     return (
         <div
+            ref={barRef}
             // Hangs off the pane header rather than the top of the pane, which
             // would put it over the view switcher.
             style={{ top: PANE_OVERLAY_TOP }}
             className="absolute right-3 z-30 flex items-center gap-1 pl-2.5 pr-1.5 py-1.5
                 rounded-xl bg-white/95 dark:bg-surface-raised/95 backdrop-blur
-                border border-gray-200 dark:border-surface-control shadow-lg animate-fade-in"
+                border border-gray-200 dark:border-surface-control shadow-lg"
             role="search"
         >
             <Search01Icon size={14} strokeWidth={2} className="shrink-0 text-gray-400" />

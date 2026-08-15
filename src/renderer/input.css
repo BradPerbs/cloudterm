@@ -145,23 +145,16 @@ input[type="color"]::-webkit-color-swatch {
     @apply bg-gray-400 dark:bg-neutral-600;
 }
 
-/* Ripple Animation */
+/* The circle that spreads from a press. Only what it looks like is here; the
+   spreading is `playRipple` in lib/enterMotion, which also takes it back off
+   the page at the end. */
 .ripple {
     @apply absolute rounded-full pointer-events-none z-10;
     background: rgba(0, 0, 0, 0.1);
-    transform: scale(0);
-    animation: ripple-animation 0.6s linear;
 }
 
 .dark .ripple {
     background: rgba(255, 255, 255, 0.1);
-}
-
-@keyframes ripple-animation {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
 }
 
 .app-drag {
@@ -170,38 +163,6 @@ input[type="color"]::-webkit-color-swatch {
 
 .app-no-drag {
     -webkit-app-region: no-drag;
-}
-
-/* Toast animations */
-@keyframes slide-in-right {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
-}
-
-/* Fade in animation for backdrop */
-@keyframes fade-in {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-.animate-fade-in {
-    animation: fade-in 0.2s ease-out;
 }
 
 /* Auth tab active state */
@@ -271,21 +232,6 @@ input[type="color"]::-webkit-color-swatch {
     animation: connect-sweep 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-@keyframes connect-fade-in {
-    from {
-        opacity: 0;
-        transform: translateY(6px);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-.connect-fade-in {
-    animation: connect-fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
 
 /* The session screen's other faces -----------------------------------------
    A pane with no session up shows one screen, and every surface on it is mixed
@@ -408,25 +354,6 @@ input[type="color"]::-webkit-color-swatch {
 .sftp-pathbar::-webkit-scrollbar {
     height: 0;
 }
-
-/* Right-click menu slide in. Used wherever ui/ContextMenu.jsx is opened, which
-   is the file browser and the tab strip. */
-@keyframes context-menu-in {
-    from {
-        opacity: 0;
-        transform: scale(0.95) translateY(-5px);
-    }
-
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.context-menu {
-    animation: context-menu-in 0.15s ease-out;
-}
-
 
 /* Checkbox tick. The stroke is drawn on rather than faded in, which reads as a
    deliberate confirmation instead of a flicker. Paired with ui/Checkbox.jsx:
@@ -1018,51 +945,8 @@ input[type="color"]::-webkit-color-swatch {
     }
 }
 
-/* Dialog entrance */
-@keyframes dialog-in {
-    from {
-        opacity: 0;
-        transform: scale(0.97) translateY(6px);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-.animate-dialog-in {
-    animation: dialog-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-
-/* Tooltips -----------------------------------------------------------------
-   These open the instant the pointer lands, so the entrance has to be short
-   enough not to become the delay it was meant to replace: long enough to read
-   as a movement, over before anyone waits on it. `--tip-x/--tip-y` are set per
-   side in ui/Tooltip.jsx, so the bubble comes out of its trigger rather than
-   drifting in from a fixed direction. */
-@keyframes tooltip-in {
-    from {
-        opacity: 0;
-        transform: translate(var(--tip-x, 0), var(--tip-y, 0)) scale(0.96);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-.tooltip-bubble {
-    animation: tooltip-in 0.12s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .tooltip-bubble {
-        animation-duration: 0.01ms;
-    }
-}
+/* The entrances that used to live here, for dialogs, menus, tooltips and the
+   rest, are `lib/enterMotion.js` now, asked for through the `useEnter` hook. */
 
 
 /* Split panes -------------------------------------------------------------
@@ -1331,13 +1215,15 @@ body.pane-resizing-y .xterm {
     will-change: transform;
 }
 
+/* The scale and the fade are GSAP's, from lib/cardMotion, so that putting a
+   card down runs the pick-up backwards from wherever it had reached. Only the
+   shadow is left here, because it is the one part of the lift with a colour
+   that has to answer to the theme. */
 .org-ghost {
     width: 100%;
     height: 100%;
     transform-origin: center;
-    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-                box-shadow 160ms ease-out,
-                opacity 160ms ease-out;
+    transition: box-shadow 160ms ease-out;
 }
 
 /* Added a frame after the clone lands, and removed again on drop, so putting a
@@ -1347,8 +1233,6 @@ body.pane-resizing-y .xterm {
    ring that says it would be filed there, and the drop target matters more than
    the thing being dropped. */
 .org-ghost-lifted {
-    transform: scale(1.03);
-    opacity: 0.88;
     box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.28), 0 4px 10px -4px rgba(0, 0, 0, 0.18);
 }
 
@@ -1437,35 +1321,12 @@ body.org-banding * {
     cursor: crosshair !important;
 }
 
-/* Rises into place, because it appears under the cursor rather than where the
-   pointer is looking, and something that simply exists on the next frame reads
-   as a repaint rather than an answer. */
-.org-selection-bar {
-    animation: selection-bar-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes selection-bar-in {
-    from {
-        opacity: 0;
-        transform: translate(-50%, 12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
 
     .org-ghost,
     .org-card-into {
         transition: none;
         transform: none;
-    }
-
-    .org-selection-bar {
-        animation: none;
     }
 }
 
