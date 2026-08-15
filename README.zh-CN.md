@@ -103,10 +103,13 @@ Windows 主机，或者任意服务商上的服务器。CloudTerm 由 VPS 云主
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/local-model.svg" alt="本地模型" title="本地模型" height="34">
   <br/>
   <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
-  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>本地模型</b></sub>
+  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Kimi Code</b>
+  &nbsp;·&nbsp; <b>本地模型</b></sub>
 </p>
 
 - **使用本机已有的 Claude Code、Codex、OpenCode 或 Grok Build**，沿用你自己的账号和配置

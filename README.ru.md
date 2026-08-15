@@ -112,10 +112,13 @@ CloudTerm собирает все способы подключения к се�
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/local-model.svg" alt="Локальная модель" title="Локальная модель" height="34">
   <br/>
   <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
-  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Локальная модель</b></sub>
+  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Kimi Code</b>
+  &nbsp;·&nbsp; <b>Локальная модель</b></sub>
 </p>
 
 - **Работает на уже установленных у вас Claude Code, Codex, OpenCode или Grok

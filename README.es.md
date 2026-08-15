@@ -113,10 +113,13 @@ para leerlo y modificarlo.
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="34">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/logos/local-model.svg" alt="Modelo local" title="Modelo local" height="34">
   <br/>
   <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
-  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Modelo local</b></sub>
+  &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Kimi Code</b>
+  &nbsp;·&nbsp; <b>Modelo local</b></sub>
 </p>
 
 - **Funciona con Claude Code, Codex, OpenCode o Grok Build que ya tienes** en tu

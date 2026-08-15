@@ -403,6 +403,7 @@ export default {
     'settings.assistant.provider.codex': '来自 OpenAI，用你自己的账号。',
     'settings.assistant.provider.opencode': '开源，用你配置的服务商。',
     'settings.assistant.provider.grok': '来自 xAI，用你自己的账号。',
+    'settings.assistant.provider.kimi': '来自月之暗面，用 Moonshot 密钥。',
     'settings.assistant.provider.local': '你自己的模型：LM Studio、Ollama、vLLM。',
     'settings.assistant.provider.unavailable': '此版本尚未提供。',
     'settings.assistant.endpoint': '服务器地址',
@@ -465,6 +466,9 @@ export default {
         + '请用“opencode auth login”管理它们；保存在 CloudBlast 中的密钥不会传给 OpenCode。',
     'settings.assistant.accountGrokApi': '本机没有安装 Grok Build，因此 CloudTerm 直接用这里保存的密钥调用 xAI API，'
         + '按 token 计费。安装 CLI 并登录后即可改用你自己的套餐。',
+    'settings.assistant.accountKimi': '无论本机是否安装了 CLI，Kimi Code 都使用这里保存的密钥，'
+        + '按 token 计费。CloudBlast 会用它自己的一份配置来驱动 CLI，'
+        + '因此本机上的 Kimi Code 登录不会被读取，也不会被改动。',
     'settings.assistant.accountLocal': '没有需要登录的账户。模型就跑在这台电脑上，'
         + '因此既没有账户，也不按 token 计费。只有你自己在服务器上设置了密钥时才需要填。',
     'settings.assistant.accountPlan': '已在本机通过 {agent} 登录，使用的是 {plan} 套餐。'

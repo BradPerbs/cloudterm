@@ -439,6 +439,7 @@ export default {
     'settings.assistant.provider.codex': 'O agente da OpenAI, na sua conta.',
     'settings.assistant.provider.opencode': 'Código aberto, nos fornecedores que definir.',
     'settings.assistant.provider.grok': 'O agente da xAI, na sua conta.',
+    'settings.assistant.provider.kimi': 'O agente da Moonshot, com uma chave Moonshot.',
     'settings.assistant.provider.local': 'O seu modelo: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Ainda não disponível nesta versão.',
     'settings.assistant.endpoint': 'Endereço do servidor',
@@ -516,6 +517,9 @@ export default {
     'settings.assistant.accountGrokApi': 'O Grok Build não está instalado nesta máquina, por isso o '
         + 'CloudTerm fala diretamente com a API da xAI usando a chave guardada aqui, e o uso é '
         + 'cobrado por token. Instale a CLI e inicie sessão para usar o seu próprio plano.',
+    'settings.assistant.accountKimi': 'O Kimi Code usa sempre a chave guardada aqui, esteja a CLI '
+        + 'instalada ou não, e o uso é cobrado por token. O CloudBlast executa a CLI com uma '
+        + 'configuração própria, por isso a sessão do Kimi Code nesta máquina não é lida nem tocada.',
     'settings.assistant.accountLocal': 'Não há sessão para iniciar. O modelo corre neste '
         + 'computador, por isso não há conta nem cobrança por token. Só precisa de uma chave se foi '
         + 'você a pôr uma no servidor.',

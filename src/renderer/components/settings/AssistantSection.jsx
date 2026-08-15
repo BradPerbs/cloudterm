@@ -44,6 +44,7 @@ const KEY_HINTS = {
     'claude-code': 'sk-ant-...',
     codex: 'sk-proj-...',
     grok: 'xai-...',
+    kimi: 'sk-...',
 };
 
 /** What the key box says when it is empty. */
@@ -76,6 +77,10 @@ function describeAccount(t, account, hasApiKey, provider) {
     if (provider === 'grok' && account?.apiProvider === 'xAI API') {
         return t('settings.assistant.accountGrokApi');
     }
+    // Kimi Code always runs on the key stored here, whether the CLI is driving
+    // or the API is, so the page says so instead of offering the login line
+    // that is true of the others and never of this one.
+    if (provider === 'kimi') return t('settings.assistant.accountKimi');
     if (account?.subscriptionType) {
         return t('settings.assistant.accountPlan', { agent, plan: account.subscriptionType });
     }

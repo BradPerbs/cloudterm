@@ -425,6 +425,7 @@ export default {
     'settings.assistant.provider.codex': 'Tác nhân của OpenAI, bằng tài khoản của bạn.',
     'settings.assistant.provider.opencode': 'Mã nguồn mở, với nhà cung cấp bạn cấu hình.',
     'settings.assistant.provider.grok': 'Tác nhân của xAI, bằng tài khoản của bạn.',
+    'settings.assistant.provider.kimi': 'Tác nhân của Moonshot, bằng khoá Moonshot.',
     'settings.assistant.provider.local': 'Mô hình của bạn: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Bản dựng này chưa có.',
     'settings.assistant.endpoint': 'Địa chỉ máy chủ',
@@ -501,6 +502,9 @@ export default {
     'settings.assistant.accountGrokApi': 'Máy này chưa cài Grok Build, nên CloudTerm nói chuyện '
         + 'thẳng với API của xAI bằng khoá lưu ở đây, và chi phí tính theo token. Hãy cài CLI và '
         + 'đăng nhập để dùng gói của chính bạn.',
+    'settings.assistant.accountKimi': 'Kimi Code luôn chạy bằng khoá lưu ở đây, dù CLI có được cài '
+        + 'hay không, và chi phí tính theo token. CloudBlast chạy CLI với một cấu hình riêng của '
+        + 'nó, nên phiên đăng nhập Kimi Code trên máy này không được đọc tới và giữ nguyên.',
     'settings.assistant.accountLocal': 'Không có gì để đăng nhập. Mô hình chạy trên chính máy '
         + 'tính này, nên không có tài khoản và không tính tiền theo token. Chỉ cần khoá nếu chính '
         + 'bạn đã đặt một khoá trên máy chủ.',

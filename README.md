@@ -109,17 +109,19 @@ machine at all.
 
 <table align="center">
   <tr>
-    <td align="center" width="150"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="32"></td>
-    <td align="center" width="150"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="32"></td>
-    <td align="center" width="150"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="32"></td>
-    <td align="center" width="150"><img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="32"></td>
-    <td align="center" width="150"><img src="docs/logos/local-model.svg" alt="Local model" title="Local model" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="32"></td>
+    <td align="center" width="128"><img src="docs/logos/local-model.svg" alt="Local model" title="Local model" height="32"></td>
   </tr>
   <tr>
     <td align="center"><b>Claude Code</b></td>
     <td align="center"><b>Codex</b></td>
     <td align="center"><b>OpenCode</b></td>
     <td align="center"><b>Grok Build</b></td>
+    <td align="center"><b>Kimi Code</b></td>
     <td align="center"><b>Local model</b></td>
   </tr>
   <tr>
@@ -127,6 +129,7 @@ machine at all.
     <td align="center"><sub>OpenAI models</sub></td>
     <td align="center"><sub>Any provider you have set up</sub></td>
     <td align="center"><sub>xAI models</sub></td>
+    <td align="center"><sub>Moonshot models</sub></td>
     <td align="center"><sub>Whatever you have loaded</sub></td>
   </tr>
   <tr>
@@ -134,6 +137,7 @@ machine at all.
     <td align="center"><sub>Sign in with the Codex app or CLI</sub></td>
     <td align="center"><sub>Sign in with <code>opencode auth login</code></sub></td>
     <td align="center"><sub>Sign in with <code>grok</code>, or paste an xAI key</sub></td>
+    <td align="center"><sub>Paste a Moonshot key</sub></td>
     <td align="center"><sub>No account, no key, no internet</sub></td>
   </tr>
 </table>

@@ -13,12 +13,14 @@ const fs = require('fs');
  * The secrets here are API keys for the providers that accept one directly,
  * one per provider. OpenCode keeps credentials in its own provider store;
  * Claude Code, Codex and Grok can use either a key stored here or the login
- * already on the machine; a local server usually wants no key at all.
+ * already on the machine; Kimi Code needs one either way, since it is driven
+ * against a configuration of ours rather than the user's own; a local server
+ * usually wants no key at all.
  */
 
 const CONFIG_VERSION = 2;
 
-const PROVIDERS = new Set(['claude-code', 'codex', 'opencode', 'grok', 'local']);
+const PROVIDERS = new Set(['claude-code', 'codex', 'opencode', 'grok', 'kimi', 'local']);
 
 /**
  * Every level any agent here offers, low to high. The union, not one agent's

@@ -6,7 +6,7 @@
     "scripts": {
         "postinstall": "patch-package",
         "start": "electron .",
-        "test": "node test/snippets.test.js && node test/host-tags.test.js && node test/backup.test.js && node test/activity.test.js && node test/vnc.test.js && node test/rdp.test.js && node test/telnet.test.js && node test/serial.test.js && node test/session-log.test.js && node test/server-sync.test.js && node test/os-detect.test.js && node test/cloud-snapshot.test.js && node test/jump-host.test.js && node test/transcript.test.js && node test/assistant-approval.test.js && node test/assistant-terminal.test.js && node test/opencode-provider.test.js && node test/codex-provider.test.js && node test/claude-provider.test.js && node test/grok-provider.test.js && node test/local-provider.test.js && node test/updates.test.js",
+        "test": "node test/snippets.test.js && node test/host-tags.test.js && node test/backup.test.js && node test/activity.test.js && node test/vnc.test.js && node test/rdp.test.js && node test/telnet.test.js && node test/serial.test.js && node test/session-log.test.js && node test/server-sync.test.js && node test/os-detect.test.js && node test/cloud-snapshot.test.js && node test/jump-host.test.js && node test/transcript.test.js && node test/assistant-approval.test.js && node test/assistant-terminal.test.js && node test/opencode-provider.test.js && node test/codex-provider.test.js && node test/claude-provider.test.js && node test/grok-provider.test.js && node test/kimi-provider.test.js && node test/local-provider.test.js && node test/updates.test.js",
         "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
         "dev:vite": "vite",
         "dev:electron": "wait-on tcp:5173 && electron .",

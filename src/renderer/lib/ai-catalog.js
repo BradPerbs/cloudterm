@@ -49,6 +49,7 @@ export const PROVIDER_NAMES = {
     codex: 'Codex',
     opencode: 'OpenCode',
     grok: 'Grok Build',
+    kimi: 'Kimi Code',
     local: 'Local model',
 };
 

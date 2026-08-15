@@ -29,6 +29,7 @@ const PROVIDERS = {
     codex: require('./providers/codex'),
     opencode: require('./providers/opencode'),
     grok: require('./providers/grok'),
+    kimi: require('./providers/kimi'),
     local: require('./providers/local'),
 };
 
