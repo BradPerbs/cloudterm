@@ -104,17 +104,17 @@ CloudTerm собирает все способы подключения к се�
 ### ИИ-агент
 
 <p align="center">
-  <img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/claude-code-dark.svg"><img src="docs/logos/claude-code.svg" alt="Claude Code" title="Claude Code" height="34"></picture>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/codex-dark.svg"><img src="docs/logos/codex.svg" alt="Codex" title="Codex" height="34"></picture>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/opencode-dark.svg"><img src="docs/logos/opencode.svg" alt="OpenCode" title="OpenCode" height="34"></picture>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/grok-dark.svg"><img src="docs/logos/grok.svg" alt="Grok Build" title="Grok Build" height="34"></picture>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/kimi-dark.svg"><img src="docs/logos/kimi.svg" alt="Kimi Code" title="Kimi Code" height="34"></picture>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/logos/local-model.svg" alt="Локальная модель" title="Локальная модель" height="34">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/local-model-dark.svg"><img src="docs/logos/local-model.svg" alt="Локальная модель" title="Локальная модель" height="34"></picture>
   <br/>
   <sub><b>Claude Code</b> &nbsp;·&nbsp; <b>Codex</b> &nbsp;·&nbsp; <b>OpenCode</b>
   &nbsp;·&nbsp; <b>Grok Build</b> &nbsp;·&nbsp; <b>Kimi Code</b>
@@ -220,7 +220,7 @@ CloudTerm собирает все способы подключения к се�
   <img src="src/renderer/assets/icons/128_slackware.png" alt="Slackware" title="Slackware" width="42">
   <img src="src/renderer/assets/icons/128_linux.png" alt="Linux" title="Any other Linux" width="42">
   <img src="src/renderer/assets/icons/128_windows.png" alt="Windows" title="Windows" width="42">
-  <img src="docs/logos/macos.svg" alt="macOS" title="macOS" width="42">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/logos/macos-dark.svg"><img src="docs/logos/macos.svg" alt="macOS" title="macOS" width="42"></picture>
 </p>
 
 ### Безопасность
