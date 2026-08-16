@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { LockPasswordIcon } from 'hugeicons-react';
 import SettingCard from './ui/SettingCard';
+import { useStacked } from './ui/stacked';
 import Checkbox from '../ui/Checkbox';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { toastOptions } from '../../lib/toast';
@@ -155,6 +156,7 @@ function LockForm({ mode, onCancel, onDone }) {
  */
 export default function AppLockSection() {
     const t = useT();
+    const stacked = useStacked();
     const [enabled, setEnabled] = useState(null);
     const [mode, setMode] = useState(null); // 'set' | 'change' | 'disable'
     const [confirmLock, setConfirmLock] = useState(false);
@@ -178,7 +180,13 @@ export default function AppLockSection() {
     return (
         <>
             <SettingCard>
-                <div className="flex items-start justify-between gap-4">
+                {/* Stacks with the rest of the page. Three buttons pinned to the
+                    right of a card the assistant has halved leave the warning
+                    beside them a word wide. */}
+                <div className={stacked
+                    ? 'flex flex-col gap-3'
+                    : 'flex items-start justify-between gap-4'}
+                >
                     <div className="min-w-0">
                         <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <LockPasswordIcon size={18} strokeWidth={2} className="text-gray-400" />

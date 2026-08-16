@@ -152,6 +152,13 @@ const PROVIDERS = [
 // Three across, wrapping. One long row is how the names start breaking in
 // half, and these are read by their marks and their names rather than by
 // sitting on one line.
+//
+// The count comes from the width the grid has rather than being written down as
+// three, for the reason CARD_GRID works that way: with the assistant open the
+// card these sit in can be half the width it usually is, and a fixed three
+// columns there is three cards too narrow to hold a provider's name. Thirteen
+// rem is the floor that still gives three across at the card's full width.
+const GRID = 'grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))]';
 const CARD = `relative min-w-0 p-3 rounded-xl border text-left transition-colors outline-none
     focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25`;
 
@@ -159,7 +166,7 @@ export default function ProviderPicker({ value, available = [], onChange }) {
     const t = useT();
 
     return (
-        <div className="grid grid-cols-3 gap-2">
+        <div className={GRID}>
             {PROVIDERS.map((provider) => {
                 const Mark = provider.mark;
                 const ready = available.includes(provider.value);

@@ -7,6 +7,7 @@ import {
     Alert02Icon,
 } from 'hugeicons-react';
 import SettingCard from './ui/SettingCard';
+import { useStacked } from './ui/stacked';
 import Checkbox from '../ui/Checkbox';
 import { toastOptions } from '../../lib/toast';
 import { formatDateTime } from '../../lib/format';
@@ -60,6 +61,7 @@ function CardHeader({ icon, title, children }) {
 
 function ExportCard() {
     const t = useT();
+    const stacked = useStacked();
     const [open, setOpen] = useState(false);
     const [passphrase, setPassphrase] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -120,7 +122,10 @@ function ExportCard() {
 
     return (
         <SettingCard>
-            <div className="flex items-start justify-between gap-4">
+            {/* Stacks with the rest of the page: a button held to the right of
+                a card the assistant has halved leaves the note beside it a word
+                wide. */}
+            <div className={stacked ? 'flex flex-col gap-3' : 'flex items-start justify-between gap-4'}>
                 <CardHeader
                     icon={<Download04Icon size={18} strokeWidth={2} className="text-gray-400" />}
                     title={t('settings.backup.exportTitle')}
@@ -261,6 +266,7 @@ function RestoreSummary({ report, overwrite }) {
 
 function RestoreCard({ onRestored }) {
     const t = useT();
+    const stacked = useStacked();
     const [filePath, setFilePath] = useState('');
     const [passphrase, setPassphrase] = useState('');
     const [report, setReport] = useState(null);
@@ -370,7 +376,8 @@ function RestoreCard({ onRestored }) {
 
     return (
         <SettingCard>
-            <div className="flex items-start justify-between gap-4">
+            {/* Stacks with the rest of the page, as the export card does. */}
+            <div className={stacked ? 'flex flex-col gap-3' : 'flex items-start justify-between gap-4'}>
                 <CardHeader
                     icon={<Upload04Icon size={18} strokeWidth={2} className="text-gray-400" />}
                     title={t('settings.backup.restoreTitle')}

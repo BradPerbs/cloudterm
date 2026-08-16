@@ -522,7 +522,10 @@ export default function AssistantSection() {
                         readOnly: readOnlyTools,
                     })}
                 >
-                    <ul className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    {/* Two across at the card's full width, one once it has
+                        less: these names truncate, and half of a narrow card is
+                        where they start truncating to nothing. */}
+                    <ul className="grid gap-x-6 gap-y-2 grid-cols-[repeat(auto-fill,minmax(min(15rem,100%),1fr))]">
                         {tools.map(tool => (
                             <li key={tool.name} className="flex items-center gap-2 min-w-0">
                                 <span

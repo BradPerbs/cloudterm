@@ -6,7 +6,7 @@ import {
     PackageAddIcon,
     PlusSignIcon,
 } from 'hugeicons-react';
-import Button, { IconButton } from '../ui/Button';
+import { IconButton, CollapsingButton } from '../ui/Button';
 import MenuButton from '../ui/MenuButton';
 import SegmentedControl from '../ui/SegmentedControl';
 import SearchField from '../ui/SearchField';
@@ -34,6 +34,11 @@ const KINDS = ['all', 'command', 'package'];
  * The kind filter is a menu rather than a segmented control for the reason sort
  * is on Hosts: at the 900px minimum window there is not room for a third
  * segmented control beside the search field and the layout switch.
+ *
+ * `compact` is the page saying it is short of width, and the row answers it the
+ * way Hosts does: the primary button's label goes first, since everything else
+ * here keeps the size it asks for, and the row wraps rather than overflowing if
+ * even that leaves it short.
  */
 const SnippetsToolbar = forwardRef(function SnippetsToolbar({
     query,
@@ -46,11 +51,12 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
     onViewChange,
     onNewPackage,
     onNewSnippet,
+    compact = false,
 }, searchRef) {
     const t = useT();
 
     return (
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
             <SearchField
                 ref={searchRef}
                 value={query}
@@ -60,8 +66,10 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
             />
 
             {/* Grouped so the row's flexing is all spent on the search field:
-                these keep the size they ask for. */}
-            <div className="flex items-center gap-2 shrink-0">
+                these keep the size they ask for. `ml-auto` only does anything
+                once the row has wrapped, where it holds them to the right edge
+                rather than letting them sit under the start of the field. */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
                 <MenuButton
                     icon={<FilterIcon size={16} strokeWidth={2} />}
                     title={t('snippets.showing', { kind: t(`snippets.kind.${kind}`) })}
@@ -89,13 +97,12 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
                     title={t('snippets.newPackage')}
                     icon={<PackageAddIcon size={18} strokeWidth={1.75} />}
                 />
-                <Button
-                    variant="primary"
+                <CollapsingButton
+                    compact={compact}
                     onClick={onNewSnippet}
+                    label={t('snippets.newSnippet')}
                     icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
-                >
-                    {t('snippets.newSnippet')}
-                </Button>
+                />
             </div>
         </div>
     );

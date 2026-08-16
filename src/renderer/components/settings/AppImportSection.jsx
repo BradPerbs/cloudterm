@@ -256,7 +256,11 @@ export default function AppImportSection({ onImported }) {
             </div>
 
             <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-3 gap-2">
+                {/* Three across at the card's full width, fewer once it has
+                    less: a logo, an app's name, a session count and an Import
+                    button do not go in a third of a card that the assistant has
+                    already halved. Same idiom as CARD_GRID. */}
+                <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))]">
                     {SOURCES.map(source => (
                         <SourceCard
                             key={source.id}

@@ -24,9 +24,10 @@ import {
 } from 'hugeicons-react';
 import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
-import Button, { IconButton } from './ui/Button';
+import Button, { CollapsingButton, IconButton } from './ui/Button';
 import { FIELD_CLASS } from './ui/Field';
 import { useActivity } from '../hooks/useActivity';
+import useNarrow from '../hooks/useNarrow';
 import { useT } from '../i18n';
 import {
     CATEGORY_LABELS,
@@ -52,6 +53,17 @@ import { toastOptions } from '../lib/toast';
  * in this client, so that is the honest answer, and it is the one that matters
  * when a machine is shared or a backup was restored somewhere else.
  */
+
+/**
+ * Where the Clear button drops its label and keeps its bin.
+ *
+ * Measured on the page rather than the window, since the assistant opens as a
+ * column beside it and takes 340px or more off it. This header carries a title
+ * as well as its controls, so it runs out sooner than it looks: the filter
+ * field, two icon buttons and a labelled Clear come to about 360px on their
+ * own, and the title needs the rest.
+ */
+const COMPACT_AT = 520;
 
 const FILTERS = [
     { id: '', labelKey: 'logs.filterAll' },
@@ -243,6 +255,9 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
     const [search, setSearch] = useState('');
     const [confirming, setConfirming] = useState(null);
 
+    // How much room the page has, which is not how big the window is.
+    const [panelRef, cramped] = useNarrow(COMPACT_AT);
+
     const { entries, summary, loading, exhausted, refresh, loadMore, clear, exportLog } =
         useActivity({ category, failuresOnly, search });
 
@@ -284,12 +299,23 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
     const countFor = (id) => (id ? counts[id] : counts.all);
 
     return (
-        <div className="flex flex-col gap-6 h-full" id="logs-panel">
-            <div className="flex items-center justify-between gap-4">
+        <div ref={panelRef} className="flex flex-col gap-6 h-full" id="logs-panel">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('nav.logs')}</h2>
 
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className="relative">
+                {/* `ml-auto` only does anything once the row has wrapped, where
+                    it holds these to the right edge rather than letting them
+                    sit under the title. `min-w-0` rather than `shrink-0` so the
+                    filter field inside can give width back: the buttons carry
+                    their own `shrink-0`, so it is the only thing that does. */}
+                <div className="flex items-center gap-2 min-w-0 ml-auto">
+                    {/* The width lives on the wrapper, the way SearchField's
+                        does: FIELD_CLASS carries `w-full`, which Tailwind emits
+                        after the fixed widths and wins over anything set on the
+                        input itself. A ceiling and a floor rather than one
+                        width, so the field gives a little back before the row
+                        has to wrap. */}
+                    <div className="relative flex-1 min-w-[7rem] max-w-[11rem]">
                         <Search01Icon
                             size={15}
                             strokeWidth={2}
@@ -301,7 +327,7 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                             placeholder={t('common.filter')}
                             spellCheck={false}
                             aria-label={t('logs.filterAria')}
-                            className={`${FIELD_CLASS} w-44 h-9 pl-9 pr-3 rounded-xl`}
+                            className={`${FIELD_CLASS} h-9 pl-9 pr-3 rounded-xl`}
                         />
                     </div>
 
@@ -315,14 +341,15 @@ function LogsPanel({ isActive = true, reachedForPage = 0 }) {
                         title={t('logs.export')}
                         onClick={handleExport}
                     />
-                    <Button
+                    <CollapsingButton
+                        compact={cramped}
                         variant="dangerOutline"
                         icon={<Delete02Icon size={15} strokeWidth={2} />}
+                        label={t('common.clear')}
                         onClick={handleClear}
                         disabled={!counts.all}
-                    >
-                        {t('common.clear')}
-                    </Button>
+                        className="shrink-0"
+                    />
                 </div>
             </div>
 

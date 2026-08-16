@@ -15,13 +15,18 @@ import { useT } from '../../i18n';
  * The account folder keeps its mark here as well as on its card, because
  * standing inside it is exactly where the card is no longer on screen to say
  * so.
+ *
+ * It gives width back rather than holding its own: a deep path beside the drag
+ * hint, in a panel the assistant has taken 340px off, adds up to more than the
+ * row has. The crumbs truncate, which loses the middle of a folder's name, and
+ * that is a better answer than a path running off the side of the page.
  */
 function HostsBreadcrumb({ path, dropTargetId, onNavigate }) {
     const t = useT();
     const parentId = path.length > 1 ? path[path.length - 2].id : null;
 
     return (
-        <div className="flex items-center gap-1.5 shrink-0" id="breadcrumb">
+        <div className="flex items-center gap-1.5 min-w-0" id="breadcrumb">
             {parentId !== null && (
                 <IconButton
                     size="sm"

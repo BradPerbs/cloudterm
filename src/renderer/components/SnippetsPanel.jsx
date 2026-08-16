@@ -17,6 +17,17 @@ import { toastOptions } from '../lib/toast';
 import { useT } from '../i18n';
 import { CARD_GRID } from '../lib/layout';
 import { useFlipOrder } from '../hooks/useFlipOrder';
+import useNarrow from '../hooks/useNarrow';
+
+/**
+ * Where this page runs out of room: the "New snippet" button drops its label
+ * and keeps its plus, and the shortcut hint under the toolbar goes.
+ *
+ * Measured on the page rather than the window, since the assistant opens as a
+ * column beside it and takes 340px or more off it. The same number as Hosts,
+ * which carries the same four controls beside its search field.
+ */
+const COMPACT_AT = 560;
 
 /**
  * The snippet library.
@@ -138,6 +149,9 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
     const orderKey = useMemo(() => visible.map(entry => entry.snippet.id).join(), [visible]);
     useFlipOrder(gridRef, orderKey, { resetKey: view });
 
+    // How much room the page has, which is not how big the window is.
+    const [panelRef, cramped] = useNarrow(COMPACT_AT);
+
     /* ------------------------------------------------------------------ *
      * Actions
      * ------------------------------------------------------------------ */
@@ -226,9 +240,10 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
     const clearFilters = () => { setQuery(''); setKind('all'); setTag(''); };
 
     return (
-        <div className="flex flex-col gap-4 h-full min-h-0" id="snippets-panel">
+        <div ref={panelRef} className="flex flex-col gap-4 h-full min-h-0" id="snippets-panel">
             <SnippetsToolbar
                 ref={searchRef}
+                compact={cramped}
                 query={query}
                 onQueryChange={setQuery}
                 onQueryKeyDown={handleSearchKeyDown}
@@ -284,9 +299,15 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                 ) : <span />}
 
                 {/* Said once, quietly, where the thing it describes is. A feature
-                    nobody discovers is the same as one that is not there. */}
-                {snippets.length > 0 && (
-                    <p className="hidden md:block text-[11px] text-gray-400 dark:text-neutral-500 shrink-0">
+                    nobody discovers is the same as one that is not there.
+
+                    Gone at the same width the toolbar compacts at: this line is
+                    shorter than the one Hosts carries, so it survives to about
+                    the point the header itself runs out of room. It used to go
+                    on the window's width, which never hid it at all, the
+                    window having a 900px floor. */}
+                {snippets.length > 0 && !cramped && (
+                    <p className="text-[11px] text-gray-400 dark:text-neutral-500 shrink-0">
                         Press{' '}
                         <kbd className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-surface-control font-mono text-[10px] text-gray-600 dark:text-gray-300">
                             Ctrl+Shift+K

@@ -35,6 +35,7 @@ import { hostKind, protocolLabel } from '../lib/protocols';
 import { hostHasTags, tagCounts, toggleTag } from '../lib/tags';
 import { useCardDrag } from '../hooks/useCardDrag';
 import { useFlipOrder } from '../hooks/useFlipOrder';
+import useNarrow from '../hooks/useNarrow';
 import useMonitor from '../hooks/useMonitor';
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection';
 import { CARD_GRID } from '../lib/layout';
@@ -66,6 +67,22 @@ const readPreference = (key, allowed, fallback) => {
 
 /** Shared, so clearing an already-empty selection is not a state change. */
 const NOTHING_SELECTED = new Set();
+
+/**
+ * The two widths this page changes shape at, measured on the page itself rather
+ * than on the window: the assistant opens as a column beside it and takes 340px
+ * or more, so how much room there is here has little to do with how big the
+ * display is.
+ *
+ * Under 720 the drag hint goes. It is a whole sentence sharing a line with the
+ * breadcrumb, and it is the one thing in the header nobody came for.
+ *
+ * Under 560 the "New host" button keeps its icon and drops its label. That is
+ * about where the toolbar's fixed controls plus a usable search field stop
+ * fitting on one line, and the label is the only width in the row that anything
+ * else can have.
+ */
+const NARROW = [720, 560];
 
 /** The size the icons in a card's menu are drawn at, wherever it is shown. */
 const ICON = 15;
@@ -165,6 +182,9 @@ function HostsPanel({
     const scrollRef = useRef(null);
     const gridRef = useRef(null);
     const bandRef = useRef(null);
+
+    // How much room the page has, which is not how big the window is: see NARROW.
+    const [panelRef, [tight, cramped]] = useNarrow(NARROW);
 
     // Read by the pointer loops and by handlers that run long after the render
     // they were made in, neither of which can wait for a closure to catch up.
@@ -1053,9 +1073,10 @@ function HostsPanel({
     const movingParts = moving ? splitCardKeys(moving) : null;
 
     return (
-        <div className="relative flex flex-col gap-4 h-full min-h-0" id="hosts-panel">
+        <div ref={panelRef} className="relative flex flex-col gap-4 h-full min-h-0" id="hosts-panel">
             <HostsToolbar
                 ref={searchRef}
+                compact={cramped}
                 query={query}
                 onQueryChange={setQuery}
                 onQueryKeyDown={handleSearchKeyDown}
@@ -1121,9 +1142,14 @@ function HostsPanel({
                 {/* Said once, quietly, where the thing it describes is. A feature
                     nobody discovers is the same as one that is not there, which
                     goes double for a box you have to drag across empty space to
-                    find out exists. */}
-                {!empty && selectionCount === 0 && (
-                    <p className="hidden lg:block text-[11px] text-gray-400 dark:text-gray-500 shrink-0 text-right">
+                    find out exists.
+
+                    Gone once the page is short of width. It used to go on the
+                    window's width, which is the wrong number here: with the
+                    assistant open this line and the breadcrumb were sharing
+                    about 400px on a display that a media query calls large. */}
+                {!empty && selectionCount === 0 && !tight && (
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 shrink-0 text-right">
                         {filtering
                             ? t('hosts.dragHintFiltered')
                             : t('hosts.dragHint')}

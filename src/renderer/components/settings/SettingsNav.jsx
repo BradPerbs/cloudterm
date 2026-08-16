@@ -11,6 +11,7 @@ import {
     PulseRectangle01Icon,
 } from 'hugeicons-react';
 import AgentMark from '../assistant/AgentMark';
+import Tooltip from '../ui/Tooltip';
 import { useT } from '../../i18n';
 
 /**
@@ -44,7 +45,19 @@ export const SETTINGS_CATEGORIES = [
     { id: 'about', icon: InformationCircleIcon },
 ];
 
-function SettingsNav({ active, onChange }) {
+/**
+ * The category list, or the same list as a rail of icons.
+ *
+ * `collapsed` is the panel saying the page is short of width. 160px of names
+ * beside a card whose rows have stopped fitting is the easiest 124px on the
+ * screen to give back: the icons are the part people navigate by once they know
+ * the list, and the names come back as tooltips for the times they do not.
+ *
+ * The names are tooltips rather than nothing, and the buttons keep their
+ * `aria-current` and their place in the arrow-key walk, so the only thing that
+ * changes is how much of it is drawn.
+ */
+function SettingsNav({ active, onChange, collapsed = false }) {
     const listRef = useRef(null);
     const t = useT();
 
@@ -72,30 +85,39 @@ function SettingsNav({ active, onChange }) {
             ref={listRef}
             aria-label={t('settings.nav.aria')}
             onKeyDown={handleKeyDown}
-            className="sticky top-0 shrink-0 w-40 flex flex-col gap-0.5"
+            className={`sticky top-0 shrink-0 flex flex-col gap-0.5 ${collapsed ? 'w-9' : 'w-40'}`}
         >
             {SETTINGS_CATEGORIES.map(({ id, icon: Icon }) => {
                 const isActive = id === active;
+                const label = t(`settings.nav.${id}`);
 
-                return (
+                const button = (
                     <button
                         key={id}
                         type="button"
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={collapsed ? label : undefined}
                         tabIndex={isActive ? 0 : -1}
                         onClick={() => onChange(id)}
-                        className={`flex items-center gap-2.5 px-3 h-9 rounded-xl text-left outline-none
+                        className={`flex items-center h-9 rounded-xl text-left outline-none
                             text-sm transition-colors
                             focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
+                            ${collapsed ? 'w-9 justify-center' : 'gap-2.5 px-3'}
                             ${isActive
                                 ? 'bg-gray-900/[0.08] dark:bg-surface-control text-gray-900 dark:text-white font-semibold'
                                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-900/[0.04] dark:hover:bg-surface-raised'
                             }`}
                     >
                         <Icon size={17} strokeWidth={isActive ? 2 : 1.5} className="shrink-0" />
-                        {t(`settings.nav.${id}`)}
+                        {!collapsed && label}
                     </button>
                 );
+
+                // To the side rather than below: a rail is a column of ten of
+                // these, and a bubble under one covers the next.
+                return collapsed
+                    ? <Tooltip key={id} label={label} placement="right">{button}</Tooltip>
+                    : button;
             })}
         </nav>
     );

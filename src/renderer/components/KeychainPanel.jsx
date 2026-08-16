@@ -4,13 +4,24 @@ import toast from 'react-hot-toast';
 import { toastOptions } from '../lib/toast';
 import KeyModal from './KeyModal';
 import KeyCard from './KeyCard';
-import Button, { IconButton } from './ui/Button';
+import { IconButton, CollapsingButton } from './ui/Button';
 import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
 import SearchField from './ui/SearchField';
 import { CARD_GRID } from '../lib/layout';
 import { useT } from '../i18n';
 import { useFlipOrder } from '../hooks/useFlipOrder';
+import useNarrow from '../hooks/useNarrow';
+
+/**
+ * Where the "New key" button drops its label and keeps its plus.
+ *
+ * Measured on the page rather than the window, since the assistant opens as a
+ * column beside it and takes 340px or more off it. Lower than the Hosts number
+ * because this header carries less: two icon buttons rather than a sort menu, a
+ * layout switch and a folder button.
+ */
+const COMPACT_AT = 420;
 
 /**
  * The keychain.
@@ -53,6 +64,9 @@ function KeychainPanel({
     const [enrolling, setEnrolling] = useState(false);
 
     const searchRef = useRef(null);
+
+    // How much room the page has, which is not how big the window is.
+    const [panelRef, cramped] = useNarrow(COMPACT_AT);
 
     useEffect(() => {
         onLoadKeys();
@@ -289,8 +303,8 @@ function KeychainPanel({
      * ------------------------------------------------------------------ */
 
     return (
-        <div className="flex flex-col gap-4 h-full min-h-0" id="keychain-panel">
-            <div className="flex items-center gap-2 shrink-0">
+        <div ref={panelRef} className="flex flex-col gap-4 h-full min-h-0" id="keychain-panel">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <SearchField
                     ref={searchRef}
                     value={query}
@@ -299,7 +313,10 @@ function KeychainPanel({
                     ariaLabel={t('keychain.search')}
                 />
 
-                <div className="flex items-center gap-2 shrink-0">
+                {/* `ml-auto` only does anything once the row has wrapped, where
+                    it holds these to the right edge rather than letting them
+                    sit under the start of the field. */}
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
                     <IconButton
                         onClick={() => handleNewKey('import')}
                         title={t('keychain.import')}
@@ -318,13 +335,12 @@ function KeychainPanel({
                             icon={<FingerPrintIcon size={18} strokeWidth={1.75} />}
                         />
                     )}
-                    <Button
-                        variant="primary"
+                    <CollapsingButton
+                        compact={cramped}
                         onClick={() => handleNewKey('generate')}
+                        label={t('keychain.newKey')}
                         icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
-                    >
-                        {t('keychain.newKey')}
-                    </Button>
+                    />
                 </div>
             </div>
 

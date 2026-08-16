@@ -148,3 +148,24 @@ export function IconButton({
         </Tooltip>
     );
 }
+
+/**
+ * A labelled button that gives its label up when the row it sits in runs short
+ * of width, and keeps it as a tooltip.
+ *
+ * Every page header ends in one of these, and the width they have is not the
+ * window's: the assistant opens as a column beside the content and takes at
+ * least 340px off it, which was enough to push "New host" off the side of the
+ * screen on a display with plenty of room on it. Collapsed it is the same
+ * button at the same height, holding only its icon, which is the part of it
+ * that was already saying what it does.
+ *
+ * The caller decides when the row is short, since only it knows what else is in
+ * the row (see hooks/useNarrow). This decides what the two states look like, so
+ * the five pages that end in one of these cannot drift apart.
+ */
+export function CollapsingButton({ compact = false, label, icon, variant = 'primary', ...rest }) {
+    if (compact) return <IconButton variant={variant} title={label} icon={icon} {...rest} />;
+
+    return <Button variant={variant} icon={icon} {...rest}>{label}</Button>;
+}

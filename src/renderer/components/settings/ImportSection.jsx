@@ -9,6 +9,7 @@ import {
 } from 'hugeicons-react';
 import Checkbox from '../ui/Checkbox';
 import SettingCard from './ui/SettingCard';
+import { useStacked } from './ui/stacked';
 import { describeTunnel } from '../../lib/tunnels';
 import { toastOptions } from '../../lib/toast';
 import { useT } from '../../i18n';
@@ -92,6 +93,7 @@ function RowNotes({ host }) {
  */
 export default function ImportSection({ onImported }) {
     const t = useT();
+    const stacked = useStacked();
     const [paths, setPaths] = useState(null);
     const [scan, setScan] = useState(null);
     const [scanning, setScanning] = useState(false);
@@ -204,7 +206,12 @@ export default function ImportSection({ onImported }) {
 
     return (
         <SettingCard className="flex flex-col gap-5">
-            <div className="flex items-start justify-between gap-4">
+            {/* Stacks with the rest of the page: two buttons held to the right
+                of a halved card leave nothing for the description. */}
+            <div className={stacked
+                ? 'flex flex-col gap-3'
+                : 'flex items-start justify-between gap-4'}
+            >
                 <div className="min-w-0">
                     <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         <Download01Icon size={18} strokeWidth={2} className="text-gray-400" />

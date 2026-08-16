@@ -10,6 +10,7 @@ import {
 } from 'hugeicons-react';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import SettingCard from './ui/SettingCard';
+import { useStacked } from './ui/stacked';
 import { formatDateTime } from '../../lib/format';
 import { toastOptions } from '../../lib/toast';
 import { useT } from '../../i18n';
@@ -120,6 +121,7 @@ function HostRow({ record, expanded, onToggle, onForgetHost, onForgetKey }) {
  */
 export default function KnownHostsSection() {
     const t = useT();
+    const stacked = useStacked();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
@@ -186,7 +188,12 @@ export default function KnownHostsSection() {
     return (
         <>
             <SettingCard>
-                <div className="flex items-start justify-between gap-4 mb-5">
+                {/* Stacks with the rest of the page, and the filter field takes
+                    the card's width there rather than a fixed 160px. */}
+                <div className={`mb-5 ${stacked
+                    ? 'flex flex-col gap-3'
+                    : 'flex items-start justify-between gap-4'}`}
+                >
                     <div className="min-w-0">
                         <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             <ShieldKeyIcon size={18} strokeWidth={2} className="text-gray-400" />
@@ -198,7 +205,7 @@ export default function KnownHostsSection() {
                     </div>
 
                     {records.length > 4 && (
-                        <div className="relative shrink-0">
+                        <div className={stacked ? 'relative' : 'relative shrink-0'}>
                             <Search01Icon
                                 size={14}
                                 strokeWidth={2}
@@ -209,7 +216,7 @@ export default function KnownHostsSection() {
                                 onChange={(event) => setFilter(event.target.value)}
                                 placeholder={t('common.filter')}
                                 spellCheck={false}
-                                className="w-40 h-8 pl-8 pr-7 rounded-lg border border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base text-gray-900 dark:text-white text-xs outline-none focus:border-gray-300 dark:focus:border-neutral-700 placeholder:text-gray-400"
+                                className={`h-8 pl-8 pr-7 rounded-lg border border-gray-200 dark:border-surface-control bg-gray-50 dark:bg-surface-base text-gray-900 dark:text-white text-xs outline-none focus:border-gray-300 dark:focus:border-neutral-700 placeholder:text-gray-400 ${stacked ? 'w-full' : 'w-40'}`}
                             />
                             {filter && (
                                 <button

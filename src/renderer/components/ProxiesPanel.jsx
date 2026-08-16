@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { PlusSignIcon, Route02Icon, SearchRemoveIcon } from 'hugeicons-react';
-import Button from './ui/Button';
+import { CollapsingButton } from './ui/Button';
 import ConfirmDialog from './ui/ConfirmDialog';
 import EmptyFrame from './ui/EmptyFrame';
 import SearchField from './ui/SearchField';
@@ -13,6 +13,17 @@ import { toastOptions } from '../lib/toast';
 import { CARD_GRID } from '../lib/layout';
 import { useT } from '../i18n';
 import { useFlipOrder } from '../hooks/useFlipOrder';
+import useNarrow from '../hooks/useNarrow';
+
+/**
+ * Where the "New proxy" button drops its label and keeps its plus.
+ *
+ * Measured on the page rather than the window, since the assistant opens as a
+ * column beside it and takes 340px or more off it. The lowest of the four
+ * collection pages: this header is a search field and one button, so it has
+ * further to fall before it runs out of room.
+ */
+const COMPACT_AT = 360;
 
 /**
  * The saved proxies.
@@ -42,6 +53,9 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
     const [checks, setChecks] = useState({});
 
     const searchRef = useRef(null);
+
+    // How much room the page has, which is not how big the window is.
+    const [panelRef, cramped] = useNarrow(COMPACT_AT);
 
     // The editor belongs to this page. Home stays mounted behind a terminal tab,
     // so without this the sheet would sit over the shell you switched to.
@@ -234,8 +248,8 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
      * ------------------------------------------------------------------ */
 
     return (
-        <div className="flex flex-col gap-4 h-full min-h-0" id="proxies-panel">
-            <div className="flex items-center gap-2 shrink-0">
+        <div ref={panelRef} className="flex flex-col gap-4 h-full min-h-0" id="proxies-panel">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <SearchField
                     ref={searchRef}
                     value={query}
@@ -244,14 +258,16 @@ function ProxiesPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                     ariaLabel={t('proxies.search')}
                 />
 
-                <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                        variant="primary"
+                {/* `ml-auto` only does anything once the row has wrapped, where
+                    it holds the button to the right edge rather than letting it
+                    sit under the start of the field. */}
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <CollapsingButton
+                        compact={cramped}
                         onClick={() => setEditing({})}
+                        label={t('proxies.newProxy')}
                         icon={<PlusSignIcon size={16} strokeWidth={2.5} />}
-                    >
-                        {t('proxies.newProxy')}
-                    </Button>
+                    />
                 </div>
             </div>
 
