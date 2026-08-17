@@ -6,13 +6,18 @@ const path = require('path');
 const provider = require('../src/main/ai/providers/kimi');
 
 /**
- * The Kimi Code provider: where its CLI is found, how one headless run is
- * described, what it is configured with, and what its stream turns into.
+ * The Kimi Code provider: where its CLI is found, where the user's own login
+ * is, how one headless run is described, what it is configured with, and what
+ * its stream turns into.
  *
  * The configuration is worth testing as hard as the stream here, which is not
- * true of the other agents. This CLI takes no flag for an MCP server and no
- * flag for a tool denylist, so the file written below is the only thing
- * standing between the local-tools switch and a shell on the user's machine.
+ * true of the other agents, and for two reasons. This CLI takes no flag for an
+ * MCP server and no flag for a tool denylist, so the file written below is the
+ * only thing standing between the local-tools switch and a shell on the user's
+ * machine. And that file is built from theirs: these runs go out on the login
+ * they already have, so the tests below check both that it is carried across
+ * whole and that it is linked rather than copied, since a copy of a credential
+ * that refreshes on its own is a copy that logs them out of their own CLI.
  */
 
 /**
@@ -235,41 +240,72 @@ async function run() {
     const later = provider.runArguments({ sessionId: 'abc-123', prompt: 'and again' });
     assert.strictEqual(later[later.indexOf('--session') + 1], 'abc-123', 'the second turn resumes');
 
-    /* ---------------- The model and the effort, which travel in the env ---- */
+    /* ---------------- The environment, which is one variable now ---------- */
 
-    const env = provider.environment({
-        home: '/data/kimi-code',
-        current: { apiKey: 'sk-secret', effort: 'high' },
-        model: 'kimi-k2-latest',
-    });
-    assert.strictEqual(env.KIMI_CODE_HOME, '/data/kimi-code', 'the user\'s own ~/.kimi-code is left alone');
-    assert.strictEqual(env.KIMI_MODEL_NAME, 'kimi-k2-latest');
-    assert.strictEqual(env.KIMI_MODEL_API_KEY, 'sk-secret', 'the key goes in the env, never into a file');
-    assert.strictEqual(env.KIMI_MODEL_BASE_URL, provider.API_URL);
-    assert.strictEqual(env.KIMI_MODEL_THINKING_EFFORT, 'high');
-
-    assert.strictEqual(
-        provider.environment({
-            home: '/data/kimi-code',
-            current: { apiKey: 'k', effort: 'ultra' },
-            model: 'm',
-        }).KIMI_MODEL_THINKING_EFFORT,
-        'max',
-        'a level above this scale rounds down rather than being dropped'
-    );
-
+    const env = provider.environment({ home: '/data/kimi-code' });
+    assert.strictEqual(env.KIMI_CODE_HOME, '/data/kimi-code', 'the user\'s own ~/.kimi-code is not written to');
     assert.ok(
-        !('KIMI_MODEL_THINKING_EFFORT' in provider.environment({
-            home: '/h',
-            current: { apiKey: 'k', effort: '' },
-            model: 'm',
-        })),
-        'no setting means the variable is not set at all'
+        !Object.keys(env).some(name => name.startsWith('KIMI_MODEL_')),
+        'no key and no synthesised provider: the login in the home does all of it'
     );
 
     assert.strictEqual(provider.effortFor({ effort: 'medium' }), 'medium');
     assert.strictEqual(provider.effortFor({ effort: 'ultra' }), 'max');
     assert.strictEqual(provider.effortFor({ effort: '' }), '');
+
+    /* ---------------- Reading the user's own configuration ---------------- */
+
+    const THEIRS = [
+        'default_model = "kimi-code/k3"',
+        '',
+        '[providers."managed:kimi-code"]',
+        'type = "kimi"',
+        'api_key = "theirs"',
+        '',
+        '[providers."managed:kimi-code".oauth]',
+        'storage = "file"',
+        'key = "kimi-code"',
+        '',
+        '[models."kimi-code/k3"]',
+        'provider = "managed:kimi-code"',
+        'model = "k3-0710"',
+        'display_name = "K3"',
+        'support_efforts = ["low", "high", "elephant"]',
+        '',
+        '[models."kimi-code/kimi-for-coding"]',
+        'model = "kfc-1"',
+        'display_name = "Kimi for Coding"',
+        '',
+        '[thinking]',
+        'enabled = true',
+        'effort = "low"',
+        '',
+        '[loop_control]',
+        'max_steps_per_turn = 3',
+    ].join('\n');
+
+    const rows = provider.modelsFrom(THEIRS);
+    assert.deepStrictEqual(
+        rows.map(row => row.value),
+        ['kimi-code/k3', 'kimi-code/kimi-for-coding'],
+        'every model their configuration defines is offered, and nothing else'
+    );
+    assert.strictEqual(rows[0].resolved, 'k3-0710', 'the alias carries the id it stands for');
+    assert.strictEqual(rows[0].short, 'K3', 'the name they gave it is the name shown');
+    assert.deepStrictEqual(
+        rows[0].effort,
+        ['low', 'high'],
+        'a level this app has no name for is not a stop it can offer'
+    );
+    assert.strictEqual(rows[0].preferred, true, 'their default_model is the row the menu lands on');
+    assert.deepStrictEqual(rows[1].effort, [], 'a model that declares no scale gets no dial');
+    assert.strictEqual(provider.modelsFrom('default_model = "x"'), null, 'no models is not an empty list');
+
+    const carried = provider.withoutTables(THEIRS, ['loop_control', 'thinking']);
+    assert.ok(carried.includes('[providers."managed:kimi-code".oauth]'), 'their login goes through untouched');
+    assert.ok(carried.includes('[models."kimi-code/k3"]'), 'so do their models');
+    assert.ok(!carried.includes('max_steps_per_turn'), 'a table we write ourselves is taken out of theirs');
+    assert.ok(!carried.includes('effort = "low"'), 'and so is the one under it');
 
     /* ---------------- What it is configured with ---------------- */
 
@@ -278,12 +314,24 @@ async function run() {
         const url = 'http://127.0.0.1:51234/mcp/deadbeef';
         provider.writeConfig({
             home,
+            base: THEIRS,
             url,
             current: { maxTurns: 25, allowLocalTools: false },
+            effort: 'high',
         });
 
         const toml = fs.readFileSync(path.join(home, 'config.toml'), 'utf8');
         assert.match(toml, /max_steps_per_turn = 25/, 'the app\'s ceiling is the agent\'s ceiling');
+        assert.ok(
+            toml.includes('[providers."managed:kimi-code".oauth]'),
+            'their login is carried across, which is the whole point of this directory'
+        );
+        assert.strictEqual(
+            toml.match(/max_steps_per_turn/g).length,
+            1,
+            'their answer to a question we also answer is taken out, not left to be picked between'
+        );
+        assert.match(toml, /\[thinking\]\nenabled = true\neffort = "high"/, 'the dial lands in their file');
         assert.match(
             toml,
             /decision = "allow"\npattern = "mcp__remote__\*"/,
@@ -310,12 +358,16 @@ async function run() {
             'no downloads in the middle of somebody\'s turn'
         );
 
-        provider.writeConfig({ home, url, current: { maxTurns: 40, allowLocalTools: true } });
+        provider.writeConfig({ home, base: THEIRS, url, current: { maxTurns: 40, allowLocalTools: true } });
         const opened = fs.readFileSync(path.join(home, 'config.toml'), 'utf8');
         assert.ok(!opened.includes('pattern = "Bash"'), 'the switch being on lets its own tools through');
         assert.ok(
             opened.includes('pattern = "AskUserQuestion"'),
             'that one is denied either way: there is still nobody reading the answer'
+        );
+        assert.ok(
+            opened.includes('effort = "low"'),
+            'with no level of ours to set, the one they chose for themselves stays'
         );
     } finally {
         fs.rmSync(home, { recursive: true, force: true });
@@ -417,32 +469,72 @@ async function run() {
     failing.finish('error');
 
     const notice = bad.events.find(event => event.type === 'error');
-    assert.match(notice.message, /key/i, 'the fix is in the message, not just the failure');
+    assert.match(notice.message, /sign in/i, 'the fix is in the message, not just the failure');
     assert.strictEqual(bad.events.at(-1).isError, true, 'the turn ends as a failure');
 
     /* ---------------- Failures that say what to do ---------------- */
 
-    assert.match(provider.describeFailure('401 unauthorized'), /rejected that key/i);
+    assert.match(provider.describeFailure('401 unauthorized'), /rejected that login/i);
     assert.match(provider.describeFailure('spawn kimi ENOENT'), /could not be started/);
     assert.match(provider.describeFailure('error: unknown option --effort'), /Update the CLI/);
     assert.match(provider.describeFailure('429 rate limit exceeded'), /rate limiting/);
-    assert.match(provider.describeFailure('KIMI_MODEL_API_KEY is required'), /without a usable key/);
+    assert.match(provider.describeFailure('KIMI_MODEL_API_KEY is required'), /without a usable login/);
     assert.match(provider.describeFailure('could not find bash.exe'), /Git for Windows/);
     assert.strictEqual(provider.describeFailure('a plain failure'), 'a plain failure');
 
-    /* ---------------- Which model an unpinned conversation gets ---------- */
+    /* ---------------- Where the login is looked for ---------------- */
 
-    const { preferred } = provider._test;
     assert.strictEqual(
-        preferred([{ value: 'moonshot-v1-8k' }, { value: 'kimi-k2-latest' }]),
-        'kimi-k2-latest',
-        'the same account reaches the older chat models, and this card is not about those'
+        provider.userHome({ env: {}, home: UNIX_HOME }),
+        path.join(UNIX_HOME, '.kimi-code'),
+        'the CLI\'s own default is where a login is expected to be'
     );
     assert.strictEqual(
-        preferred([{ value: 'moonshot-v1-8k' }, { value: 'moonshot-v1-32k' }]),
-        'moonshot-v1-8k',
-        'with nothing of the family listed, the first row is still an honest answer'
+        provider.userHome({ env: { KIMI_CODE_HOME: '/elsewhere' }, home: UNIX_HOME }),
+        '/elsewhere',
+        'a home they moved is the one the CLI would read, so it is the one we read'
     );
+
+    const login = fs.mkdtempSync(path.join(os.tmpdir(), 'kimi-login-'));
+    try {
+        assert.strictEqual(provider.signedIn({ source: login }), false, 'an empty home is not a login');
+
+        fs.writeFileSync(path.join(login, 'config.toml'), 'default_model = "x"\n', 'utf8');
+        assert.strictEqual(
+            provider.signedIn({ source: login }),
+            false,
+            'a configuration with no credential beside it is a CLI that has been run, not signed in'
+        );
+
+        fs.mkdirSync(path.join(login, 'credentials'));
+        fs.writeFileSync(path.join(login, 'credentials', 'kimi-code.json'), '{}', 'utf8');
+        assert.strictEqual(provider.signedIn({ source: login }), true);
+
+        /* ------------ The login is linked, never copied ------------ */
+
+        const borrowed = fs.mkdtempSync(path.join(os.tmpdir(), 'kimi-home-'));
+        try {
+            provider._test.borrowLogin({ home: borrowed, source: login });
+            const linked = path.join(borrowed, 'credentials');
+            assert.ok(fs.lstatSync(linked).isSymbolicLink(), 'a link, so a refreshed token is refreshed once');
+
+            // What the CLI would do with a rotated token, done from their side.
+            fs.writeFileSync(path.join(login, 'credentials', 'kimi-code.json'), '{"v":2}', 'utf8');
+            assert.strictEqual(
+                fs.readFileSync(path.join(linked, 'kimi-code.json'), 'utf8'),
+                '{"v":2}',
+                'their login and the one these runs use are the same login'
+            );
+
+            // Twice is not an error: every conversation start asks for it.
+            provider._test.borrowLogin({ home: borrowed, source: login });
+            assert.ok(fs.lstatSync(linked).isSymbolicLink(), 'asking again leaves it as it was');
+        } finally {
+            fs.rmSync(borrowed, { recursive: true, force: true });
+        }
+    } finally {
+        fs.rmSync(login, { recursive: true, force: true });
+    }
 
     console.log('kimi provider tests passed');
 }

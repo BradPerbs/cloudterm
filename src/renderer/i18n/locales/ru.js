@@ -445,16 +445,27 @@ export default {
     'settings.assistant.desc': 'Ассистент читает ваши терминалы и работает на ваших серверах через '
         + 'уже открытые вами соединения. Он никогда не видит сохранённые пароли и ключи.',
     'settings.assistant.loading': 'Загрузка настроек ассистента…',
-    'settings.assistant.agent': 'Агент',
-    'settings.assistant.agentDesc': 'Какой агент отвечает: установленный на этой машине или '
-        + 'модель, которую вы запустили сами. Смена агента начинает новый разговор.',
+    'settings.assistant.agent': 'Агенты',
+    'settings.assistant.agentDesc': 'Какие агенты отвечают: установленные на этой машине или '
+        + 'модель, которую вы запустили сами. Включите столько, на сколько у вас есть учётная '
+        + 'запись или ключ. Меню моделей в чате показывает модели всех включённых сразу, и выбор '
+        + 'там решает, какой агент ответит следующим.',
     'settings.assistant.provider.claudeCode': 'Агент Anthropic, под вашей учётной записью.',
     'settings.assistant.provider.codex': 'Агент OpenAI, под вашей учётной записью.',
     'settings.assistant.provider.opencode': 'Открытый код, с вашими провайдерами.',
     'settings.assistant.provider.grok': 'Агент xAI, под вашей учётной записью.',
-    'settings.assistant.provider.kimi': 'Агент Moonshot, по ключу Moonshot.',
+    'settings.assistant.provider.kimi': 'Агент Moonshot, под вашей учётной записью.',
     'settings.assistant.provider.local': 'Ваша модель: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'В этой сборке пока недоступно.',
+    'settings.assistant.provider.keepOne': 'Хотя бы один агент должен оставаться включённым.',
+    'settings.assistant.provider.checking': 'Ищем его на этой машине…',
+    'settings.assistant.provider.notFound': 'Не найден на этой машине. Установите его и отметьте '
+        + 'снова.',
+    'settings.assistant.provider.notSignedIn': 'Установлен, но вход не выполнен. Войдите в него в '
+        + 'терминале и отметьте снова.',
+    'settings.assistant.provider.noServer': 'По адресу ниже никто не ответил. Запустите свой сервер '
+        + 'моделей и отметьте снова.',
+    'settings.assistant.provider.checkFailed': 'Проверку не удалось завершить. Попробуйте снова.',
     'settings.assistant.endpoint': 'Адрес сервера',
     'settings.assistant.endpointDesc': 'Где слушает локальный сервер моделей. Подойдёт любой '
         + 'сервер, говорящий на API OpenAI.',
@@ -525,39 +536,6 @@ export default {
     'settings.assistant.lines': 'Сколько строк терминала он читает',
     'settings.assistant.linesDesc': 'Сколько недавнего вывода сеанса возвращает одно чтение. '
         + 'Больше значит больше контекста для работы и больший расход бюджета разговора.',
-    'settings.assistant.signIn': 'Вход',
-    'settings.assistant.theAgent': 'агент',
-    'settings.assistant.accountOpencode': 'OpenCode использует провайдеров и учётные данные, уже '
-        + 'настроенные в его CLI. Управляйте ими командой «opencode auth login»; ключи, сохранённые '
-        + 'в CloudBlast, в OpenCode не передаются.',
-    'settings.assistant.accountGrokApi': 'Grok Build не установлен на этой машине, поэтому '
-        + 'CloudTerm обращается к API xAI напрямую с сохранённым здесь ключом, и оплата идёт за '
-        + 'токены. Установите CLI и войдите, чтобы использовать свой тариф.',
-    'settings.assistant.accountKimi': 'Kimi Code всегда работает по сохранённому здесь ключу, '
-        + 'установлен CLI или нет, и оплата идёт за токены. CloudBlast запускает CLI со своей '
-        + 'собственной конфигурацией, поэтому вход в Kimi Code на этой машине не читается и '
-        + 'остаётся нетронутым.',
-    'settings.assistant.accountLocal': 'Входить некуда. Модель работает на этом компьютере, так '
-        + 'что нет ни учётной записи, ни оплаты за токены. Ключ нужен, только если вы сами '
-        + 'поставили его на сервер.',
-    'settings.assistant.accountPlan': 'Вход выполнен через {agent} на этой машине, тариф {plan}. '
-        + 'Расход идёт по этому тарифу, поэтому ключ здесь не нужен.',
-    'settings.assistant.accountProvider': '{agent} на этой машине настроен на {provider}, который '
-        + 'сам занимается своими учётными данными. Здесь ничего не требуется.',
-    'settings.assistant.accountAgentKey': '{agent} на этой машине использует ключ API, поэтому '
-        + 'расход считается по токенам.',
-    'settings.assistant.accountStoredKey': 'Ключ сохранён здесь и будет использоваться. Очистите '
-        + 'поле и сохраните, чтобы удалить его и вернуться ко входу через {agent}.',
-    'settings.assistant.accountNone': 'Делать ничего не нужно, если вы уже вошли в {agent} на этой '
-        + 'машине, а так обычно и бывает. Ключ нужен, только если вход не выполнен.',
-    'settings.assistant.apiKey': 'Ключ API',
-    'settings.assistant.keyStored': 'Ключ сохранён',
-    'settings.assistant.keyOptional': 'Только если ваш сервер его требует',
-    'settings.assistant.keySaved': 'Ключ сохранён.',
-    'settings.assistant.keyRemoved': 'Ключ удалён.',
-    'settings.assistant.keyFailed': 'Не удалось сохранить этот ключ.',
-    'settings.assistant.noSecureStore': 'В этой системе нет доступного защищённого хранилища, '
-        + 'поэтому ключ здесь сохранить нельзя.',
     'settings.assistant.tools': 'Что он умеет',
     'settings.assistant.toolsDesc': 'Инструментов: {count}, из них только читают {readOnly}. '
         + 'Остальные подчиняются настройке подтверждения выше.',
@@ -1177,9 +1155,8 @@ export default {
     'assistant.modelAndEffort': 'Модель и усилие',
     'assistant.readingModels': 'Читаем список моделей…',
     'assistant.noModels': 'Моделей не сообщено. Попробуйте снова',
+    'assistant.someNoModels': 'Некоторые агенты не сообщили моделей. Попробуйте снова',
     'assistant.notInRuntimeList': 'Нет в списке этого рантайма',
-    'assistant.agentDefault': 'По умолчанию для {agent}',
-    'assistant.agentDefaultHint': 'То, что использует установленный у вас {agent}',
     'assistant.effort': 'Усилие',
     'assistant.effortLow': 'Низкое',
     'assistant.effortMedium': 'Среднее',

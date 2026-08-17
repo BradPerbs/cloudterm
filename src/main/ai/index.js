@@ -86,8 +86,15 @@ let lastAccount = null;
  */
 const modelCatalogs = new Map();
 
-/** The in-flight ask, so ten panels opening at once do not start ten of them. */
-let modelsPending = null;
+/**
+ * The in-flight asks, so ten panels opening at once do not start ten of them.
+ *
+ * One per agent rather than one slot, for the same reason the catalogs are
+ * keyed: a panel opening with four agents switched on asks all four at once,
+ * and a single slot would have three of them waiting on an answer to somebody
+ * else's question.
+ */
+const modelsPending = new Map();
 
 function setNotifier(fn) {
     notify = fn;
@@ -286,8 +293,20 @@ function setScope(conversationId, target) {
     return { success: true, ...scope };
 }
 
+/**
+ * The settings as one agent sees them: its own name, and its own key.
+ *
+ * Named rather than assumed, because the agent being asked something is no
+ * longer always the agent that is answering the conversation. Reading the model
+ * list of one that is switched on but not selected has to hand it the key
+ * stored for it, or the ask goes out with somebody else's credential on it.
+ */
+function resolvedFor(provider) {
+    return { ...settings.get(), provider, apiKey: settings.readApiKey(provider) };
+}
+
 function resolved() {
-    return { ...settings.get(), apiKey: settings.readApiKey() };
+    return resolvedFor(settings.get().provider);
 }
 
 /**
@@ -334,7 +353,15 @@ function reconfigure(before, after) {
     for (const conversation of conversations.values()) {
         const session = conversation.session;
         if (session) {
-            if (before.model !== after.model) session.setModel?.(after.model);
+            // Only when it is still the same agent's session. Picking a model
+            // out of the composer's merged menu can move both at once, and a
+            // model name belonging to one agent means nothing to the one that
+            // is running: the query is restarted below, which is what actually
+            // applies the pair. Effort has no such trouble, since a level is a
+            // level whoever is listening.
+            if (before.provider === after.provider && before.model !== after.model) {
+                session.setModel?.(after.model);
+            }
             if (before.effort !== after.effort) session.setEffort?.(after.effort);
         }
         if (RESTART_ON.some(field => before[field] !== after[field])) {
@@ -793,14 +820,17 @@ function list() {
 }
 
 /**
- * The models this machine can run, asked for rather than waited for.
+ * The models one agent can run, asked for rather than waited for.
  *
- * Cached until the agent changes, which `reconfigure` clears. A conversation
- * reports the same list when it starts, which is free and keeps this honest
- * if someone changes their agent's own setup while the app is open.
+ * Which agent is named by the caller now that several can be switched on at
+ * once, and defaults to the one answering. Cached per agent, so a panel opening
+ * with four of them on asks each once and never again for the life of the app
+ * unless something forces it. A conversation reports the same list when it
+ * starts, which is free and keeps this honest if someone changes their agent's
+ * own setup while the app is open.
  */
-function models({ refresh = false } = {}) {
-    const asked = resolved().provider;
+function models({ refresh = false, provider: wanted = '' } = {}) {
+    const asked = PROVIDERS[wanted] ? wanted : resolved().provider;
 
     // A forced ask drops what is held for this agent and starts again. The
     // menu offers it when a read came back with nothing, which is usually a
@@ -808,12 +838,12 @@ function models({ refresh = false } = {}) {
     if (refresh) modelCatalogs.delete(asked);
 
     if (modelCatalogs.has(asked)) return Promise.resolve(modelCatalogs.get(asked));
-    if (modelsPending?.provider === asked && !refresh) return modelsPending.promise;
+    if (!refresh && modelsPending.has(asked)) return modelsPending.get(asked);
 
     const provider = PROVIDERS[asked];
     if (!provider?.listModels) return Promise.resolve(null);
 
-    const promise = provider.listModels({ settings: resolved() })
+    const promise = provider.listModels({ settings: resolvedFor(asked) })
         .then((rows) => {
             const list = rows?.length ? rows : null;
             // Stored against the agent that answered, whether or not that is
@@ -832,11 +862,44 @@ function models({ refresh = false } = {}) {
             return null;
         })
         .finally(() => {
-            if (modelsPending?.promise === promise) modelsPending = null;
+            if (modelsPending.get(asked) === promise) modelsPending.delete(asked);
         });
 
-    modelsPending = { provider: asked, promise };
+    modelsPending.set(asked, promise);
     return promise;
+}
+
+/**
+ * Whether one agent could actually run here, asked before it is switched on.
+ *
+ * The rule the whole feature rests on: the assistant drives the agents already
+ * installed and already signed in on this machine, so being on the machine is
+ * what a tick is asking about. Each agent answers for itself, because what
+ * counts as being here differs: five of them are a binary to find, and a local
+ * model is a server that either answers at the address or does not.
+ *
+ * An agent with no `detect` of its own passes, which is the right default for
+ * one that has nothing to look for.
+ *
+ * Never throws. A check that fails is an answer of "no" with a reason on it,
+ * not an exception for a settings page to work out what to do with.
+ */
+async function detect(provider) {
+    const agent = PROVIDERS[provider];
+    if (!agent) return { provider, ok: false, reason: 'unknown' };
+    if (!agent.detect) return { provider, ok: true, reason: '' };
+
+    try {
+        const verdict = await agent.detect({ settings: resolvedFor(provider) });
+        return {
+            provider,
+            ok: Boolean(verdict?.ok),
+            reason: verdict?.ok ? '' : (verdict?.reason || 'notFound'),
+        };
+    } catch (error) {
+        console.error(`Could not check whether ${provider} is installed:`, error.message);
+        return { provider, ok: false, reason: 'error' };
+    }
 }
 
 function status() {
@@ -853,6 +916,12 @@ function status() {
         // Only if it belongs to the agent currently selected. Null otherwise,
         // which reads as "not asked yet" and is exactly what it is.
         models: modelCatalogs.get(current.provider) ?? null,
+        // Every list read so far, keyed by the agent that answered, for the
+        // composer's menu: it offers the models of every agent that is
+        // switched on, so one list is not the question it is asking. Agents
+        // that have not been asked are absent rather than null, which is how
+        // the panel knows which of them it still has to ask.
+        catalogs: Object.fromEntries(modelCatalogs),
         tools: catalog.TOOLS.map(tool => ({
             name: tool.name,
             title: tool.title,
@@ -906,6 +975,7 @@ module.exports = {
     list,
     status,
     models,
+    detect,
     shutdown,
     respondToApproval,
     respondToAction,

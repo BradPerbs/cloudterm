@@ -584,13 +584,16 @@ contextBridge.exposeInMainWorld('api', {
         onModels: (callback) => subscribe('ai-models', callback),
         // Asks for the list, starting the runtime briefly if that is what it
         // takes. Resolves null when this machine's Claude Code cannot say.
-        // `refresh` throws away what was read for this agent and asks again,
-        // for the button the menu shows when a read came back empty.
-        models: ({ refresh = false } = {}) => ipcRenderer.invoke('ai-model-list', { refresh }),
-        // Write-only. The key goes in and never comes back out. It is stored
-        // against the agent that is selected, since a key for one of them is
-        // not a credential for any of the others.
-        setApiKey: (value) => ipcRenderer.invoke('ai-set-key', value),
+        // `provider` names which agent to ask, since several can be switched on
+        // at once, and defaults to the one answering. `refresh` throws away
+        // what was read for that agent and asks again, for the button the menu
+        // shows when a read came back empty.
+        models: ({ refresh = false, provider = '' } = {}) =>
+            ipcRenderer.invoke('ai-model-list', { refresh, provider }),
+        // Whether one agent could run on this machine, for the moment before it
+        // is switched on. Resolves `{ ok, reason }`; an agent with nothing to
+        // find on disk answers yes.
+        detect: (provider) => ipcRenderer.invoke('ai-detect', provider),
 
         // `sessionIds` and `hostIds` are the explicit set a pinned scope fences
         // the conversation to. Empty for the two modes that are not a set.

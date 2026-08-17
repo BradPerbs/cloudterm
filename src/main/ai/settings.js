@@ -10,12 +10,14 @@ const fs = require('fs');
  * snippet, and the store's shape is the thing that syncs between machines.
  * A model choice belongs to the machine the model runs on.
  *
- * The secrets here are API keys for the providers that accept one directly,
- * one per provider. OpenCode keeps credentials in its own provider store;
- * Claude Code, Codex and Grok can use either a key stored here or the login
- * already on the machine; Kimi Code needs one either way, since it is driven
- * against a configuration of ours rather than the user's own; a local server
- * usually wants no key at all.
+ * The secrets here are API keys, and nothing writes them any more. The
+ * assistant runs the agents already installed and already signed in on this
+ * machine, which is the whole proposition of driving the user's own agent, and
+ * an agent that is not on the machine is refused when it is switched on. A key
+ * box beside that offered the opposite: an agent accepted on the promise of a
+ * credential, and a failure saved up for the middle of a question. What remains
+ * is read so that a key an older version stored is still handed to the agent it
+ * belongs to, and nobody's working setup breaks on an update.
  */
 
 const CONFIG_VERSION = 2;
@@ -71,6 +73,20 @@ const DEFAULT_LOCAL_URL = 'http://localhost:1234/v1';
 
 const DEFAULTS = {
     enabled: true,
+    /**
+     * Every agent that is switched on, and the one that is answering.
+     *
+     * Two settings rather than one because they answer two questions. The list
+     * is what the user set up: the agents they have a login or a key for, and
+     * whose models the composer's menu is allowed to offer. `provider` is which
+     * of those the next message goes to, and it moves every time a model is
+     * picked out of that menu, because a model belongs to exactly one of them.
+     *
+     * `provider` is always a member of `providers`, and `providers` is never
+     * empty. Both are enforced in `sanitize`, so nothing downstream has to
+     * check: a conversation still starts one agent, the same as it always did.
+     */
+    providers: ['claude-code'],
     provider: 'claude-code',
     // Only read when the provider is `local`. Kept here rather than in a
     // provider file because it is a setting the user types, and the settings
@@ -122,11 +138,10 @@ let config = null;
 /**
  * The stored keys, one per provider, each encrypted by the OS keychain.
  *
- * One shared key was enough while every provider that took one was reaching
- * Anthropic or OpenAI and the user only ever had one of them. It stopped being
- * enough the moment a second key could be in play: an xAI key handed to Claude
- * Code is not a fallback, it is a login failure with a confusing message, and
- * switching agents would have quietly done exactly that.
+ * Filled from disk and never added to. Kept keyed by provider rather than
+ * flattened, because that is how they were written and because a key handed to
+ * the wrong agent is not a fallback, it is a login failure with a confusing
+ * message.
  */
 let secrets = {};
 
@@ -158,9 +173,30 @@ function cleanUrl(value, fallback) {
     }
 }
 
+/**
+ * Which agents are switched on, as a list with no gaps in it.
+ *
+ * A config written before more than one could be on at a time has no list at
+ * all, only the agent it was set to. That one is the answer: it was the only
+ * one running, so it is the only one switched on, and the machine goes on
+ * behaving exactly as it did.
+ *
+ * Never empty. An empty list is a settings page with no agent to offer and a
+ * composer with nothing in its menu, so the agent that was selected stays on
+ * whatever the patch said.
+ */
+function readProviders(raw, provider) {
+    const kept = Array.isArray(raw.providers)
+        ? [...new Set(raw.providers.filter(name => PROVIDERS.has(name)))]
+        : [];
+    if (kept.length > 0) return kept;
+    return [provider];
+}
+
 function sanitize(raw) {
     const next = {
         ...DEFAULTS,
+        providers: [...DEFAULTS.providers],
         autoApproveCommands: [...DEFAULTS.autoApproveCommands],
         blockedCommands: [...DEFAULTS.blockedCommands],
         quickPrompts: [...DEFAULTS.quickPrompts],
@@ -168,6 +204,13 @@ function sanitize(raw) {
     if (raw && typeof raw === 'object') {
         if ('enabled' in raw) next.enabled = Boolean(raw.enabled);
         if (PROVIDERS.has(raw.provider)) next.provider = raw.provider;
+        next.providers = readProviders(raw, next.provider);
+        // The agent answering has to be one of the agents that are on.
+        // Whichever way the two disagree the list wins, because the list is
+        // what the user was changing: switching off the agent you were on
+        // hands the conversation to the first one still standing rather than
+        // leaving a model menu that cannot offer what is selected.
+        if (!next.providers.includes(next.provider)) next.provider = next.providers[0];
         if ('localBaseUrl' in raw) next.localBaseUrl = cleanUrl(raw.localBaseUrl, DEFAULTS.localBaseUrl);
         // Long enough for the publisher-and-repository ids a local server
         // reports, which run past the 80 characters an alias needs.
@@ -266,11 +309,11 @@ function get() {
     const current = load();
     return {
         ...current,
-        // Whether the agent now selected has one, which is the question the
-        // settings page is actually asking. A key stored for another agent is
-        // not an answer to it.
+        // Whether the agent now answering is running on a key left here by an
+        // older version, which is what the usage chip in the composer needs to
+        // know: a metered key and a plan are charged differently and it says
+        // which. Whether, never which key.
         hasApiKey: Boolean(secrets[current.provider]),
-        encryptionAvailable: isEncryptionAvailable(),
         // What the app shipped with, so a settings page can offer the way back
         // without keeping a second copy of these lists that drifts from this
         // one. Read-only: `set` works from `load()`, not from here, so nothing
@@ -284,59 +327,37 @@ function get() {
 
 function set(patch) {
     const before = load();
-    const next = { ...before, ...patch };
+    const next = sanitize({ ...before, ...patch });
 
     // A model name belongs to the agent that offers it. Claude Code's
     // `opus[1m]` means nothing to Codex, and handing it over would either be
     // refused or, worse, quietly run something else. Switching agents drops
     // back to "whatever it is already set to", which is the one answer that
     // is right for both.
-    if (patch && 'provider' in patch && patch.provider !== before.provider) {
+    //
+    // Unless the change names both at once, which is what the composer's menu
+    // does now that it lists every switched-on agent's models together: one
+    // click there is a change of model and of the agent that owns it, and
+    // clearing the model it just asked for would undo half of the request.
+    if (next.provider !== before.provider && !(patch && 'model' in patch)) {
         next.model = '';
     }
 
-    config = sanitize(next);
+    config = next;
     persist();
     return get();
 }
 
-function isEncryptionAvailable() {
-    try {
-        return safeStorage.isEncryptionAvailable();
-    } catch {
-        return false;
-    }
-}
-
 /**
- * Store or clear the API key for one provider, by default the selected one.
+ * The decrypted key, for the provider only. Never leaves the main process.
  *
- * Refused rather than stored in the clear when the OS keychain is unavailable.
- * A credential written to a JSON file in plain text is worse than no feature:
- * the user believes it is protected because they were asked to type it into
- * something that looked like a password field.
+ * Read, never written. Nothing in the app stores a key any more: the assistant
+ * runs the agents that are already installed and already signed in on this
+ * machine, and an agent that is not there is refused when it is switched on
+ * rather than accepted against a credential typed into a box. What is left here
+ * is what an older version wrote, which is still handed to the agent it belongs
+ * to so that nobody's working setup stops working on an update.
  */
-function setApiKey(value, provider = load().provider) {
-    const name = PROVIDERS.has(provider) ? provider : load().provider;
-    const text = String(value ?? '').trim();
-    if (!text) {
-        delete secrets[name];
-        persist();
-        return { success: true, hasApiKey: false };
-    }
-    if (!isEncryptionAvailable()) {
-        return { success: false, message: 'This system has no secure store available, so a key cannot be saved here' };
-    }
-    try {
-        secrets[name] = safeStorage.encryptString(text).toString('base64');
-        persist();
-        return { success: true, hasApiKey: true };
-    } catch (error) {
-        return { success: false, message: error.message };
-    }
-}
-
-/** The decrypted key, for the provider only. Never leaves the main process. */
 function readApiKey(provider = load().provider) {
     const secret = secrets[provider];
     if (!secret) return '';
@@ -351,9 +372,7 @@ function readApiKey(provider = load().provider) {
 module.exports = {
     get,
     set,
-    setApiKey,
     readApiKey,
-    isEncryptionAvailable,
     DEFAULTS,
     APPROVALS,
     COMMAND_MODES,

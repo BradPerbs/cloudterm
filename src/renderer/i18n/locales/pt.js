@@ -431,17 +431,28 @@ export default {
     'settings.assistant.desc': 'O agente lê os seus terminais e trabalha nos seus servidores '
         + 'através das ligações que já abriu. Nunca vê uma palavra-passe ou chave guardada.',
     'settings.assistant.loading': 'A carregar as definições do agente…',
-    'settings.assistant.agent': 'Agente',
-    'settings.assistant.agentDesc': 'Que agente de programação responde: um instalado nesta '
-        + 'máquina, ou um modelo que você mesmo está a servir. Mudar de agente começa uma conversa '
-        + 'nova.',
+    'settings.assistant.agent': 'Agentes',
+    'settings.assistant.agentDesc': 'Que agentes de programação respondem: os instalados nesta '
+        + 'máquina, ou um modelo que você mesmo está a servir. Ligue quantos tiver login ou chave. '
+        + 'O menu de modelos da conversa lista os modelos de todos eles juntos, e escolher um ali é '
+        + 'o que decide qual agente responde a seguir.',
     'settings.assistant.provider.claudeCode': 'O agente da Anthropic, na sua conta.',
     'settings.assistant.provider.codex': 'O agente da OpenAI, na sua conta.',
     'settings.assistant.provider.opencode': 'Código aberto, nos fornecedores que definir.',
     'settings.assistant.provider.grok': 'O agente da xAI, na sua conta.',
-    'settings.assistant.provider.kimi': 'O agente da Moonshot, com uma chave Moonshot.',
+    'settings.assistant.provider.kimi': 'O agente da Moonshot, na sua conta.',
     'settings.assistant.provider.local': 'O seu modelo: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Ainda não disponível nesta versão.',
+    'settings.assistant.provider.keepOne': 'Pelo menos um agente tem de ficar ligado.',
+    'settings.assistant.provider.checking': 'A procurá-lo nesta máquina...',
+    'settings.assistant.provider.notFound': 'Não encontrado nesta máquina. Instale-o e volte a '
+        + 'marcar.',
+    'settings.assistant.provider.notSignedIn': 'Instalado, mas sem sessão iniciada. Inicie sessão '
+        + 'num terminal e volte a marcar.',
+    'settings.assistant.provider.noServer': 'Nada respondeu no endereço abaixo. Inicie o seu '
+        + 'servidor de modelos e volte a marcar.',
+    'settings.assistant.provider.checkFailed': 'Não foi possível concluir a verificação. Tente '
+        + 'outra vez.',
     'settings.assistant.endpoint': 'Endereço do servidor',
     'settings.assistant.endpointDesc': 'Onde o servidor de modelos local está à escuta. Serve '
         + 'qualquer servidor que fale a API da OpenAI.',
@@ -509,38 +520,6 @@ export default {
     'settings.assistant.lines': 'Linhas de terminal que pode ler',
     'settings.assistant.linesDesc': 'Quanto do resultado recente de uma sessão devolve cada '
         + 'leitura. Mais dá-lhe mais contexto para trabalhar e gasta mais do orçamento da conversa.',
-    'settings.assistant.signIn': 'Início de sessão',
-    'settings.assistant.theAgent': 'o agente',
-    'settings.assistant.accountOpencode': 'O OpenCode usa os fornecedores e credenciais já '
-        + 'configurados na sua CLI. Trate deles com “opencode auth login”; as chaves guardadas no '
-        + 'CloudBlast não são passadas ao OpenCode.',
-    'settings.assistant.accountGrokApi': 'O Grok Build não está instalado nesta máquina, por isso o '
-        + 'CloudTerm fala diretamente com a API da xAI usando a chave guardada aqui, e o uso é '
-        + 'cobrado por token. Instale a CLI e inicie sessão para usar o seu próprio plano.',
-    'settings.assistant.accountKimi': 'O Kimi Code usa sempre a chave guardada aqui, esteja a CLI '
-        + 'instalada ou não, e o uso é cobrado por token. O CloudBlast executa a CLI com uma '
-        + 'configuração própria, por isso a sessão do Kimi Code nesta máquina não é lida nem tocada.',
-    'settings.assistant.accountLocal': 'Não há sessão para iniciar. O modelo corre neste '
-        + 'computador, por isso não há conta nem cobrança por token. Só precisa de uma chave se foi '
-        + 'você a pôr uma no servidor.',
-    'settings.assistant.accountPlan': 'Com sessão iniciada através do {agent} nesta máquina, num '
-        + 'plano {plan}. A utilização sai desse plano, por isso não é precisa nenhuma chave aqui.',
-    'settings.assistant.accountProvider': 'O {agent} nesta máquina está configurado com {provider}, '
-        + 'que trata das suas próprias credenciais. Não é preciso nada aqui.',
-    'settings.assistant.accountAgentKey': 'O {agent} nesta máquina está a usar uma chave de API, '
-        + 'por isso a utilização é cobrada por token.',
-    'settings.assistant.accountStoredKey': 'Está aqui guardada uma chave e será usada. Limpe a '
-        + 'caixa e guarde para a remover e voltar ao início de sessão do {agent}.',
-    'settings.assistant.accountNone': 'Não é preciso fazer nada se já tem sessão iniciada no '
-        + '{agent} nesta máquina, que é o caso habitual. Só é precisa uma chave quando não tem.',
-    'settings.assistant.apiKey': 'Chave de API',
-    'settings.assistant.keyStored': 'Há uma chave guardada',
-    'settings.assistant.keyOptional': 'Só se o seu servidor pedir uma',
-    'settings.assistant.keySaved': 'Chave guardada.',
-    'settings.assistant.keyRemoved': 'Chave removida.',
-    'settings.assistant.keyFailed': 'Não foi possível guardar essa chave.',
-    'settings.assistant.noSecureStore': 'Este sistema não tem nenhum cofre seguro disponível, por '
-        + 'isso não é possível guardar aqui uma chave.',
     'settings.assistant.tools': 'O que pode fazer',
     'settings.assistant.toolsDesc': '{count} ferramentas, das quais {readOnly} apenas leem. As '
         + 'restantes estão sujeitas à definição de aprovação acima.',
@@ -1131,9 +1110,8 @@ export default {
     'assistant.modelAndEffort': 'Modelo e esforço',
     'assistant.readingModels': 'A ler a lista de modelos...',
     'assistant.noModels': 'Nenhum modelo comunicado. Tente outra vez',
+    'assistant.someNoModels': 'Alguns agentes não comunicaram modelos. Tente outra vez',
     'assistant.notInRuntimeList': 'Não está na lista deste runtime',
-    'assistant.agentDefault': 'Predefinição do {agent}',
-    'assistant.agentDefaultHint': 'O que quer que o {agent} instalado use',
     'assistant.effort': 'Esforço',
     'assistant.effortLow': 'Baixo',
     'assistant.effortMedium': 'Médio',

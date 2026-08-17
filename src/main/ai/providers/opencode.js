@@ -587,9 +587,15 @@ function describeFailure(error) {
     return message;
 }
 
+/** Whether the CLI is on this machine. See the note on claude-code's. */
+function detect() {
+    return { ok: Boolean(findOpenCode()), reason: 'notFound' };
+}
+
 module.exports = {
     start,
     listModels,
+    detect,
     findOpenCode,
     openCodeCandidates,
     parseModel,

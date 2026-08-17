@@ -398,14 +398,22 @@ export default {
         + '它绝不会看到任何已保存的密码或密钥。',
     'settings.assistant.loading': '正在加载助手设置…',
     'settings.assistant.agent': '代理程序',
-    'settings.assistant.agentDesc': '由哪个编码代理来作答：本机已安装的那一份，或你自己运行的模型。切换会开始一次全新的对话。',
+    'settings.assistant.agentDesc': '由哪些编码代理来作答：本机已安装的那些，或你自己运行的模型。'
+        + '有几份账号或密钥就可以开启几个。对话里的模型菜单会把它们的模型列在一起，在那里选哪个模型，'
+        + '就决定接下来由谁来作答。',
     'settings.assistant.provider.claudeCode': '来自 Anthropic，用你自己的账号。',
     'settings.assistant.provider.codex': '来自 OpenAI，用你自己的账号。',
     'settings.assistant.provider.opencode': '开源，用你配置的服务商。',
     'settings.assistant.provider.grok': '来自 xAI，用你自己的账号。',
-    'settings.assistant.provider.kimi': '来自月之暗面，用 Moonshot 密钥。',
+    'settings.assistant.provider.kimi': '来自月之暗面，用你自己的账号。',
     'settings.assistant.provider.local': '你自己的模型：LM Studio、Ollama、vLLM。',
     'settings.assistant.provider.unavailable': '此版本尚未提供。',
+    'settings.assistant.provider.keepOne': '至少要保留一个代理处于开启状态。',
+    'settings.assistant.provider.checking': '正在本机上查找…',
+    'settings.assistant.provider.notFound': '本机未找到。请先安装，然后再勾选。',
+    'settings.assistant.provider.notSignedIn': '已安装，但尚未登录。请在终端中登录，然后再勾选。',
+    'settings.assistant.provider.noServer': '下方地址没有任何响应。请先启动你的模型服务器，然后再勾选。',
+    'settings.assistant.provider.checkFailed': '检查未能完成。请重试。',
     'settings.assistant.endpoint': '服务器地址',
     'settings.assistant.endpointDesc': '本地模型服务器监听的地址。任何讲 OpenAI API 的服务器都可以。',
     'settings.assistant.endpointNote': 'LM Studio：http://localhost:1234/v1。Ollama：'
@@ -460,33 +468,6 @@ export default {
     'settings.assistant.lines': '可读取的终端行数',
     'settings.assistant.linesDesc': '一次读取会返回会话中多少最近的输出。调高可以提供更多上下文，'
         + '同时也会占用更多对话预算。',
-    'settings.assistant.signIn': '登录方式',
-    'settings.assistant.theAgent': '该代理程序',
-    'settings.assistant.accountOpencode': 'OpenCode 使用其 CLI 中已配置的服务商和凭据。'
-        + '请用“opencode auth login”管理它们；保存在 CloudBlast 中的密钥不会传给 OpenCode。',
-    'settings.assistant.accountGrokApi': '本机没有安装 Grok Build，因此 CloudTerm 直接用这里保存的密钥调用 xAI API，'
-        + '按 token 计费。安装 CLI 并登录后即可改用你自己的套餐。',
-    'settings.assistant.accountKimi': '无论本机是否安装了 CLI，Kimi Code 都使用这里保存的密钥，'
-        + '按 token 计费。CloudBlast 会用它自己的一份配置来驱动 CLI，'
-        + '因此本机上的 Kimi Code 登录不会被读取，也不会被改动。',
-    'settings.assistant.accountLocal': '没有需要登录的账户。模型就跑在这台电脑上，'
-        + '因此既没有账户，也不按 token 计费。只有你自己在服务器上设置了密钥时才需要填。',
-    'settings.assistant.accountPlan': '已在本机通过 {agent} 登录，使用的是 {plan} 套餐。'
-        + '用量从该套餐扣除，因此这里不需要填写密钥。',
-    'settings.assistant.accountProvider': '本机的 {agent} 已配置为使用 {provider}，'
-        + '其凭据由该服务商自行管理。这里无需任何设置。',
-    'settings.assistant.accountAgentKey': '本机的 {agent} 正在使用 API 密钥，因此按 token 计费。',
-    'settings.assistant.accountStoredKey': '这里已保存一个密钥并会被使用。清空输入框并保存即可将其删除，'
-        + '并回退到 {agent} 的登录。',
-    'settings.assistant.accountNone': '如果你已经在本机登录 {agent}（通常都是这样），那就无需任何操作。'
-        + '只有在没有登录时才需要密钥。',
-    'settings.assistant.apiKey': 'API 密钥',
-    'settings.assistant.keyStored': '已保存一个密钥',
-    'settings.assistant.keyOptional': '只有服务器要求时才需要',
-    'settings.assistant.keySaved': '密钥已保存。',
-    'settings.assistant.keyRemoved': '密钥已删除。',
-    'settings.assistant.keyFailed': '无法保存该密钥。',
-    'settings.assistant.noSecureStore': '本系统没有可用的安全存储，因此无法在此保存密钥。',
     'settings.assistant.tools': '它能做什么',
     'settings.assistant.toolsDesc': '共 {count} 个工具，其中 {readOnly} 个只读。其余受上面的批准设置约束。',
 
@@ -990,9 +971,8 @@ export default {
     'assistant.modelAndEffort': '模型与思考强度',
     'assistant.readingModels': '正在读取模型列表…',
     'assistant.noModels': '未报告任何模型。请重试',
+    'assistant.someNoModels': '部分代理未报告模型。请重试',
     'assistant.notInRuntimeList': '不在此运行时的列表中',
-    'assistant.agentDefault': '{agent} 默认',
-    'assistant.agentDefaultHint': '你安装的 {agent} 使用什么就用什么',
     'assistant.effort': '思考强度',
     'assistant.effortLow': '低',
     'assistant.effortMedium': '中',

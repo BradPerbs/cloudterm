@@ -470,16 +470,27 @@ export default {
     'settings.assistant.desc': 'The agent reads your terminals and works on your servers '
         + 'through the connections you have already opened. It never sees a stored password or key.',
     'settings.assistant.loading': 'Loading the agent settings...',
-    'settings.assistant.agent': 'Agent',
-    'settings.assistant.agentDesc': 'Which coding agent answers: one installed on this machine, or '
-        + 'a model you are serving yourself. Switching starts a fresh conversation.',
+    'settings.assistant.agent': 'Agents',
+    'settings.assistant.agentDesc': 'Which coding agents answer: ones installed on this machine, or '
+        + 'a model you are serving yourself. Switch on as many as you have a login or a key for. The '
+        + 'model menu in the chat lists all of their models together, and picking one there is what '
+        + 'decides which agent answers next.',
     'settings.assistant.provider.claudeCode': 'Anthropic’s agent, on your own account.',
     'settings.assistant.provider.codex': 'OpenAI’s agent, on your own account.',
     'settings.assistant.provider.opencode': 'Open source, on the providers you set up.',
     'settings.assistant.provider.grok': 'xAI’s agent, on your own account.',
-    'settings.assistant.provider.kimi': 'Moonshot’s agent, on a Moonshot key.',
+    'settings.assistant.provider.kimi': 'Moonshot’s agent, on your own account.',
     'settings.assistant.provider.local': 'Your own model: LM Studio, Ollama, vLLM.',
     'settings.assistant.provider.unavailable': 'Not available in this build yet.',
+    'settings.assistant.provider.keepOne': 'One agent has to stay switched on.',
+    'settings.assistant.provider.checking': 'Looking for it on this machine...',
+    'settings.assistant.provider.notFound': 'Not found on this machine. Install it, then tick this '
+        + 'again.',
+    'settings.assistant.provider.notSignedIn': 'Installed, but not signed in. Sign in to it in a '
+        + 'terminal, then tick this again.',
+    'settings.assistant.provider.noServer': 'Nothing answered at the address below. Start your '
+        + 'model server, then tick this again.',
+    'settings.assistant.provider.checkFailed': 'That check could not be finished. Try again.',
     'settings.assistant.endpoint': 'Server address',
     'settings.assistant.endpointDesc': 'Where the local model server is listening. Any server that '
         + 'speaks the OpenAI API works here.',
@@ -546,38 +557,6 @@ export default {
     'settings.assistant.lines': 'Terminal lines it can read',
     'settings.assistant.linesDesc': 'How much of a session’s recent output one read returns. Higher '
         + 'gives it more context to work from and uses more of the conversation’s budget.',
-    'settings.assistant.signIn': 'Signing in',
-    'settings.assistant.theAgent': 'the agent',
-    'settings.assistant.accountOpencode': 'OpenCode uses the providers and credentials already '
-        + 'configured in its CLI. Manage them with "opencode auth login"; keys stored in CloudBlast '
-        + 'are not passed to OpenCode.',
-    'settings.assistant.accountGrokApi': 'Grok Build is not installed on this machine, so CloudTerm '
-        + 'talks to the xAI API directly with the key stored here, and usage is charged per token. '
-        + 'Install the CLI and sign in to use your own plan instead.',
-    'settings.assistant.accountKimi': 'Kimi Code always runs on the key stored here, whether the CLI '
-        + 'is installed or not, and usage is charged per token. CloudBlast drives the CLI against a '
-        + 'configuration of its own, so a Kimi Code login on this machine is left alone and not used.',
-    'settings.assistant.accountLocal': 'Nothing to sign in to. The model runs on this computer, so '
-        + 'there is no account and no per-token charge. A key is only needed if you put one on the '
-        + 'server yourself.',
-    'settings.assistant.accountPlan': 'Signed in through {agent} on this machine, on a {plan} plan. '
-        + 'Usage comes out of that plan, so no key is needed here.',
-    'settings.assistant.accountProvider': '{agent} on this machine is set up against {provider}, '
-        + 'which handles its own credentials. Nothing is needed here.',
-    'settings.assistant.accountAgentKey': '{agent} on this machine is using an API key, so usage is '
-        + 'charged per token.',
-    'settings.assistant.accountStoredKey': 'A key is stored here and will be used. Clear the box '
-        + 'and save to remove it and fall back to the {agent} login.',
-    'settings.assistant.accountNone': 'Nothing to do if you are already signed in to {agent} on '
-        + 'this machine, which is the usual case. A key is only needed when you are not.',
-    'settings.assistant.apiKey': 'API key',
-    'settings.assistant.keyStored': 'A key is stored',
-    'settings.assistant.keyOptional': 'Only if your server asks for one',
-    'settings.assistant.keySaved': 'Key saved.',
-    'settings.assistant.keyRemoved': 'Key removed.',
-    'settings.assistant.keyFailed': 'That key could not be saved.',
-    'settings.assistant.noSecureStore': 'This system has no secure store available, so a key cannot '
-        + 'be saved here.',
     'settings.assistant.tools': 'What it can do',
     'settings.assistant.toolsDesc': '{count} tools, of which {readOnly} only read. The rest are '
         + 'subject to the approval setting above.',
@@ -1171,9 +1150,8 @@ export default {
     'assistant.modelAndEffort': 'Model and effort',
     'assistant.readingModels': 'Reading the model list...',
     'assistant.noModels': 'No models reported. Try again',
+    'assistant.someNoModels': 'Some agents reported no models. Try again',
     'assistant.notInRuntimeList': 'Not in this runtime’s list',
-    'assistant.agentDefault': '{agent} default',
-    'assistant.agentDefaultHint': 'Whatever your installed {agent} uses',
     'assistant.effort': 'Effort',
     'assistant.effortLow': 'Low',
     'assistant.effortMedium': 'Medium',

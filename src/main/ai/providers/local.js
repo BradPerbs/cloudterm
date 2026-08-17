@@ -102,9 +102,33 @@ async function listModels({ settings: current = {} } = {}) {
     return rows.map((row, index) => ({ ...row, preferred: index === 0 }));
 }
 
+/**
+ * Whether a model server is actually listening where the user said it is.
+ *
+ * There is no binary to find here, so the question has to be put to the address
+ * itself, and the cheapest form of it is the one the model menu asks anyway.
+ * Unlike the other agents' checks this is a request over the network, bounded
+ * by the 15 second timeout the reader carries.
+ *
+ * A refusal is not a dead end: the settings page keeps the address row open
+ * when this says no, so the port can be corrected and the tick tried again.
+ */
+async function detect({ settings: current = {} } = {}) {
+    try {
+        const rows = await listModels({ settings: current });
+        return { ok: Boolean(rows?.length), reason: 'noServer' };
+    } catch {
+        // A refused connection, a wrong port, a server with its API switched
+        // off. All of them are the same answer here, and the address row says
+        // more about which when it is checked from its own button.
+        return { ok: false, reason: 'noServer' };
+    }
+}
+
 module.exports = {
     start,
     listModels,
+    detect,
     endpoint,
     resolveModel,
     LABEL,

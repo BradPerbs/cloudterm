@@ -7,13 +7,14 @@
  * all five levels for every model, when support for them is per model, so two
  * of the stops quietly did nothing on some of the choices.
  *
- * The installed Claude Code knows both, and says so when asked. The main
- * process asks once its runtime is up and hands the answer to `status()` and
- * to `window.api.ai.onModels`. This file turns that into rows.
+ * Each installed agent knows both, and says so when asked. The main process
+ * asks and hands the answer to `status()` and to `window.api.ai.onModels`.
+ * This file turns that into rows.
  *
- * Nothing here guesses. The question can only be put to a process that is
- * already running, so until the assistant has run once there is exactly one
- * row: whatever Claude Code is already set to use.
+ * Nothing here guesses, and nothing here pads. An agent that has not answered
+ * yet contributes no rows at all, rather than one standing in for the answer:
+ * a menu that looks like it is working is the worst thing to show while it is
+ * not, and the note under the rows is what says which of the two it is.
  */
 
 import { translate } from '../i18n';
@@ -43,7 +44,7 @@ export const EFFORTS = [
 /** An effort stop with its name filled in, for the two places that draw one. */
 export const effortLabel = (stop) => (stop ? translate(stop.labelKey) : '');
 
-/** What each agent is called, for the one row that has to name it. */
+/** What each agent is called, for the rows that have to name one. */
 export const PROVIDER_NAMES = {
     'claude-code': 'Claude Code',
     codex: 'Codex',
@@ -54,37 +55,35 @@ export const PROVIDER_NAMES = {
 };
 
 /**
- * Inheriting is not a model, so no runtime lists it. It is always the first
- * row and it is the default, which is the whole proposition of driving the
- * user's own agent: pinning a model here would override the choice they
- * already made there.
+ * The order agents are drawn in, wherever more than one of them is.
+ *
+ * Taken from the names above rather than written twice: the settings cards and
+ * the composer's model menu are two views of one set, and a list that reordered
+ * itself between them would read as two different sets.
  */
-function inheritRow(provider) {
-    const name = PROVIDER_NAMES[provider] || translate('settings.assistant.theAgent');
-    return {
-        value: '',
-        short: name,
-        label: translate('assistant.agentDefault', { agent: name }),
-        hint: translate('assistant.agentDefaultHint', { agent: name }),
-        effort: null,
-    };
-}
+export const PROVIDER_ORDER = Object.keys(PROVIDER_NAMES);
 
 /**
  * The rows to offer, which are the ones the runtime reported and nothing else.
  *
  * There is deliberately no built-in list to fall back on. A list written here
- * would be a guess at what the Claude Code on this machine can run, and a
- * wrong guess is worse than a short menu: it offers models the runtime may not
- * have, on an account that may not be entitled to them, and it reads as fact.
- * Until the runtime has answered there is one row, which is the one that is
- * true whatever it turns out to have: use whatever it is already set to.
+ * would be a guess at what the agent on this machine can run, and a wrong guess
+ * is worse than a short menu: it offers models the runtime may not have, on an
+ * account that may not be entitled to them, and it reads as fact.
+ *
+ * There is no row for inheriting either, and there used to be: one reading
+ * "Claude Code default", offered whenever the agent had not named a default of
+ * its own. It said nothing a person could act on, and because an agent that
+ * failed to report its models had not named one either, it was also what a
+ * failed read looked like. A menu with one row in it that seemed to be working
+ * is worse than an empty one that says it is empty, which is what the note
+ * under these rows is for.
  *
  * A model the user has pinned that the runtime does not list is kept rather
  * than dropped: a menu that silently loses the setting it is displaying is
  * worse than one showing a row it cannot explain.
  */
-export function modelRows(catalog, selected = '', provider = 'claude-code') {
+function modelRows(catalog, selected = '') {
     const known = Array.isArray(catalog) && catalog.length > 0;
 
     const rows = (known ? catalog : []).map(row => ({
@@ -108,11 +107,52 @@ export function modelRows(catalog, selected = '', provider = 'claude-code') {
         });
     }
 
-    // An agent that names its own default does not need a row saying "use the
-    // default": that row is in the list already, under the name of the model
-    // it actually is. Only agents that keep their choice to themselves get the
-    // inherit row, where it is the one honest thing to offer.
-    return rows.some(row => row.preferred) ? rows : [inheritRow(provider), ...rows];
+    return rows;
+}
+
+/**
+ * Every switched-on agent's models, in one list, each row saying whose it is.
+ *
+ * The menu this feeds is a merged one, so a row needs two things it did not
+ * need while there was only ever one agent. `provider` is which agent it
+ * belongs to, which is what the mark beside the name is drawn from and what
+ * picking the row switches to. `key` is `agent:model`, because the values
+ * themselves collide: every agent that keeps its default to itself contributes
+ * a row valued `''`, and two agents can perfectly well offer the same alias.
+ *
+ * Only the agent that is answering is passed the saved model, so exactly one
+ * row can come back ticked and the "pinned but not in the runtime's list" row
+ * appears once rather than under every agent that has never heard of it.
+ *
+ * An agent that has reported nothing contributes nothing. The list can come
+ * back empty, and the menu says so rather than being padded out.
+ */
+export function mergedModelRows(catalogs, providers, settings) {
+    const on = new Set(providers?.length ? providers : [settings.provider]);
+
+    return PROVIDER_ORDER.filter(provider => on.has(provider)).flatMap((provider) => {
+        const answering = provider === settings.provider;
+        return modelRows(catalogs?.[provider], answering ? settings.model : '')
+            .map(row => ({ ...row, provider, key: `${provider}:${row.value}` }));
+    });
+}
+
+/**
+ * The row the chip is sitting on, or nothing at all.
+ *
+ * Resolved against the answering agent's rows alone, since a fallback across a
+ * merged list would be some other agent's first model and would have the chip
+ * naming something that is not going to answer.
+ *
+ * Undefined is a real answer here, and it means what it says: no model is
+ * pinned and the agent has not named a default, so nothing on this machine
+ * knows which model the next question will go to until it comes back. The chip
+ * names the agent in that case rather than picking a row to look confident
+ * with.
+ */
+export function currentModelRow(rows, settings) {
+    const mine = rows.filter(row => row.provider === settings.provider);
+    return modelRow(mine, settings.model);
 }
 
 /** An alias with its context window dropped: `opus[1m]` is `opus`. */
@@ -140,21 +180,23 @@ export function isDiscovered(catalog) {
 }
 
 /**
- * One row, by value, with the inherit row as the answer to anything unknown.
+ * One row, by value, or nothing when the list has no answer to give.
  *
  * Falls back to matching on the wire id, so a model pinned before the runtime
  * was ever asked shows up as the row that covers it rather than as its own
  * raw string. The setting is not rewritten for this: it changes the next time
  * the user picks something, and until then it works exactly as it did.
+ *
+ * Nothing pinned means the agent's own default, which is a named row only when
+ * the agent was willing to say which one that is. When it was not, there is no
+ * row, and none is invented: the first row of a list is not a default, it is
+ * whichever model happened to sort first.
  */
-export function modelRow(rows, value) {
-    // Nothing pinned means the agent's own default, which is a named row when
-    // the agent was willing to say which one it is.
-    if (!value) return rows.find(row => row.preferred) || rows[0];
+function modelRow(rows, value) {
+    if (!value) return rows.find(row => row.preferred);
     return rows.find(row => row.value === value)
         || rows.find(row => covers(row, value))
-        || rows.find(row => row.preferred)
-        || rows[0];
+        || rows.find(row => row.preferred);
 }
 
 /**

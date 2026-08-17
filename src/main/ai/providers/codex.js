@@ -565,4 +565,9 @@ function describeModels(rows) {
     return models.length ? models : null;
 }
 
-module.exports = { start, listModels, findCodex, codexAppRoots, codexRoots, SERVER_NAME };
+/** Whether the CLI is on this machine. See the note on claude-code's. */
+function detect() {
+    return { ok: Boolean(findCodex()), reason: 'notFound' };
+}
+
+module.exports = { start, listModels, detect, findCodex, codexAppRoots, codexRoots, SERVER_NAME };

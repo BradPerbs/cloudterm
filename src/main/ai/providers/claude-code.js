@@ -776,4 +776,20 @@ function describeFailure(error) {
     return text;
 }
 
-module.exports = { start, listModels, findClaude, claudeCandidates, LOCAL_TOOLS, SERVER_NAME };
+/**
+ * Whether this agent is on this machine, for the tick that switches it on.
+ *
+ * The same lookup `start` does, run before anything is switched on rather than
+ * on the first message. Switching an agent on and finding out days later, in
+ * the middle of a question, that it was never installed is the failure this
+ * exists to stop: the tick either takes or says why, in the moment the person
+ * is looking at the setting.
+ *
+ * No spawn and no network, only the fs walk `findClaude` already does, so this
+ * is a few milliseconds and does not need a timeout.
+ */
+function detect() {
+    return { ok: Boolean(findClaude()), reason: 'notFound' };
+}
+
+module.exports = { start, listModels, detect, findClaude, claudeCandidates, LOCAL_TOOLS, SERVER_NAME };

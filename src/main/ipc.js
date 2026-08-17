@@ -1586,6 +1586,9 @@ function register(getWindow) {
     // model menu is right the first time it is opened rather than after the
     // first message. Cached from then on; `ai-models` announces the answer.
     handle('ai-model-list', (event, options) => assistant.models(options || {}));
+    // Asked by the settings page before an agent is switched on, so a tick that
+    // could not have worked is refused while the person is still looking at it.
+    handle('ai-detect', (event, provider) => assistant.detect(provider));
     handle('ai-settings-set', (event, patch) => {
         const before = assistant.settings.get();
         const next = assistant.settings.set(patch);
@@ -1628,10 +1631,6 @@ function register(getWindow) {
 
         return next;
     });
-    // Write-only, like every other credential in the app: it goes in, and only
-    // whether one exists ever comes back.
-    handle('ai-set-key', (event, value) => assistant.settings.setApiKey(value));
-
     handle('ai-conversation-start', (event, payload) => assistant.create(payload || {}));
     handle('ai-conversation-list', () => assistant.list());
     handle('ai-conversation-history', (event, conversationId) => assistant.history(conversationId));

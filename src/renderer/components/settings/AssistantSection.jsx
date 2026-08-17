@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PROVIDER_NAMES } from '../../lib/ai-catalog';
+import { PROVIDER_ORDER } from '../../lib/ai-catalog';
 import ProviderPicker from './ProviderPicker';
 import SettingCard from './ui/SettingCard';
 import SettingRow, { DIVIDED } from './ui/SettingRow';
@@ -23,9 +23,16 @@ import { useT } from '../../i18n';
  * conversation and walking to a settings page to do it costs the thread they
  * were pulling on. Having them in both places meant two controls for one
  * setting, each having to be told when the other moved.
+ *
+ * There is no API key on this page and no card for signing in. The assistant
+ * runs the agents that are already installed and already signed in on this
+ * machine, and nothing else: an agent that is not there is refused when it is
+ * ticked, rather than accepted on the promise of a credential typed in
+ * afterwards. A key box invited exactly that, and an agent switched on with
+ * nothing behind it is a failure saved up for the middle of a question.
  */
 
-/** The field look this page uses: the two text areas and the key input. */
+/** The field look this page uses: the two text areas and the address box. */
 const FIELD_CLASS = `w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutral-800
     border border-gray-300 dark:border-neutral-700
     text-gray-900 dark:text-gray-100 outline-none
@@ -33,77 +40,32 @@ const FIELD_CLASS = `w-full px-3 py-2 rounded-xl text-sm bg-white dark:bg-neutra
 
 const APPROVALS = ['always', 'writes', 'never'];
 
-/**
- * What a key for each agent looks like, as the field's placeholder.
- *
- * A key is stored per agent, so this is also the one thing on the row that
- * says whose key is being asked for: an Anthropic key typed into the box while
- * Grok is selected is not a fallback, it is a login failure a week later.
- */
-const KEY_HINTS = {
-    'claude-code': 'sk-ant-...',
-    codex: 'sk-proj-...',
-    grok: 'xai-...',
-    kimi: 'sk-...',
-};
-
-/** What the key box says when it is empty. */
-function keyPlaceholder(t, settings) {
-    if (settings.hasApiKey) return t('settings.assistant.keyStored');
-    // A local server usually wants no key at all, so the box says that rather
-    // than showing the shape of a credential nobody has to go and find.
-    if (settings.provider === 'local') return t('settings.assistant.keyOptional');
-    return KEY_HINTS[settings.provider] || 'sk-ant-...';
-}
-
 const COMMAND_MODES = ['terminal', 'background'];
 
 /**
- * How the assistant is authenticating, said plainly.
+ * The shortest a "is this agent here" check is allowed to take.
  *
- * The runtime is asked once a conversation has run, so before that there is
- * nothing to report and the page says as much. Guessing here is how someone on
- * a subscription ends up reading that they are being charged per token.
+ * The work behind it is a walk over a few directories, which is a couple of
+ * milliseconds, and a spinner that appears and disappears inside one frame is
+ * not feedback, it is a flicker. The card would simply tick, or simply not,
+ * with nothing on screen saying that anything had been looked for. This is long
+ * enough to read as an answer and short enough not to be a wait.
  */
-function describeAccount(t, account, hasApiKey, provider) {
-    const agent = PROVIDER_NAMES[provider] || t('settings.assistant.theAgent');
-    if (provider === 'opencode') return t('settings.assistant.accountOpencode');
-    // Nothing is signed in to and nothing is charged. The only credential a
-    // model server ever wants is one the user put on it themselves.
-    if (provider === 'local') return t('settings.assistant.accountLocal');
-    // Grok with no CLI on the machine, which the provider says by naming the
-    // API as what answered. It is a different arrangement from the other four
-    // and the page should not describe it as an agent that is signed in here.
-    if (provider === 'grok' && account?.apiProvider === 'xAI API') {
-        return t('settings.assistant.accountGrokApi');
-    }
-    // Kimi Code always runs on the key stored here, whether the CLI is driving
-    // or the API is, so the page says so instead of offering the login line
-    // that is true of the others and never of this one.
-    if (provider === 'kimi') return t('settings.assistant.accountKimi');
-    if (account?.subscriptionType) {
-        return t('settings.assistant.accountPlan', { agent, plan: account.subscriptionType });
-    }
-    if (account?.apiProvider && account.apiProvider !== 'firstParty') {
-        return t('settings.assistant.accountProvider', { agent, provider: account.apiProvider });
-    }
-    if (account?.apiKeySource && account.apiKeySource !== 'none') {
-        return t('settings.assistant.accountAgentKey', { agent });
-    }
-    if (hasApiKey) return t('settings.assistant.accountStoredKey', { agent });
-    return t('settings.assistant.accountNone', { agent });
-}
+const CHECK_FLOOR = 400;
+
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function AssistantSection() {
     const t = useT();
     const [settings, setSettings] = useState(null);
-    const [account, setAccount] = useState(null);
     // Which agents the main process actually has, so the picker offers what
     // exists rather than what is planned.
     const [providers, setProviders] = useState([]);
     const [tools, setTools] = useState([]);
-    const [keyValue, setKeyValue] = useState('');
-    const [keyState, setKeyState] = useState('');
+    /** The agent being looked for right now, so its card can say so. */
+    const [checking, setChecking] = useState('');
+    /** The agent whose tick was refused, and why: `{ provider, reason }`. */
+    const [rejected, setRejected] = useState(null);
     const [endpoint, setEndpoint] = useState('');
     const [endpointState, setEndpointState] = useState('');
     const [commands, setCommands] = useState('');
@@ -115,7 +77,6 @@ export default function AssistantSection() {
         window.api.ai.status().then((status) => {
             if (cancelled || !status) return;
             setSettings(status.settings);
-            setAccount(status.account || null);
             setProviders(status.providers || []);
             setTools(status.tools || []);
             setEndpoint(status.settings.localBaseUrl || '');
@@ -139,19 +100,51 @@ export default function AssistantSection() {
         return next;
     }, []);
 
-    const saveKey = useCallback(async () => {
-        const result = await window.api.ai.setApiKey(keyValue);
-        if (result?.success) {
-            setKeyValue('');
-            setKeyState(keyValue
-                ? t('settings.assistant.keySaved')
-                : t('settings.assistant.keyRemoved'));
-            const status = await window.api.ai.status();
-            setSettings(status.settings);
-        } else {
-            setKeyState(result?.message || t('settings.assistant.keyFailed'));
+    /**
+     * Switch one agent on or off.
+     *
+     * The list is what goes over, not the agent that was clicked, so main is
+     * never left working out which of two states a name meant. Switching off
+     * the agent that is answering is allowed: main moves the conversation to
+     * the first one still on, since the alternative is a model menu offering
+     * nothing that can run.
+     *
+     * Switching one on asks main whether it is there first, and the tick does
+     * not take if it is not. An agent that was never installed used to be
+     * switchable on, and said so days later in the middle of a question; the
+     * one moment a person can do anything about it is the moment they are
+     * looking at the setting.
+     *
+     * Switching off asks nothing. An agent that has gone missing is exactly
+     * the one you would want to be able to untick.
+     */
+    const toggleProvider = useCallback(async (provider) => {
+        const on = settings?.providers || [];
+        setRejected(null);
+
+        if (on.includes(provider)) {
+            const next = on.filter(name => name !== provider);
+            // The picker will not offer the click that empties the list, and
+            // main would refuse it anyway. Guarded here as well so the three of
+            // them agree rather than relying on the one furthest from it.
+            if (next.length === 0) return;
+            update({ providers: next });
+            return;
         }
-    }, [keyValue, t]);
+
+        setChecking(provider);
+        const [verdict] = await Promise.all([
+            window.api.ai.detect(provider).catch(() => null),
+            pause(CHECK_FLOOR),
+        ]);
+        setChecking('');
+
+        if (!verdict?.ok) {
+            setRejected({ provider, reason: verdict?.reason || 'error' });
+            return;
+        }
+        update({ providers: [...on, provider] });
+    }, [settings?.providers, update]);
 
     /**
      * Save the address, then say what is listening at it.
@@ -166,7 +159,10 @@ export default function AssistantSection() {
         setEndpoint(next.localBaseUrl || '');
         setEndpointState(t('settings.assistant.endpointChecking'));
 
-        const rows = await window.api.ai.models({ refresh: true }).catch(() => null);
+        // Named, because the local server is not necessarily the agent that is
+        // answering: it can be switched on beside three others and still be the
+        // one whose address is being checked.
+        const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
         setEndpointState(rows?.length
             ? t('settings.assistant.endpointFound', { count: rows.length })
             : t('settings.assistant.endpointNone'));
@@ -220,6 +216,11 @@ export default function AssistantSection() {
 
     const readOnlyTools = tools.filter(tool => tool.readOnly).length;
 
+    // In the order the cards are drawn rather than the order they were switched
+    // on in, so the set the page shows and the set the composer's menu offers
+    // read as one list rather than two.
+    const activated = PROVIDER_ORDER.filter(name => (settings.providers || []).includes(name));
+
     // Offered only once a list has actually moved away from the shipped one,
     // so the row is not carrying a button that would do nothing. Compared
     // against what is saved rather than what is in the box, because a list
@@ -241,19 +242,26 @@ export default function AssistantSection() {
                     description={t('settings.assistant.agentDesc')}
                 >
                     <ProviderPicker
-                        value={settings.provider}
+                        values={activated}
                         available={providers}
-                        onChange={(value) => update({ provider: value })}
+                        checking={checking}
+                        rejected={rejected}
+                        onToggle={toggleProvider}
                     />
                 </SettingRow>
 
                 {/* Only for the one agent that has no installer to find it by.
-                    The other four are somewhere on the machine or they are
+                    The other five are somewhere on the machine or they are
                     not; this one is wherever the user said it is. It opens
                     rather than appearing, because it belongs to the card
                     above it and a row that blinks into existence reads as the
-                    page having been rebuilt. */}
-                <Reveal open={settings.provider === 'local'}>
+                    page having been rebuilt.
+
+                    Open on a refusal as well as on the tick, because this row
+                    is the only thing that can answer one: a server listening on
+                    some other port is refused for an address the user cannot
+                    reach, which is a dead end rather than a check. */}
+                <Reveal open={activated.includes('local') || rejected?.provider === 'local'}>
                     <SettingRow
                         className={DIVIDED}
                         title={t('settings.assistant.endpoint')}
@@ -467,51 +475,6 @@ export default function AssistantSection() {
                         />
                     }
                 />
-            </SettingCard>
-
-            <SettingCard>
-                <SettingRow
-                    title={t('settings.assistant.signIn')}
-                    description={describeAccount(
-                        t,
-                        account,
-                        settings.hasApiKey,
-                        settings.provider
-                    )}
-                >
-                    {settings.provider === 'opencode' ? (
-                        <code className="inline-flex px-3 py-2 rounded-xl text-xs font-jetbrains
-                            bg-gray-50 dark:bg-neutral-800 text-gray-700 dark:text-gray-300">
-                            opencode auth login
-                        </code>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="flex gap-3">
-                                <input
-                                    type="password"
-                                    aria-label={t('settings.assistant.apiKey')}
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    placeholder={keyPlaceholder(t, settings)}
-                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
-                                    value={keyValue}
-                                    onChange={(event) => { setKeyValue(event.target.value); setKeyState(''); }}
-                                />
-                                <Button size="md" variant="secondary" onClick={saveKey}>
-                                    {t('common.save')}
-                                </Button>
-                            </div>
-                            {keyState && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{keyState}</p>
-                            )}
-                            {!settings.encryptionAvailable && (
-                                <p className="text-xs text-amber-600 dark:text-amber-400">
-                                    {t('settings.assistant.noSecureStore')}
-                                </p>
-                            )}
-                        </div>
-                    )}
-                </SettingRow>
             </SettingCard>
 
             <SettingCard>

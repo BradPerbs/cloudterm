@@ -1,17 +1,39 @@
-import { ChatGptIcon, CpuIcon, Tick02Icon } from 'hugeicons-react';
-import openCodeLogoDark from '../../assets/icons/opencode-logo-dark-square.png';
-import openCodeLogoLight from '../../assets/icons/opencode-logo-light-square.png';
+import { Loading03Icon } from 'hugeicons-react';
+import Checkbox from '../ui/Checkbox';
+import ProviderMark from '../../lib/provider-marks';
+import { PROVIDER_NAMES, PROVIDER_ORDER } from '../../lib/ai-catalog';
 import { useT } from '../../i18n';
 
 /**
- * Which agent runs behind the assistant.
+ * Which agents run behind the assistant.
  *
  * Cards rather than a dropdown, because this is the one setting on the
  * page that changes what the whole feature is: everything below it (the model
  * list, the effort scale, what a tool call even looks like) belongs to
- * whichever of these is chosen. A row of a select box does not read like that
+ * whichever agents are running. A row of a select box does not read like that
  * kind of decision, and they are recognised by their marks long before
  * anyone reads the names.
+ *
+ * More than one can be on. They used to be radio buttons, one agent at a time,
+ * and switching meant coming to this page: a person with a Claude plan and an
+ * xAI key had to choose between them per question rather than per app. Switched
+ * on here, an agent's models join the composer's menu, and picking one there is
+ * what decides which of them answers the next message.
+ *
+ * So these are the app's own checkbox, in its card variant, rather than a card
+ * of our own with a tick drawn in the corner. A tick that only appears once you
+ * are already on says what the state is; an empty box says what the control
+ * does, which is the question someone arriving at this page is asking.
+ *
+ * At least one stays on. Nothing switched on is a model menu with no models and
+ * an assistant that cannot answer, which is the `enabled` toggle's job to say
+ * rather than something to arrive at by unticking six boxes.
+ *
+ * A tick is a request rather than the setting itself: the card spins while the
+ * machine is searched for that agent, and the box only fills if it was found.
+ * The three that answer over HTTP on a stored key have nothing on disk to look
+ * for and are through in the time of one IPC round trip, which is the honest
+ * answer for them rather than a wait invented to make the spinner visible.
  *
  * Which cards can be picked is not written here. `available` is the list of
  * providers the main process actually has, so one that has not been built yet
@@ -19,135 +41,57 @@ import { useT } from '../../i18n';
  * offers it without being touched.
  */
 
-/**
- * Claude Code's mark, as the single path Simple Icons publishes for it. The
- * path data is CC0; the mark itself is Anthropic's, used here to name their
- * product and nothing else.
- */
-function ClaudeCodeMark({ size = 22 }) {
-    return (
-        <svg
-            role="img"
-            aria-hidden="true"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-        >
-            <path d="M21 10.5h3v3h-3v3h-1.5v3H18v-3h-1.5v3H15v-3H9v3H7.5v-3H6v3H4.5v-3H3v-3H0v-3h3v-6h18Zm-15 0h1.5v-3H6Zm10.5 0H18v-3h-1.5z" />
-        </svg>
-    );
-}
-
-function OpenCodeMark({ size = 22 }) {
-    return (
-        <>
-            <img
-                src={openCodeLogoLight}
-                alt=""
-                aria-hidden="true"
-                width={size}
-                height={size}
-                className="block dark:hidden"
-            />
-            <img
-                src={openCodeLogoDark}
-                alt=""
-                aria-hidden="true"
-                width={size}
-                height={size}
-                className="hidden dark:block"
-            />
-        </>
-    );
-}
+const HINT_KEYS = {
+    'claude-code': 'settings.assistant.provider.claudeCode',
+    codex: 'settings.assistant.provider.codex',
+    opencode: 'settings.assistant.provider.opencode',
+    grok: 'settings.assistant.provider.grok',
+    kimi: 'settings.assistant.provider.kimi',
+    local: 'settings.assistant.provider.local',
+};
 
 /**
- * Grok's mark, as the two filled strokes xAI draws it with. The mark is
- * theirs, used here to name their product and nothing else.
+ * Why a tick was refused, in the agent's own terms.
  *
- * What stood here before was a glyph of our own: a slash with a broken
- * diagonal across it, which is xAI's corporate mark rather than Grok's, so the
- * card carried the wrong logo for the thing it names. A card that is read by
- * its mark before its name has to carry the right one.
+ * Anything not named here falls back to "that check could not be finished",
+ * which is the honest answer to a reason this build does not recognise: it says
+ * the check did not conclude rather than inventing a cause for it.
  */
-function GrokMark({ size = 22 }) {
-    return (
-        <svg
-            role="img"
-            aria-hidden="true"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            fillRule="evenodd"
-        >
-            <path d="M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815" />
-        </svg>
-    );
-}
+const REASONS = {
+    notFound: 'settings.assistant.provider.notFound',
+    noServer: 'settings.assistant.provider.noServer',
+    notSignedIn: 'settings.assistant.provider.notSignedIn',
+};
 
 /**
- * Kimi's mark, as the dot and the stroke Moonshot draw it with. The mark is
- * theirs, used here to name their product and nothing else.
+ * What the card says under its name.
+ *
+ * The one line does three jobs, because they are three answers to the same
+ * question and putting them in three places would mean a card that grows a row
+ * when it is refused and shoves the grid around underneath the pointer.
  */
-function KimiMark({ size = 22 }) {
-    return (
-        <svg
-            role="img"
-            aria-hidden="true"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            fillRule="evenodd"
-        >
-            <path d="M21.846 0a1.923 1.923 0 110 3.846H20.15a.226.226 0 01-.227-.226V1.923C19.923.861 20.784 0 21.846 0z" />
-            <path d="M11.065 11.199l7.257-7.2c.137-.136.06-.41-.116-.41H14.3a.164.164 0 00-.117.051l-7.82 7.756c-.122.12-.302.013-.302-.179V3.82c0-.127-.083-.23-.185-.23H3.186c-.103 0-.186.103-.186.23V19.77c0 .128.083.23.186.23h2.69c.103 0 .186-.102.186-.23v-3.25c0-.069.025-.135.069-.178l2.424-2.406a.158.158 0 01.205-.023l6.484 4.772a7.677 7.677 0 003.453 1.283c.108.012.2-.095.2-.23v-3.06c0-.117-.07-.212-.164-.227a5.028 5.028 0 01-2.027-.807l-5.613-4.064c-.117-.078-.132-.279-.028-.381z" />
-        </svg>
-    );
-}
+function CardNote({ provider, ready, checking, rejected }) {
+    const t = useT();
 
-const PROVIDERS = [
-    {
-        value: 'claude-code',
-        name: 'Claude Code',
-        hintKey: 'settings.assistant.provider.claudeCode',
-        mark: ClaudeCodeMark,
-    },
-    {
-        value: 'codex',
-        name: 'Codex',
-        hintKey: 'settings.assistant.provider.codex',
-        mark: ({ size = 22 }) => <ChatGptIcon size={size} strokeWidth={1.5} />,
-    },
-    {
-        value: 'opencode',
-        name: 'OpenCode',
-        hintKey: 'settings.assistant.provider.opencode',
-        mark: OpenCodeMark,
-    },
-    {
-        value: 'grok',
-        name: 'Grok Build',
-        hintKey: 'settings.assistant.provider.grok',
-        mark: GrokMark,
-    },
-    {
-        value: 'kimi',
-        name: 'Kimi Code',
-        hintKey: 'settings.assistant.provider.kimi',
-        mark: KimiMark,
-    },
-    {
-        value: 'local',
-        // Not the name of one product, because it is not one product: the card
-        // is for whatever is listening on the address below it.
-        name: 'Local model',
-        hintKey: 'settings.assistant.provider.local',
-        mark: ({ size = 22 }) => <CpuIcon size={size} strokeWidth={1.5} />,
-    },
-];
+    if (checking) {
+        return (
+            <span className="flex items-center gap-1.5">
+                <Loading03Icon size={12} strokeWidth={2.5} className="shrink-0 animate-spin" />
+                {t('settings.assistant.provider.checking')}
+            </span>
+        );
+    }
+
+    if (rejected) {
+        return (
+            <span className="text-amber-600 dark:text-amber-400">
+                {t(REASONS[rejected] || 'settings.assistant.provider.checkFailed')}
+            </span>
+        );
+    }
+
+    return ready ? t(HINT_KEYS[provider]) : t('settings.assistant.provider.unavailable');
+}
 
 // Three across, wrapping. One long row is how the names start breaking in
 // half, and these are read by their marks and their names rather than by
@@ -159,52 +103,57 @@ const PROVIDERS = [
 // columns there is three cards too narrow to hold a provider's name. Thirteen
 // rem is the floor that still gives three across at the card's full width.
 const GRID = 'grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))]';
-const CARD = `relative min-w-0 p-3 rounded-xl border text-left transition-colors outline-none
-    focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25`;
 
-export default function ProviderPicker({ value, available = [], onChange }) {
+export default function ProviderPicker({
+    values = [],
+    available = [],
+    checking = '',
+    rejected = null,
+    onToggle,
+}) {
     const t = useT();
+    const only = values.length === 1;
 
     return (
-        <div className={GRID}>
-            {PROVIDERS.map((provider) => {
-                const Mark = provider.mark;
-                const ready = available.includes(provider.value);
-                const selected = provider.value === value;
+        <div className={GRID} role="group">
+            {PROVIDER_ORDER.map((provider) => {
+                const ready = available.includes(provider);
+                const on = values.includes(provider);
+                // The last one standing keeps its box ticked, and says why on
+                // hover rather than swallowing the click in silence.
+                const stuck = on && only;
+                const looking = checking === provider;
 
                 return (
-                    <button
-                        key={provider.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={!ready}
-                        onClick={() => !selected && onChange(provider.value)}
-                        className={`${CARD} ${selected
-                            ? 'border-gray-900 dark:border-white bg-gray-50 dark:bg-white/[0.06]'
-                            : 'border-gray-200 dark:border-surface-control hover:border-gray-300 '
-                                + 'dark:hover:border-white/25'}
-                            ${ready ? '' : 'opacity-50 cursor-not-allowed hover:border-gray-200'}`}
-                    >
-                        {selected && (
-                            <Tick02Icon
-                                size={14}
-                                strokeWidth={2.5}
-                                className="absolute top-2.5 right-2.5 text-gray-900 dark:text-white"
-                            />
-                        )}
-
-                        <span className="flex items-center gap-2 min-w-0 text-gray-900 dark:text-white">
-                            <span className="shrink-0 leading-none">
-                                <Mark size={22} />
-                            </span>
-                            <span className="text-sm font-semibold truncate">{provider.name}</span>
-                        </span>
-
-                        <span className="mt-1.5 block text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                            {ready ? t(provider.hintKey) : t('settings.assistant.provider.unavailable')}
-                        </span>
-                    </button>
+                    <div key={provider} title={stuck ? t('settings.assistant.provider.keepOne') : undefined}>
+                        <Checkbox
+                            variant="card"
+                            className="h-full"
+                            checked={on}
+                            // Held while the machine is being searched for it,
+                            // so a second click cannot start a second search
+                            // for the same agent.
+                            disabled={!ready || looking}
+                            onChange={() => !stuck && onToggle(provider)}
+                            label={
+                                <span className="flex items-center gap-2 min-w-0
+                                    text-gray-900 dark:text-white">
+                                    <span className="shrink-0 leading-none">
+                                        <ProviderMark provider={provider} size={20} />
+                                    </span>
+                                    <span className="truncate">{PROVIDER_NAMES[provider]}</span>
+                                </span>
+                            }
+                            description={
+                                <CardNote
+                                    provider={provider}
+                                    ready={ready}
+                                    checking={looking}
+                                    rejected={rejected?.provider === provider ? rejected.reason : ''}
+                                />
+                            }
+                        />
+                    </div>
                 );
             })}
         </div>

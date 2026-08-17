@@ -190,6 +190,72 @@ async function run() {
     assert.strictEqual(events.at(-1).costUsd, 0.02, 'what the run cost is carried through');
     assert.strictEqual(events.at(-1).isError, false);
 
+    /* ---------------- The spelling the CLI actually uses ---------------- */
+
+    // Replayed verbatim from `grok -p ... --output-format streaming-json` on
+    // 1.0.4. Every line here was captured off the wire rather than written from
+    // the shape this file expected, which is how the two came to disagree: the
+    // words arrive under `data`, and while nothing read that key a turn ran to
+    // a clean exit and put nothing on the screen at all.
+    const wire = collect();
+    const real = provider.createTranslator(wire.onEvent);
+
+    real.event({ type: 'available_commands', tools: ['read_file'], commands: ['compact'] });
+    real.event({ type: 'thought', data: 'The user wants me to say ok.' });
+    real.event({ type: 'text', data: 'ok' });
+    real.event({
+        type: 'tool_call',
+        toolCallId: 'call-1',
+        title: 'list_dir',
+        kind: 'list',
+        status: 'pending',
+        toolName: 'list_dir',
+        rawInput: { target_directory: '.' },
+        content: [],
+        locations: [],
+    });
+    // The CLI sends one of these with no status at all before the real one.
+    real.event({ type: 'tool_call_update', toolCallId: 'call-1', status: null, content: [], rawOutput: null });
+    real.event({
+        type: 'tool_call_update',
+        toolCallId: 'call-1',
+        status: 'completed',
+        content: [],
+        rawOutput: { type: 'ListDir', Content: { content: '- note.txt', absolute_root_path: 'C:\\tmp' } },
+    });
+    real.event({ type: 'usage', usage: { input_tokens: 8455, output_tokens: 67 } });
+    real.event({
+        type: 'end',
+        stopReason: 'end_turn',
+        sessionId: '01a0',
+        usage: { input_tokens: 11256, output_tokens: 111, total_tokens: 28647 },
+        num_turns: 2,
+        total_cost_usd: 0.00540906,
+    });
+    real.finish();
+
+    assert.deepStrictEqual(
+        wire.events.map(event => event.type),
+        ['thinking-delta', 'text-delta', 'assistant-text', 'tool-call', 'tool-result', 'result'],
+        'the answer reaches the panel, which is what a turn is for'
+    );
+    assert.strictEqual(wire.events[1].text, 'ok', 'the words are under `data` on this CLI');
+    assert.strictEqual(
+        wire.events.find(event => event.type === 'tool-result').text,
+        '- note.txt',
+        'a result is unwrapped out of the struct the tool names it with'
+    );
+    assert.strictEqual(
+        wire.events.at(-1).costUsd,
+        0.00540906,
+        'the cost is stated once, on the last line, and nowhere else'
+    );
+    assert.strictEqual(
+        wire.events.at(-1).usage.total_tokens,
+        28647,
+        'and so is the total for the turn, rather than the last call of several'
+    );
+
     /* ---------------- The same events, spelled differently ---------------- */
 
     const other = collect();
@@ -282,6 +348,99 @@ async function run() {
     assert.match(provider.describeFailure('error: unexpected argument --effort'), /Update the CLI/);
     assert.match(provider.describeFailure('429 rate limit exceeded'), /rate limiting/);
     assert.strictEqual(provider.describeFailure('a plain failure'), 'a plain failure');
+
+    /* ---------------- The models, read from the CLI's own home ---------- */
+
+    assert.strictEqual(
+        provider.grokHome({ env: {}, home: UNIX_HOME }),
+        path.join(UNIX_HOME, '.grok'),
+        'the CLI\'s own default is where its setup is expected to be'
+    );
+    assert.strictEqual(
+        provider.grokHome({ env: { GROK_HOME: '/elsewhere' }, home: UNIX_HOME }),
+        '/elsewhere',
+        'a home they moved is the one the CLI would read, so it is the one we read'
+    );
+
+    const grokHome = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-home-'));
+    try {
+        assert.strictEqual(provider.signedIn({ source: grokHome }), false, 'no auth file is no login');
+        assert.strictEqual(provider.cachedModels({ source: grokHome }), null, 'and nothing to offer');
+
+        fs.writeFileSync(path.join(grokHome, 'auth.json'), '{}', 'utf8');
+        assert.strictEqual(provider.signedIn({ source: grokHome }), true);
+
+        fs.writeFileSync(path.join(grokHome, 'config.toml'), [
+            '[cli]',
+            'installer = "internal"',
+            '',
+            '[models]',
+            'default = "grok-4.6"',
+            'default_reasoning_effort = "xhigh"',
+            '',
+            '[ui]',
+            'yolo = false',
+        ].join('\n'), 'utf8');
+        assert.strictEqual(
+            provider.configuredModel(grokHome),
+            'grok-4.6',
+            'the model it is set to is the row the menu should land on'
+        );
+
+        fs.writeFileSync(path.join(grokHome, 'models_cache.json'), JSON.stringify({
+            models: {
+                'grok-4.6': {
+                    info: {
+                        id: 'grok-4.6',
+                        model: 'grok-4.6',
+                        name: 'Grok 4.6',
+                        description: 'The frontier one',
+                        hidden: false,
+                        supports_reasoning_effort: true,
+                        reasoning_efforts: [
+                            { value: 'xhigh' }, { value: 'high' }, { value: 'medium' },
+                            { value: 'low' }, { value: 'glacial' },
+                        ],
+                    },
+                },
+                'grok-4.5': {
+                    info: {
+                        id: 'grok-4.5',
+                        name: 'Grok 4.5',
+                        hidden: false,
+                        supports_reasoning_effort: true,
+                        reasoning_efforts: [{ value: 'high' }, { value: 'low' }],
+                    },
+                },
+                'grok-internal': { info: { id: 'grok-internal', name: 'Internal', hidden: true } },
+            },
+        }), 'utf8');
+
+        const rows = provider.cachedModels({ source: grokHome });
+        assert.deepStrictEqual(
+            rows.map(row => row.value),
+            ['grok-4.6', 'grok-4.5'],
+            'a model the CLI hides is not one this app offers'
+        );
+        assert.strictEqual(rows[0].short, 'Grok 4.6', 'the name it goes by is the name shown');
+        assert.deepStrictEqual(
+            rows[0].effort,
+            ['xhigh', 'high', 'medium', 'low'],
+            'a level this app has no name for is not a stop it can offer'
+        );
+        assert.deepStrictEqual(
+            rows[1].effort,
+            ['high', 'low'],
+            'the scale is the model\'s own, not the union of every model\'s'
+        );
+        // Which is the bug this reader exists for: with the CLI on the machine
+        // and no key stored, the only list came from an API there was nothing
+        // to ask with, so the menu offered one row and never filled in.
+        assert.strictEqual(rows[0].preferred, true);
+        assert.strictEqual(rows[1].preferred, false);
+    } finally {
+        fs.rmSync(grokHome, { recursive: true, force: true });
+    }
 
     console.log('grok provider tests passed');
 }

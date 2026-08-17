@@ -226,14 +226,19 @@ function AssistantConversation({
     const [scope, setScope] = useState(followScope);
     const [settings, setSettings] = useState(null);
     /**
-     * The model list, as `{ provider, rows }`.
+     * The model lists, keyed by the agent each came from.
      *
      * Kept with the agent it came from rather than on its own, so that a list
-     * arriving for the agent you just switched away from cannot be shown as
-     * though it belonged to the new one. Reading a catalog means starting a
-     * runtime, so those answers can arrive seconds late, in any order.
+     * arriving for an agent that has since been switched off cannot be shown as
+     * though it belonged to another. Reading a catalog means starting a
+     * runtime, so those answers can arrive seconds late, in any order, and with
+     * several agents switched on there are several of them in flight at once.
+     *
+     * An agent that is absent has not been asked. One with `null` was asked and
+     * publishes nothing, which is a different answer and reads differently in
+     * the menu.
      */
-    const [catalog, setCatalog] = useState(null);
+    const [catalogs, setCatalogs] = useState({});
 
     /** Whether a read is in flight, so the menu can say so rather than look empty. */
     const [readingModels, setReadingModels] = useState(false);
@@ -257,41 +262,52 @@ function AssistantConversation({
         window.api.ai.status()
             .then((status) => {
                 setSettings(status?.settings || null);
-                if (status?.settings) {
-                    setCatalog({ provider: status.settings.provider, models: status.models || null });
-                }
+                setCatalogs(status?.catalogs || {});
             })
             .catch(() => {});
     }, []);
 
-    // Asked for rather than waited for: reading it means bringing the runtime
-    // up, and a chip that fills itself in only after the first message is a
-    // chip nobody can use to choose the first message. Asked again when the
-    // agent changes, since the answer belongs to the agent.
-    const readModels = useCallback((provider, { refresh = false } = {}) => {
-        if (!provider) return;
+    /**
+     * Which agents are switched on, as one array that keeps its identity.
+     *
+     * Rebuilt from a string rather than read straight off the settings,
+     * because main sends a fresh object every time anything at all changes and
+     * a new array each render would put the read below into a loop.
+     */
+    const activeKey = settings ? (settings.providers || [settings.provider]).join(' ') : '';
+    const providers = useMemo(() => (activeKey ? activeKey.split(' ') : []), [activeKey]);
+
+    // Asked for rather than waited for: reading one means bringing that agent's
+    // runtime up, and a chip that fills itself in only after the first message
+    // is a chip nobody can use to choose the first message. Every switched-on
+    // agent is asked, since the menu offers all of them together; main holds
+    // each answer, so this costs one start per agent per run of the app.
+    const readModels = useCallback((wanted, { refresh = false } = {}) => {
+        const asking = (wanted || []).filter(Boolean);
+        if (asking.length === 0) return;
+
         setReadingModels(true);
-        window.api.ai.models({ refresh })
-            .then(rows => setCatalog({ provider, models: rows || null }))
-            .catch(() => setCatalog({ provider, models: null }))
+        Promise.all(asking.map(provider => window.api.ai.models({ provider, refresh })
+            .then(rows => [provider, rows || null])
+            .catch(() => [provider, null])))
+            .then((answers) => {
+                setCatalogs(held => ({ ...held, ...Object.fromEntries(answers) }));
+            })
             .finally(() => setReadingModels(false));
     }, []);
 
     useEffect(() => {
-        readModels(settings?.provider);
-    }, [settings?.provider, readModels]);
+        readModels(providers);
+    }, [providers, readModels]);
 
     // Main announces a catalog whenever one is read or the agent changes. It
-    // carries the agent it belongs to, and so does what is stored, so nothing
-    // here has to reason about what arrived when.
-    useEffect(() => window.api.ai.onModels(setCatalog), []);
-
-    // Both sides have to exist before they can agree. Optional chaining alone
-    // is not enough here: before either has loaded, `undefined === undefined`
-    // is true and this would read through a null.
-    const models = settings && catalog?.provider === settings.provider
-        ? catalog.models
-        : null;
+    // carries the agent it belongs to, so it is filed under that agent rather
+    // than replacing what is held, and nothing here has to reason about what
+    // arrived when.
+    useEffect(() => window.api.ai.onModels(({ provider, models }) => {
+        if (!provider) return;
+        setCatalogs(held => ({ ...held, [provider]: models || null }));
+    }), []);
 
     // Quick prompts are written on the settings page, which is open beside this
     // panel rather than instead of it, so the panel is told when they change.
@@ -677,9 +693,10 @@ function AssistantConversation({
                             {settings && (
                                 <ModelMenu
                                     settings={settings}
-                                    models={models}
+                                    catalogs={catalogs}
+                                    providers={providers}
                                     loading={readingModels}
-                                    onRefresh={() => readModels(settings.provider, { refresh: true })}
+                                    onRefresh={() => readModels(providers, { refresh: true })}
                                     onChange={changeSettings}
                                 />
                             )}

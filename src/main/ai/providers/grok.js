@@ -20,15 +20,23 @@ const engine = require('./openai-compatible');
  * and reached by URL. The agent brings its own harness with it, which is the
  * point of driving an agent rather than a model.
  *
- * When it is not installed, an xAI API key is enough. `openai-compatible.js`
+ * What it can run is read out of that same install: `~/.grok` holds the model
+ * cache the CLI writes when it signs in, and the model it is set to. That is
+ * the only honest source, and for a while it was not the one used: the list
+ * came from api.x.ai, asked for with a key stored in this app, so a machine
+ * with the CLI installed and no key had a working agent and an empty model
+ * menu. Nothing in that directory is ever written to.
+ *
+ * When the CLI is not installed, an xAI API key is enough. `openai-compatible.js`
  * runs the loop instead and talks to api.x.ai, which speaks the same shape as
  * every other server that file was written for. It is the lesser of the two,
- * because the loop is ours rather than xAI's, but it is the difference between
- * a card that works and a card that says "install this first".
+ * because the loop is ours rather than xAI's, and it is no longer a way to
+ * switch this agent on: nothing stores a key any more, and the tick asks for
+ * the CLI. It stays for whoever already had one.
  *
  * Which of the two is in use is announced as an `account` event, so the panel
- * and the settings page can say so rather than leaving the user to infer it
- * from the shape of the answers.
+ * can say so rather than leaving the user to infer it from the shape of the
+ * answers.
  */
 
 /** The name our tools are served under. As elsewhere: what they do, not whose. */
@@ -161,6 +169,98 @@ function findGrok(options = {}) {
 }
 
 /**
+ * Where Grok Build keeps its own setup: its login, its config, its model cache.
+ *
+ * `~/.grok` is the CLI's default, and `GROK_HOME` wins if one is set, because
+ * that is the answer the CLI itself would give. Only ever read from: what is in
+ * there belongs to the CLI, and this app has no business writing to it.
+ */
+function grokHome({ env = process.env, home = os.homedir() } = {}) {
+    return envValue(env, 'GROK_HOME') || path.join(home, '.grok');
+}
+
+/** Whether the CLI has a login in that home to run on. */
+function signedIn({ source = grokHome(), existsSync = fs.existsSync } = {}) {
+    return existsSync(path.join(source, 'auth.json'));
+}
+
+/** One of the CLI's own files, parsed, or nothing if it is not there yet. */
+function readJson(file) {
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The model the CLI is set to, out of its own configuration.
+ *
+ * One line under `[models]`, which is the only part of that file this needs.
+ * Read a line at a time rather than parsed: the answer decides which row the
+ * menu lands on, so being wrong about it costs a highlight rather than a
+ * conversation, and a TOML parser for one key is a dependency for nothing.
+ */
+function configuredModel(source) {
+    let text = '';
+    try {
+        text = fs.readFileSync(path.join(source, 'config.toml'), 'utf8');
+    } catch {
+        return '';
+    }
+
+    let models = false;
+    for (const line of text.split(/\r?\n/)) {
+        const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+        if (header) {
+            models = header[1].trim() === 'models';
+            continue;
+        }
+        if (!models) continue;
+
+        const value = /^\s*default\s*=\s*["']([^"']+)["']/.exec(line);
+        if (value) return value[1];
+    }
+    return '';
+}
+
+/**
+ * The models the CLI cached when it last signed in.
+ *
+ * Each entry carries its own reasoning levels, which is better than the union
+ * this app used to offer for every row: 4.6 takes an extra-high that 4.5 does
+ * not, and a dial with a stop the model has never heard of is a dial that turns
+ * a working conversation into a failed argument. Narrowed to the levels this
+ * app has names for, and a model the CLI marks hidden is not offered at all.
+ */
+function cachedModels({ source = grokHome() } = {}) {
+    const cache = readJson(path.join(source, 'models_cache.json'));
+    const models = cache?.models;
+    if (!models || typeof models !== 'object') return null;
+
+    const best = configuredModel(source);
+
+    const rows = Object.entries(models)
+        .map(([id, entry]) => ({ id, info: entry?.info || {} }))
+        .filter(({ info }) => !info.hidden)
+        .map(({ id, info }) => ({
+            value: info.id || id,
+            resolved: info.model || info.id || id,
+            label: info.name || id,
+            short: info.name || id,
+            description: info.description || '',
+            effort: info.supports_reasoning_effort && Array.isArray(info.reasoning_efforts)
+                ? info.reasoning_efforts
+                    .map(level => String(level?.value || level?.id || ''))
+                    .filter(level => EFFORTS.has(level))
+                : [],
+            preferred: (info.id || id) === best,
+        }));
+
+    return rows.length > 0 ? rows : null;
+}
+
+/**
  * A directory of our own for the agent to run in.
  *
  * Not the user's project, and not their home. A terminal agent reads the
@@ -239,6 +339,40 @@ function firstString(event, ...keys) {
  * release and `content` in the next and a transcript that renders nothing is a
  * worse failure than one that renders a field it did not expect.
  */
+/**
+ * The first string anywhere inside a tool's result, as far down as it is worth
+ * looking.
+ *
+ * `rawOutput` is where this CLI puts what a tool produced, and it is not a
+ * string and not one shape: each built-in tool writes its own struct there,
+ * named and wrapped in a `Content` field. So the wrapper is opened until a
+ * string falls out. Anything unrecognised is shown as its own JSON rather than
+ * dropped: a result the panel cannot read nicely is still a result the person
+ * can read, and an empty row under a tool call reads as a tool that did
+ * nothing.
+ */
+function unwrapOutput(value, depth = 0) {
+    if (typeof value === 'string') return value;
+    if (!value || typeof value !== 'object' || depth > 4) return '';
+
+    if (Array.isArray(value)) {
+        return value.map(entry => unwrapOutput(entry, depth + 1)).filter(Boolean).join('\n');
+    }
+
+    for (const key of ['content', 'Content', 'text', 'output', 'stdout', 'message', 'error']) {
+        const found = unwrapOutput(value[key], depth + 1);
+        if (found) return found;
+    }
+
+    return depth === 0 ? JSON.stringify(value).slice(0, 2000) : '';
+}
+
+/** What a finished tool call produced, however this release spells it. */
+function readOutput(payload) {
+    return firstString(payload, 'content', 'output', 'result', 'error')
+        || unwrapOutput(payload?.rawOutput ?? payload?.raw_output);
+}
+
 function createTranslator(onEvent) {
     let text = '';
     let cost = 0;
@@ -264,8 +398,14 @@ function createTranslator(onEvent) {
         },
         event(payload) {
             switch (payload?.type) {
+                // `data` is where this CLI actually puts the words, and for a
+                // while it was the one spelling not looked for here: every
+                // chunk of every answer matched none of the keys below and was
+                // dropped, so a turn ran to a clean exit and said nothing. The
+                // others are kept because they cost nothing and this is a
+                // format that is not ours to define.
                 case 'text': {
-                    const delta = firstString(payload, 'text', 'content', 'delta', 'message');
+                    const delta = firstString(payload, 'data', 'text', 'content', 'delta', 'message');
                     if (!delta) return;
                     text += delta;
                     onEvent({ type: 'text-delta', text: delta });
@@ -273,7 +413,7 @@ function createTranslator(onEvent) {
                 }
 
                 case 'thought': {
-                    const delta = firstString(payload, 'text', 'content', 'delta', 'thought');
+                    const delta = firstString(payload, 'data', 'text', 'content', 'delta', 'thought');
                     if (delta) onEvent({ type: 'thinking-delta', text: delta });
                     return;
                 }
@@ -308,7 +448,7 @@ function createTranslator(onEvent) {
                         onEvent({
                             type: 'tool-result',
                             id,
-                            text: firstString(payload, 'content', 'rawOutput', 'raw_output', 'output', 'result', 'error'),
+                            text: readOutput(payload),
                             isError: status !== 'completed',
                         });
                     }
@@ -318,6 +458,16 @@ function createTranslator(onEvent) {
                 case 'usage':
                     usage = payload.usage || payload;
                     cost += Number(payload.costUsd ?? payload.cost_usd ?? payload.cost ?? 0) || 0;
+                    return;
+
+                // The last line of a run, and the only one that totals it. The
+                // `usage` lines above are per model call, so a turn that called
+                // two would otherwise report the second one's tokens as the
+                // turn's, and the cost is only ever stated here: none of the
+                // usage lines carries one, which is why the chip read zero.
+                case 'end':
+                    if (payload.usage) usage = payload.usage;
+                    cost += Number(payload.total_cost_usd ?? payload.totalCostUsd ?? 0) || 0;
                     return;
 
                 case 'error':
@@ -526,9 +676,8 @@ async function start(options) {
     const binary = findGrok();
     if (!binary) {
         if (settings.apiKey) return apiSession(options);
-        throw new Error('Grok Build is not installed on this machine, and no xAI key is stored. '
-            + 'Install the Grok Build CLI and sign in, or add a key from console.x.ai in the '
-            + 'assistant settings.');
+        throw new Error('Grok Build is not installed on this machine. Install the Grok Build CLI '
+            + 'and sign in with "grok" in a terminal, then switch it on again.');
     }
 
     const directory = workspace();
@@ -661,14 +810,23 @@ async function start(options) {
 /**
  * What the account can run.
  *
- * Read from the API, which is the only one of the two paths that can be asked
- * without starting an agent, and only when there is a key to ask with. With no
- * key the answer is nothing at all rather than a list written here: the CLI is
- * signed in to an account whose entitlements this app cannot see, and the menu
- * already has a row that is true either way, which is to use whatever Grok
- * Build is set to.
+ * The CLI's own list, out of the cache it writes into its home when it signs
+ * in. That used to be a request to api.x.ai made with a key stored in this app,
+ * which had the CLI on the machine reporting no models at all: the account the
+ * CLI is signed in to is not one this app has a credential for, so with no key
+ * there was nothing to ask with and the menu fell back to a single row.
+ *
+ * Nothing is asked of the network here. The file is what the CLI itself reads
+ * before it draws its own picker, so it is the same answer, and it carries more
+ * than a `/models` response does: the name each model goes by, what it is for,
+ * and the reasoning levels it actually takes.
+ *
+ * The API path keeps its own answer for a machine with a key and no CLI, since
+ * there is no cache to read there.
  */
 async function listModels({ settings: current = {} } = {}) {
+    if (findGrok()) return cachedModels();
+
     if (!current.apiKey) return null;
 
     const rows = await engine.listModels({
@@ -678,12 +836,10 @@ async function listModels({ settings: current = {} } = {}) {
     });
     if (!rows?.length) return null;
 
-    // The dial is offered only when the CLI is the thing that will run, since
-    // that is the path with an effort flag. Against the API the request would
-    // carry a reasoning field the model may not take, and a dial that turns a
-    // working conversation into a 400 is worse than no dial.
-    const effort = findGrok() ? [...EFFORTS] : [];
-    return rows.map(row => ({ ...row, effort }));
+    // No dial on this path. The request would carry a reasoning field the model
+    // may not take, and a dial that turns a working conversation into a 400 is
+    // worse than no dial.
+    return rows.map(row => ({ ...row, effort: [] }));
 }
 
 /** A failure, in words that say what to do about it. */
@@ -692,7 +848,7 @@ function describeFailure(message) {
 
     if (/not logged in|unauthor|401|sign ?in|log ?in|invalid.*api.?key/i.test(text)) {
         return 'Grok Build is not signed in on this machine. Run "grok" in a terminal and sign in, '
-            + 'or add an xAI API key in the assistant settings.';
+            + 'then try again here.';
     }
     if (/ENOENT|not found|spawn/i.test(text)) {
         return 'The Grok Build CLI could not be started. Check that "grok" runs in a terminal, '
@@ -708,10 +864,30 @@ function describeFailure(message) {
     return text;
 }
 
+/**
+ * Whether this agent could run here. See the note on claude-code's.
+ *
+ * The CLI and its login, and nothing else. `start` can also run against the xAI
+ * API on a stored key, but that is not offered as a way to switch this agent
+ * on: the assistant runs what is installed and signed in here, and an agent
+ * accepted because a credential could be typed in later is an agent that fails
+ * in the middle of a question instead of at the tick. A key an older version
+ * stored still drives the fallback for whoever already had one.
+ */
+function detect() {
+    if (!findGrok()) return { ok: false, reason: 'notFound' };
+    return { ok: signedIn(), reason: 'notSignedIn' };
+}
+
 module.exports = {
     start,
     listModels,
+    detect,
     findGrok,
+    grokHome,
+    signedIn,
+    cachedModels,
+    configuredModel,
     grokRoots,
     createTranslator,
     runArguments,

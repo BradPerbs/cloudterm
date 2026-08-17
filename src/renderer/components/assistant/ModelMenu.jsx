@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import { ArrowDown01Icon, Loading03Icon, Refresh01Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 import EffortSlider from './EffortSlider';
+import ProviderMark from '../../lib/provider-marks';
 import {
-    modelRows,
-    modelRow,
+    PROVIDER_NAMES,
+    mergedModelRows,
+    currentModelRow,
     effortStops,
     effortLabel,
     nearestEffort,
@@ -22,12 +24,21 @@ import { useT } from '../../i18n';
  * pulling on. One control for both, because "which model, how hard" is a
  * single decision about how much this next question is worth.
  *
- * Neither list is written here, and neither has a hardcoded stand-in. `models`
- * is what the installed Claude Code reported it can run, and the effort scale
- * is narrowed to the levels the chosen model actually takes, which is not the
- * same five for all of them. Until the runtime has been asked, which it can
- * only be once it is running, the menu offers the one row that is true either
- * way: whatever Claude Code is already set to use.
+ * Neither list is written here, and neither has a hardcoded stand-in.
+ * `catalogs` is what each agent reported it can run, and the effort scale is
+ * narrowed to the levels the chosen model actually takes, which is not the same
+ * five for all of them. An agent that has not answered yet puts no rows here at
+ * all: the note under them says whether that is a read still in flight or one
+ * that came back with nothing, which is what a row standing in for the answer
+ * used to hide.
+ *
+ * Every agent switched on in settings has its models here, in one list. That is
+ * the whole point of letting several be on: choosing between Opus and Grok is
+ * the same kind of choice as choosing between Opus and Haiku, made in the same
+ * moment and about the same question, and sending someone to a settings page
+ * for one of them and not the other was never a real distinction. Picking a row
+ * moves the agent as well as the model, because a model belongs to exactly one
+ * of them.
  */
 
 /**
@@ -37,8 +48,13 @@ import { useT } from '../../i18n';
  * second and sometimes fails, and a menu with one row in it looks the same
  * either way. So it says which: still coming, or came back with nothing and
  * here is the button to ask again.
+ *
+ * `partial` is the case that only exists now that several agents can be on at
+ * once: three of them answered and the fourth did not. "No models reported"
+ * under a menu full of models reads as a bug in the menu, so it says which of
+ * the two happened.
  */
-function ModelNote({ loading, onRefresh }) {
+function ModelNote({ loading, partial, onRefresh }) {
     const t = useT();
 
     if (loading) {
@@ -60,19 +76,24 @@ function ModelNote({ loading, onRefresh }) {
                 hover:text-gray-900 dark:hover:text-white"
         >
             <Refresh01Icon size={13} strokeWidth={2} className="shrink-0" />
-            {t('assistant.noModels')}
+            {t(partial ? 'assistant.someNoModels' : 'assistant.noModels')}
         </button>
     );
 }
 
-export default function ModelMenu({ settings, models, loading, onRefresh, onChange }) {
+export default function ModelMenu({ settings, catalogs, providers, loading, onRefresh, onChange }) {
     const t = useT();
     const rows = useMemo(
-        () => modelRows(models, settings.model, settings.provider),
-        [models, settings.model, settings.provider]
+        () => mergedModelRows(catalogs, providers, settings),
+        [catalogs, providers, settings]
     );
 
-    const model = modelRow(rows, settings.model);
+    // Undefined when nothing is pinned and the agent has not named a default,
+    // which includes every agent that has not answered yet. The chip says which
+    // agent it is in that case, since that much is true and known, and the menu
+    // ticks nothing: a list with no choice marked is what "no choice made"
+    // looks like.
+    const model = currentModelRow(rows, settings);
     const stops = useMemo(() => effortStops(model), [model]);
 
     // What the dial shows, which is the saved level unless this model does not
@@ -81,25 +102,57 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
     const shown = nearestEffort(stops, settings.effort);
     const effort = stops.find(option => option.value === shown);
 
-    const discovered = isDiscovered(models);
+    // Marks only once there is more than one agent to tell apart. With one on,
+    // every row would carry the same mark, which is decoration: it answers a
+    // question nobody in that situation is asking.
+    const marked = providers.length > 1;
+
+    // The agents that have not answered. One with nothing still contributes its
+    // "whatever it is set to" row, so the list is never empty; what the note is
+    // for is saying that some of it is still coming, or came back empty and can
+    // be asked for again.
+    const missing = providers.filter(provider => !isDiscovered(catalogs?.[provider]));
 
     const sections = [
         {
             heading: t('assistant.model'),
-            // Nothing under the rows once the list is there: the rows are the
+            // Nothing under the rows once every list is there: the rows are the
             // answer, and a refresh button under a working menu is furniture.
-            note: discovered ? null : <ModelNote loading={loading} onRefresh={onRefresh} />,
-            value: settings.model,
+            note: missing.length > 0 ? (
+                <ModelNote
+                    loading={loading}
+                    partial={missing.length < providers.length}
+                    onRefresh={onRefresh}
+                />
+            ) : null,
+            value: model?.key,
             // The effort travels with the model, because the scales differ:
             // picking one that stops at "extra high" while "ultra" is saved
             // would leave a setting no menu shows and the agent cannot honour.
             // Written here rather than silently on render, since this is the
             // user changing something.
-            onChange: (value) => onChange({
-                model: value,
-                effort: nearestEffort(effortStops(modelRow(rows, value)), settings.effort),
-            }),
-            options: rows,
+            //
+            // The agent travels with it too. A row names one model of one
+            // agent's, so the pair goes over together and the settings take
+            // them as one change rather than as a switch of agent that throws
+            // the model away.
+            onChange: (key) => {
+                const picked = rows.find(row => row.key === key);
+                if (!picked) return;
+                onChange({
+                    provider: picked.provider,
+                    model: picked.value,
+                    effort: nearestEffort(effortStops(picked), settings.effort),
+                });
+            },
+            options: rows.map(row => ({
+                ...row,
+                // The menu matches and keys on this, and a model id alone is
+                // not unique across agents: every agent that keeps its default
+                // to itself offers a row valued ''.
+                value: row.key,
+                icon: marked ? <ProviderMark provider={row.provider} size={14} /> : null,
+            })),
         },
     ];
 
@@ -144,7 +197,18 @@ export default function ModelMenu({ settings, models, loading, onRefresh, onChan
                             : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] '
                                 + 'hover:text-gray-700 dark:hover:text-gray-200'}`}
                 >
-                    <span className="font-medium">{model.short}</span>
+                    {/* The chip says which agent as well as which model once
+                        there is more than one it could be. Two of them can
+                        offer a model called `sonnet`, and the name on its own
+                        would not say whose plan the next question is spending. */}
+                    {marked && (
+                        <span className="shrink-0 flex items-center">
+                            <ProviderMark provider={model?.provider || settings.provider} size={13} />
+                        </span>
+                    )}
+                    <span className="font-medium">
+                        {model?.short || PROVIDER_NAMES[settings.provider] || ''}
+                    </span>
                     {effort && <span className="opacity-60">{effortLabel(effort)}</span>}
                     <ArrowDown01Icon
                         size={11}
