@@ -661,11 +661,19 @@ function TerminalView({
                 if (event.type !== 'keydown') return true;
                 if (!event.ctrlKey || !event.shiftKey || event.altKey) return true;
 
+                // Returning false only stops xterm's own handling. The
+                // browser still runs its default action for the chord, and
+                // for Ctrl+Shift+V that is a native plain-text paste into
+                // xterm's hidden textarea, which xterm then pastes again.
+                // preventDefault kills that second paste (and keeps the
+                // default menu's Paste and Match Style accelerator quiet).
                 if (event.code === 'KeyC') {
+                    event.preventDefault();
                     copySelection();
                     return false;
                 }
                 if (event.code === 'KeyV') {
+                    event.preventDefault();
                     pasteFromClipboard();
                     return false;
                 }
