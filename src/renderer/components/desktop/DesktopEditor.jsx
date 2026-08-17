@@ -65,6 +65,10 @@ const DEFAULT_TRANSPORTS = { vnc: 'tunnel', rdp: 'direct' };
  * "Desktop only" would be asking again in different words. Both are hidden and
  * the settings shown directly; the record still carries `enabled` and `only`,
  * set by whoever chose the kind.
+ *
+ * The address is the same case. A managed desktop has no other connection, so
+ * the box below writes the host's own address (`hostAddress`) rather than an
+ * override on the desktop block.
  */
 export default function DesktopEditor({
     desktop,
@@ -73,6 +77,8 @@ export default function DesktopEditor({
     onClearPassword,
     passwordCleared,
     managed = false,
+    hostAddress = '',
+    onHostAddressChange,
 }) {
     const [showPassword, setShowPassword] = useState(false);
 
@@ -209,16 +215,26 @@ export default function DesktopEditor({
                         <Field
                             label={isRdp ? 'RDP address' : 'VNC address'}
                             className="col-span-3"
-                            hint={transport === 'tunnel'
-                                ? 'Resolved by the server, so 127.0.0.1 means the server itself.'
-                                : 'Resolved by this machine. Leave blank to use the host\'s own address.'}
+                            hint={managed
+                                ? 'Where the desktop is.'
+                                : transport === 'tunnel'
+                                    ? 'Resolved by the server, so 127.0.0.1 means the server itself.'
+                                    : 'Resolved by this machine. Leave blank to use the host\'s own address.'}
                         >
                             <input
+                                data-autofocus={managed || undefined}
                                 type="text"
-                                value={value.host ?? (transport === 'tunnel' ? '127.0.0.1' : '')}
-                                onChange={(e) => set('host', e.target.value)}
+                                value={managed
+                                    ? hostAddress
+                                    : (value.host ?? (transport === 'tunnel' ? '127.0.0.1' : ''))}
+                                onChange={(e) => (managed
+                                    ? onHostAddressChange?.(e.target.value)
+                                    : set('host', e.target.value))}
                                 className={`${FIELD_CLASS} font-mono`}
-                                placeholder={transport === 'tunnel' ? '127.0.0.1' : 'Same as the host'}
+                                placeholder={managed
+                                    ? '192.168.1.1'
+                                    : (transport === 'tunnel' ? '127.0.0.1' : 'Same as the host')}
+                                required={managed}
                             />
                         </Field>
                         <Field label="Port" hint={isRdp ? '3389 is standard' : '5901 is :1'}>
