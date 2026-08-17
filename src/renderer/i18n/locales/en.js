@@ -470,6 +470,10 @@ export default {
     'settings.assistant.desc': 'The agent reads your terminals and works on your servers '
         + 'through the connections you have already opened. It never sees a stored password or key.',
     'settings.assistant.loading': 'Loading the agent settings...',
+    'settings.assistant.show': 'Show the assistant',
+    'settings.assistant.showDesc': 'The column down the right of the window, and the rail it '
+        + 'collapses to. Switched off there is no rail and no button, the width goes back to what '
+        + 'you are working on, and Ctrl+Shift+A does nothing. Everything below is kept.',
     'settings.assistant.agent': 'Agents',
     'settings.assistant.agentDesc': 'Which coding agents answer: ones installed on this machine, or '
         + 'a model you are serving yourself. Switch on as many as you have a login or a key for. The '

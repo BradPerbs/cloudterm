@@ -397,6 +397,9 @@ export default {
     'settings.assistant.desc': '助手会读取你的终端，并通过你已经打开的连接在服务器上工作。'
         + '它绝不会看到任何已保存的密码或密钥。',
     'settings.assistant.loading': '正在加载助手设置…',
+    'settings.assistant.show': '显示助手',
+    'settings.assistant.showDesc': '窗口右侧的那一栏，以及它收起后的窄条。关闭后既没有窄条也没有按钮，'
+        + '腾出的宽度还给你正在处理的内容，Ctrl+Shift+A 也不再有作用。下面的设置都会保留。',
     'settings.assistant.agent': '代理程序',
     'settings.assistant.agentDesc': '由哪些编码代理来作答：本机已安装的那些，或你自己运行的模型。'
         + '有几份账号或密钥就可以开启几个。对话里的模型菜单会把它们的模型列在一起，在那里选哪个模型，'

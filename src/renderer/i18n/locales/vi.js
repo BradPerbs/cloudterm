@@ -418,6 +418,10 @@ export default {
     'settings.assistant.desc': 'Trợ lý đọc các terminal của bạn và làm việc trên máy chủ thông qua '
         + 'những kết nối bạn đã mở sẵn. Nó không bao giờ thấy mật khẩu hay khoá đã lưu.',
     'settings.assistant.loading': 'Đang tải cài đặt trợ lý…',
+    'settings.assistant.show': 'Hiện trợ lý',
+    'settings.assistant.showDesc': 'Cột bên phải cửa sổ, và thanh mà nó thu lại thành. Khi tắt sẽ '
+        + 'không có thanh, không có nút, phần rộng trả lại cho thứ bạn đang làm, và Ctrl+Shift+A '
+        + 'không làm gì cả. Mọi thứ bên dưới vẫn được giữ.',
     'settings.assistant.agent': 'Tác nhân',
     'settings.assistant.agentDesc': 'Những tác nhân lập trình nào sẽ trả lời: các bản đã cài trên '
         + 'máy này, hoặc một mô hình do chính bạn chạy. Bật bao nhiêu tuỳ số tài khoản hoặc khoá '

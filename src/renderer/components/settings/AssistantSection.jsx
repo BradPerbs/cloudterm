@@ -233,9 +233,32 @@ export default function AssistantSection() {
 
     return (
         <>
-            {/* First, because it decides what everything under it means: the
-                models, the effort scale and the shape of a tool call all
-                belong to whichever agent is running. */}
+            {/* Before everything, because it decides whether any of it is on
+                screen. Its own card rather than a row on the one below, since
+                it is not a property of the agents: it is whether the app has an
+                assistant in it at all.
+
+                The page stays as it is when this goes off. Somebody switching
+                it off has not asked to lose what they set up, and somebody
+                switching it back on should find it the way they left it. */}
+            <SettingCard>
+                <SettingRow
+                    align="center"
+                    title={t('settings.assistant.show')}
+                    description={t('settings.assistant.showDesc')}
+                    control={
+                        <Toggle
+                            ariaLabel={t('settings.assistant.show')}
+                            checked={settings.enabled}
+                            onChange={(value) => update({ enabled: value })}
+                        />
+                    }
+                />
+            </SettingCard>
+
+            {/* First of the agent settings, because it decides what everything
+                under it means: the models, the effort scale and the shape of a
+                tool call all belong to whichever agent is running. */}
             <SettingCard>
                 <SettingRow
                     title={t('settings.assistant.agent')}

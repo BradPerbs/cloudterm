@@ -431,6 +431,10 @@ export default {
     'settings.assistant.desc': 'O agente lê os seus terminais e trabalha nos seus servidores '
         + 'através das ligações que já abriu. Nunca vê uma palavra-passe ou chave guardada.',
     'settings.assistant.loading': 'A carregar as definições do agente…',
+    'settings.assistant.show': 'Mostrar o assistente',
+    'settings.assistant.showDesc': 'A coluna à direita da janela, e a barra a que ela se reduz. '
+        + 'Desligado não há barra nem botão, a largura volta para aquilo em que está a trabalhar, e '
+        + 'Ctrl+Shift+A não faz nada. Tudo o que está abaixo é mantido.',
     'settings.assistant.agent': 'Agentes',
     'settings.assistant.agentDesc': 'Que agentes de programação respondem: os instalados nesta '
         + 'máquina, ou um modelo que você mesmo está a servir. Ligue quantos tiver login ou chave. '

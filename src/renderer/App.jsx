@@ -171,6 +171,18 @@ function App() {
     // The assistant column. Its width is remembered because it is the kind of
     // thing someone sets once to suit their screen and never touches again.
     const [assistantOpen, setAssistantOpen] = useState(false);
+    /**
+     * Whether the assistant is here at all.
+     *
+     * Switched off, there is no column and no rail: the app is a terminal and
+     * nothing else, which is how some people want it and what the setting on
+     * the AI Agent page is for.
+     *
+     * True until the answer comes back, since that is what it is on nearly
+     * every machine, and a rail that flickers into existence a moment after
+     * the window opens is worse than one that was always going to be there.
+     */
+    const [assistantShown, setAssistantShown] = useState(true);
     const [assistantWidth, setAssistantWidth] = useState(() => {
         const stored = Number(window.localStorage.getItem('assistant.width'));
         return Number.isFinite(stored) && stored >= 320 ? stored : 400;
@@ -1120,8 +1132,27 @@ function App() {
                 setAssistantOpen(open => !open);
             }
         };
+        // Not registered at all while the assistant is switched off, so the
+        // chord falls through to whatever else wants it rather than being
+        // swallowed by a panel that is not on screen.
+        if (!assistantShown) return undefined;
+
         document.addEventListener('keydown', handler, true);
         return () => document.removeEventListener('keydown', handler, true);
+    }, [assistantShown]);
+
+    /**
+     * Whether the assistant is switched on, kept in step with its settings page.
+     *
+     * The page is open beside this rather than instead of it, so the column has
+     * to go the moment the toggle moves rather than at the next launch.
+     */
+    useEffect(() => {
+        window.api.ai.status()
+            .then(status => setAssistantShown(status?.settings?.enabled !== false))
+            .catch(() => {});
+
+        return window.api.ai.onSettings(next => setAssistantShown(next?.enabled !== false));
     }, []);
 
     useEffect(() => {
@@ -1716,18 +1747,24 @@ function App() {
 
                     Always here, open or shut, because the two states are one
                     column at two widths and it animates between them. Shut, it
-                    is the rail: the button and nothing else. */}
-                <AssistantPanel
-                    open={assistantOpen}
-                    sessions={assistantSessions}
-                    hosts={hosts}
-                    activeSessionId={activeSessionId}
-                    width={assistantWidth}
-                    onWidthChange={setAssistantWidth}
-                    onOpenSettings={handleOpenAssistantSettings}
-                    onOpen={() => setAssistantOpen(true)}
-                    onClose={() => setAssistantOpen(false)}
-                />
+                    is the rail: the button and nothing else.
+
+                    Unless it is switched off on the settings page, and then it
+                    is not rendered at all: not a rail, not a sliver, nothing.
+                    The width it was giving up goes back to the content. */}
+                {assistantShown && (
+                    <AssistantPanel
+                        open={assistantOpen}
+                        sessions={assistantSessions}
+                        hosts={hosts}
+                        activeSessionId={activeSessionId}
+                        width={assistantWidth}
+                        onWidthChange={setAssistantWidth}
+                        onOpenSettings={handleOpenAssistantSettings}
+                        onOpen={() => setAssistantOpen(true)}
+                        onClose={() => setAssistantOpen(false)}
+                    />
+                )}
             </div>
 
             {/* Mounted only while open. The sheet animates itself out and calls
