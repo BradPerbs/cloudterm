@@ -73,7 +73,7 @@ console.log('\nassistant approvals');
 
 check('the default is to ask before anything that changes a system', () => {
     assert.strictEqual(defaults.approval, 'writes');
-    assert.strictEqual(defaults.allowLocalTools, false, 'local tools are off out of the box');
+    assert.strictEqual(defaults.allowLocalTools, true, 'local tools are on out of the box, behind the approval card');
 });
 
 check('every tool declares whether it only reads', () => {

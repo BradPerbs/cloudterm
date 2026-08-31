@@ -1637,7 +1637,7 @@ function register(getWindow) {
     handle('ai-conversation-park', (event, conversationId) => assistant.park(conversationId));
     handle('ai-conversation-close', (event, conversationId) => assistant.close(conversationId));
     handle('ai-scope', (event, payload) => assistant.setScope(payload?.conversationId, payload || {}));
-    handle('ai-send', (event, payload) => assistant.send(payload?.conversationId, payload?.text));
+    handle('ai-send', (event, payload) => assistant.send(payload?.conversationId, payload?.text, payload?.images));
     handle('ai-interrupt', (event, conversationId) => assistant.interrupt(conversationId));
 
     // The two answers the window owes the main process: whether a tool call may

@@ -267,17 +267,28 @@ function describeModels(rows) {
 
 /**
  * Claude Code's own tools, which operate on *this* machine rather than on any
- * server. Named so they can be taken away: this panel manages remote hosts,
- * and a local shell is a far larger surface than that needs. The user can turn
- * them back on in the settings, and `canUseTool` still gates them when they do.
+ * server. Named so they can be taken away: the local-tools switch in the
+ * settings is there for anyone who wants this panel to reach servers and
+ * nothing else, and `canUseTool` still gates them when it is on.
  */
 const LOCAL_TOOLS = [
     'Bash', 'BashOutput', 'KillShell',
     'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
     'Glob', 'Grep',
-    'WebFetch', 'WebSearch',
     'Task', 'TodoWrite', 'SlashCommand', 'ExitPlanMode',
 ];
+
+/**
+ * The tools that reach the web, kept apart from the list above on purpose.
+ * Reading a page is not touching this machine, and an assistant that cannot
+ * look anything up reads to the user as one with no internet, which is how the
+ * old arrangement was reported. They are offered whichever way the switch is
+ * set, and each call still stops at the approval card.
+ */
+const WEB_TOOLS = ['WebFetch', 'WebSearch'];
+
+/** Claude Code's own tools that may be used with the local-tools switch off. */
+const OPEN_TOOLS = new Set(WEB_TOOLS);
 
 let sdkPromise = null;
 
@@ -307,11 +318,11 @@ function createInputStream() {
     let done = false;
 
     return {
-        push(text) {
+        push(text, images = []) {
             if (done) return;
             const message = {
                 type: 'user',
-                message: { role: 'user', content: text },
+                message: { role: 'user', content: userContent(text, images) },
                 parent_tool_use_id: null,
                 session_id: '',
             };
@@ -345,6 +356,25 @@ function createInputStream() {
             }
         },
     };
+}
+
+/**
+ * One user turn as the API wants it: a plain string when there is only text,
+ * otherwise the images as blocks with the text after them.
+ *
+ * Images first because that is the order the model reads best when the words
+ * are about the picture, which in a chat they nearly always are. No text block
+ * at all when there is no text: an empty one is refused by the API, and a
+ * screenshot sent on its own is a perfectly good question.
+ */
+function userContent(text, images = []) {
+    if (!images.length) return text;
+    const blocks = images.map(image => ({
+        type: 'image',
+        source: { type: 'base64', media_type: image.mediaType, data: image.data },
+    }));
+    if (text) blocks.push({ type: 'text', text });
+    return blocks;
 }
 
 /** Our catalog, as the in-process MCP server the SDK expects. */
@@ -513,7 +543,7 @@ async function start({
             const current = getSettings();
 
             if (!local) {
-                if (!current.allowLocalTools) {
+                if (!current.allowLocalTools && !OPEN_TOOLS.has(toolName)) {
                     return {
                         behavior: 'deny',
                         message: `${toolName} acts on the user's own computer, which this assistant is not set up to do. `
@@ -614,8 +644,8 @@ async function start({
     })();
 
     return {
-        send(text) {
-            input.push(text);
+        send(text, images = []) {
+            input.push(text, images);
         },
         /**
          * Change the model without restarting anything.
@@ -792,4 +822,18 @@ function detect() {
     return { ok: Boolean(findClaude()), reason: 'notFound' };
 }
 
-module.exports = { start, listModels, detect, findClaude, claudeCandidates, LOCAL_TOOLS, SERVER_NAME };
+module.exports = {
+    start,
+    listModels,
+    detect,
+    findClaude,
+    claudeCandidates,
+    userContent,
+    LOCAL_TOOLS,
+    WEB_TOOLS,
+    SERVER_NAME,
+    // The SDK takes image blocks in a user turn, which is the whole of what
+    // "attach a screenshot" needs. The other agents are driven through a text
+    // prompt and have no such slot, so the composer only offers it here.
+    supportsImages: true,
+};

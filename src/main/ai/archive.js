@@ -1,6 +1,7 @@
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { stripImages } = require('./images');
 
 /**
  * Conversations, kept across runs of the app.
@@ -95,7 +96,9 @@ function pack(conversation) {
         // the conversation, not the whole of it.
         if (chars > MAX_CHARS && events.length > 0) break;
 
-        events.push(event);
+        // A message's pictures stay in memory for as long as the app runs and
+        // go no further: see `stripImages`.
+        events.push(Array.isArray(event.images) ? { ...event, images: stripImages(event.images) } : event);
     }
 
     events.reverse();

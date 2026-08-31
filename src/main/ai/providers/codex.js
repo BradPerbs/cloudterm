@@ -250,7 +250,9 @@ function threadOptions(settings, mcp) {
         // here is a call into our own tools, and those stop at the approval
         // card before they touch a host.
         approvalPolicy: 'never',
-        webSearchEnabled: false,
+        // Looking something up is not touching this machine, so the web is
+        // open whichever way the local-tools switch is set.
+        webSearchEnabled: true,
         mcp,
     };
 }

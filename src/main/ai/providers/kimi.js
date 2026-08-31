@@ -71,7 +71,9 @@ const LOCAL_TOOLS = [
     'Bash',
     'Read', 'Write', 'Edit', 'ReadMediaFile',
     'Glob', 'Grep',
-    'WebSearch', 'FetchURL',
+    // `WebSearch` and `FetchURL` are deliberately absent: reading a page is
+    // not touching this machine, and an assistant that cannot look anything
+    // up reads to the user as one with no internet.
     'Agent', 'AgentSwarm', 'TodoList',
     'TaskList', 'TaskOutput', 'TaskStop',
     'CronCreate', 'CronList', 'CronDelete',

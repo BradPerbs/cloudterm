@@ -527,8 +527,8 @@ export default {
         + 'delete data or restart services. Only sensible for hosts you can afford to break.',
     'settings.assistant.localTools': 'Allow tools on this computer',
     'settings.assistant.localToolsDesc': 'Lets the assistant read and write local files and run '
-        + 'local commands. Off by default: the panel is for managing servers, and your own machine '
-        + 'is a far wider surface than that needs.',
+        + 'local commands, each one stopping for approval first. Switch it off to keep the panel '
+        + 'to the servers only. Looking things up on the web stays available either way.',
     'settings.assistant.allowList': 'Commands that never need approval',
     'settings.assistant.allowListDesc': 'One per line, matched on the whole first words. A command '
         + 'containing a pipe, a redirect, a semicolon, a substitution or a second line is always '
@@ -1129,6 +1129,10 @@ export default {
     'assistant.chatHistory': 'Chat history',
     'assistant.working': 'Working',
     'assistant.send': 'Send',
+    'assistant.attachImage': 'Add an image',
+    'assistant.removeImage': 'Remove image',
+    'assistant.image': 'Image',
+    'assistant.imageDropped': '{name} was left out: images have to be PNG, JPEG, GIF or WebP, and under 5 MB.',
     'assistant.stop': 'Stop',
     'assistant.askAbout': 'Ask about {about}',
     'assistant.costHint': 'Estimated cost of this conversation, charged per token',

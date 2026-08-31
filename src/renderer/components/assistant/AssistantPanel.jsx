@@ -4,6 +4,8 @@ import {
     PlusSignIcon,
     ArrowUp01Icon,
     StopCircleIcon,
+    Image01Icon,
+    ImageAdd01Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
@@ -20,6 +22,7 @@ import ApprovalMenu from './ApprovalMenu';
 import HistoryMenu from './HistoryMenu';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
+import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
 import {
     GLOBAL,
     describe,
@@ -244,8 +247,19 @@ function AssistantConversation({
     const [readingModels, setReadingModels] = useState(false);
     const [text, setText] = useState('');
 
+    /**
+     * Pictures waiting in the composer, `{ id, name, mediaType, data, dataUrl }`.
+     * Pasted, dropped or picked, and shown as thumbnails until they are sent.
+     */
+    const [images, setImages] = useState([]);
+    /** Which agents can be sent one, from main. The button shows only for those. */
+    const [imageProviders, setImageProviders] = useState([]);
+    /** Why the last file did not make it in, shown under the thumbnails. */
+    const [imageNotice, setImageNotice] = useState('');
+
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    const fileRef = useRef(null);
     const stickToBottom = useRef(true);
 
     // `follow` is resolved against the pane in front here, so what goes over
@@ -263,6 +277,7 @@ function AssistantConversation({
             .then((status) => {
                 setSettings(status?.settings || null);
                 setCatalogs(status?.catalogs || {});
+                setImageProviders(status?.imageProviders || []);
             })
             .catch(() => {});
     }, []);
@@ -355,14 +370,61 @@ function AssistantConversation({
         keepAtBottom();
     }, [assistant.items, assistant.draft.text, keepAtBottom]);
 
+    /** Whether the agent answering can be sent a picture. */
+    const canAttach = Boolean(settings && imageProviders.includes(settings.provider));
+
     const submit = useCallback(() => {
         const body = text.trim();
-        if (!body || assistant.busy) return;
+        if ((!body && images.length === 0) || assistant.busy) return;
         setText('');
+        setImages([]);
+        setImageNotice('');
         stickToBottom.current = true;
         if (inputRef.current) inputRef.current.style.height = 'auto';
-        assistant.send(body);
-    }, [text, assistant]);
+        assistant.send(body, images.map(({ name, mediaType, data }) => ({ name, mediaType, data })));
+    }, [text, images, assistant]);
+
+    /**
+     * Take in image files, however they arrived. One at a time, so a handful
+     * of screenshots land in the order they were given; a file that cannot be
+     * used says so under the thumbnails rather than vanishing.
+     */
+    const addFiles = useCallback(async (files) => {
+        if (!canAttach) return;
+        for (const file of files) {
+            try {
+                const image = await readImage(file);
+                setImages(current => [...current, { id: `${Date.now()}-${current.length}`, ...image }]);
+            } catch {
+                setImageNotice(t('assistant.imageDropped', { name: file.name || 'image' }));
+            }
+        }
+        inputRef.current?.focus({ preventScroll: true });
+    }, [canAttach, t]);
+
+    const removeImage = useCallback((id) => {
+        setImages(current => current.filter(image => image.id !== id));
+    }, []);
+
+    // Ctrl+V with a picture on the clipboard, which is how a screenshot
+    // arrives nine times out of ten. A text paste is left to the textarea.
+    const onPaste = (event) => {
+        const files = imageFiles(event.clipboardData);
+        if (!files.length || !canAttach) return;
+        event.preventDefault();
+        addFiles(files);
+    };
+
+    const onDrop = (event) => {
+        const files = imageFiles(event.dataTransfer);
+        if (!files.length || !canAttach) return;
+        event.preventDefault();
+        addFiles(files);
+    };
+
+    const onDragOver = (event) => {
+        if (canAttach && event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+    };
 
     const onKeyDown = (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -550,6 +612,31 @@ function AssistantConversation({
                                 <div className="assistant-bubble max-w-[88%] px-3 py-2 rounded-2xl rounded-br-md
                                     bg-gray-900 dark:bg-white text-white dark:text-black
                                     text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+                                    {/* The pictures, or a chip naming each one for a
+                                        message read back from disk, which keeps the
+                                        name and not the bytes. */}
+                                    {item.images?.length > 0 && (
+                                        <div className={`flex flex-wrap gap-1.5 ${item.text ? 'mb-1.5' : ''}`}>
+                                            {item.images.map((image, index) => (image.data ? (
+                                                <img
+                                                    key={index}
+                                                    src={`data:${image.mediaType};base64,${image.data}`}
+                                                    alt={image.name}
+                                                    className="max-h-40 max-w-full rounded-lg object-contain"
+                                                />
+                                            ) : (
+                                                <span
+                                                    key={index}
+                                                    title={image.name}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                                                        text-xs bg-white/15 dark:bg-black/10"
+                                                >
+                                                    <Image01Icon size={12} strokeWidth={2} />
+                                                    {image.name || t('assistant.image')}
+                                                </span>
+                                            )))}
+                                        </div>
+                                    )}
                                     {item.text}
                                 </div>
                             </div>
@@ -655,15 +742,52 @@ function AssistantConversation({
                 outside the box and nudge the whole composer as you click
                 into it. */}
             <div className="shrink-0 p-3">
-                <div className="rounded-2xl transition-colors
-                    border border-gray-300 dark:border-surface-control
-                    focus-within:border-gray-400 dark:focus-within:border-neutral-600">
+                <div
+                    className="rounded-2xl transition-colors
+                        border border-gray-300 dark:border-surface-control
+                        focus-within:border-gray-400 dark:focus-within:border-neutral-600"
+                    onDrop={onDrop}
+                    onDragOver={onDragOver}
+                >
+                    {/* What is going with the message, above the words about
+                        it. Each thumbnail can be taken back until it is sent. */}
+                    {images.length > 0 && (
+                        <div className="flex flex-wrap gap-2 px-3 pt-2.5">
+                            {images.map(image => (
+                                <div key={image.id} className="relative group">
+                                    <img
+                                        src={image.dataUrl}
+                                        alt={image.name}
+                                        className="h-14 w-14 rounded-lg object-cover
+                                            border border-gray-200 dark:border-surface-control"
+                                    />
+                                    <button
+                                        type="button"
+                                        aria-label={t('assistant.removeImage')}
+                                        onClick={() => removeImage(image.id)}
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center
+                                            rounded-full shadow transition-opacity
+                                            bg-gray-900 dark:bg-white text-white dark:text-black
+                                            opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                    >
+                                        <Cancel01Icon size={10} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {imageNotice && (
+                        <div className="px-3 pt-2 text-xs text-amber-600 dark:text-amber-400">
+                            {imageNotice}
+                        </div>
+                    )}
                     <textarea
                         ref={inputRef}
                         rows={1}
                         value={text}
                         onChange={(event) => setText(event.target.value)}
                         onKeyDown={onKeyDown}
+                        onPaste={onPaste}
                         placeholder={t('assistant.askAbout', { about: described.sentence })}
                         className="block w-full max-h-40 px-3 pt-2.5 pb-1 bg-transparent
                             resize-none outline-none
@@ -680,6 +804,39 @@ function AssistantConversation({
                             before asking, and where it is changed. */}
                         {settings && (
                             <ApprovalMenu settings={settings} onChange={changeSettings} />
+                        )}
+
+                        {/* The picker, for the agents that can read a picture.
+                            Paste and drop work without it; this is for the
+                            file that is not already on the clipboard. */}
+                        {canAttach && (
+                            <>
+                                <input
+                                    ref={fileRef}
+                                    type="file"
+                                    accept={IMAGE_TYPES.join(',')}
+                                    multiple
+                                    className="hidden"
+                                    onChange={(event) => {
+                                        addFiles(Array.from(event.target.files || []));
+                                        event.target.value = '';
+                                    }}
+                                />
+                                <Tooltip label={t('assistant.attachImage')} placement="top">
+                                    <button
+                                        type="button"
+                                        aria-label={t('assistant.attachImage')}
+                                        onClick={() => fileRef.current?.click()}
+                                        className="w-7 h-7 shrink-0 flex items-center justify-center
+                                            rounded-full transition-colors
+                                            text-gray-500 dark:text-gray-400
+                                            hover:bg-gray-100 dark:hover:bg-surface-control
+                                            hover:text-gray-700 dark:hover:text-gray-200"
+                                    >
+                                        <ImageAdd01Icon size={15} strokeWidth={2} />
+                                    </button>
+                                </Tooltip>
+                            </>
                         )}
 
                         <div className="ml-auto flex items-center gap-1">
@@ -720,7 +877,7 @@ function AssistantConversation({
                                         <StopCircleIcon size={15} strokeWidth={2} />
                                     </button>
                                 </Tooltip>
-                            ) : text.trim() ? (
+                            ) : (text.trim() || images.length > 0) ? (
                                 <Tooltip label={t('assistant.send')} hint="Enter" placement="top">
                                     <button
                                         type="button"

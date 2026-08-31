@@ -474,9 +474,9 @@ export default {
         + 'xoá dữ liệu hay khởi động lại dịch vụ. Chỉ nên dùng với máy chủ mà bạn chấp nhận được '
         + 'việc nó hỏng.',
     'settings.assistant.localTools': 'Cho phép dùng công cụ trên máy này',
-    'settings.assistant.localToolsDesc': 'Cho phép trợ lý đọc ghi tệp cục bộ và chạy lệnh cục bộ. '
-        + 'Mặc định tắt: bảng này dùng để quản lý máy chủ, còn máy của chính bạn là một phạm vi '
-        + 'rộng hơn thế rất nhiều.',
+    'settings.assistant.localToolsDesc': 'Cho phép trợ lý đọc ghi tệp cục bộ và chạy lệnh cục bộ, '
+        + 'mỗi lệnh đều dừng lại chờ phê duyệt trước. Tắt đi để bảng này chỉ làm việc với máy chủ. '
+        + 'Tra cứu trên web vẫn dùng được trong cả hai trường hợp.',
     'settings.assistant.allowList': 'Các lệnh không bao giờ cần phê duyệt',
     'settings.assistant.allowListDesc': 'Mỗi dòng một lệnh, khớp theo trọn các từ đầu tiên. Một '
         + 'lệnh có ống dẫn, chuyển hướng, dấu chấm phẩy, phép thay thế hoặc dòng thứ hai thì luôn '
@@ -1040,6 +1040,10 @@ export default {
     'assistant.chatHistory': 'Lịch sử trò chuyện',
     'assistant.working': 'Đang làm',
     'assistant.send': 'Gửi',
+    'assistant.attachImage': 'Thêm ảnh',
+    'assistant.removeImage': 'Bỏ ảnh',
+    'assistant.image': 'Ảnh',
+    'assistant.imageDropped': '{name} bị bỏ qua: ảnh phải là PNG, JPEG, GIF hoặc WebP và nhỏ hơn 5 MB.',
     'assistant.stop': 'Dừng',
     'assistant.askAbout': 'Hỏi về {about}',
     'assistant.costHint': 'Chi phí ước tính của cuộc trò chuyện này, tính theo token',

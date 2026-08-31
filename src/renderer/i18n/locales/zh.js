@@ -443,8 +443,8 @@ export default {
     'settings.assistant.approval.never.note': '任何操作都不会停下来等待批准，包括删除数据或重启服务的命令。'
         + '只有在你能承受把主机弄坏时才适合使用。',
     'settings.assistant.localTools': '允许在这台电脑上使用工具',
-    'settings.assistant.localToolsDesc': '允许助手读写本地文件并运行本地命令。默认关闭：'
-        + '这个面板是用来管理服务器的，而你自己的机器是比这大得多的一片范围。',
+    'settings.assistant.localToolsDesc': '允许助手读写本地文件并运行本地命令，每一步都会先停下来等待批准。'
+        + '关闭后，面板只操作服务器。无论开关如何，联网查找资料始终可用。',
     'settings.assistant.allowList': '无需批准即可运行的命令',
     'settings.assistant.allowListDesc': '每行一条，按开头的完整单词匹配。只要命令中含有管道、重定向、分号、'
         + '替换或第二行，无论以什么开头都一定会询问。',
@@ -950,6 +950,10 @@ export default {
     'assistant.chatHistory': '对话历史',
     'assistant.working': '处理中',
     'assistant.send': '发送',
+    'assistant.attachImage': '添加图片',
+    'assistant.removeImage': '移除图片',
+    'assistant.image': '图片',
+    'assistant.imageDropped': '{name} 未加入：图片必须是 PNG、JPEG、GIF 或 WebP，且小于 5 MB。',
     'assistant.stop': '停止',
     'assistant.askAbout': '询问关于{about}的问题',
     'assistant.costHint': '本次对话的预估费用，按 token 计费',

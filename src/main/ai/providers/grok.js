@@ -67,9 +67,11 @@ const LOCAL_TOOLS = [
     'Bash', 'BashOutput', 'KillShell',
     'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
     'Glob', 'Grep',
-    'WebFetch', 'WebSearch',
     'Task', 'TodoWrite',
 ];
+// `WebFetch` and `WebSearch` are deliberately not in that list. Reading a page
+// is not touching this machine, and an assistant that cannot look anything up
+// reads to the user as one with no internet.
 
 /**
  * The levels Grok Build names, low to high.

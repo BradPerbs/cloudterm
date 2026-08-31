@@ -490,8 +490,8 @@ export default {
         + 'ao luxo de estragar.',
     'settings.assistant.localTools': 'Permitir ferramentas neste computador',
     'settings.assistant.localToolsDesc': 'Deixa o assistente ler e escrever ficheiros locais e '
-        + 'correr comandos locais. Desligado por predefinição: o painel serve para gerir '
-        + 'servidores, e a sua própria máquina é uma superfície muito maior do que isso exige.',
+        + 'correr comandos locais, cada um parando primeiro para aprovação. Desligue para limitar o '
+        + 'painel apenas aos servidores. Pesquisar na web continua disponível em qualquer caso.',
     'settings.assistant.allowList': 'Comandos que nunca precisam de aprovação',
     'settings.assistant.allowListDesc': 'Um por linha, comparados pelas primeiras palavras '
         + 'inteiras. Um comando com um pipe, um redirecionamento, um ponto e vírgula, uma '
@@ -1089,6 +1089,10 @@ export default {
     'assistant.chatHistory': 'Histórico de conversas',
     'assistant.working': 'A trabalhar',
     'assistant.send': 'Enviar',
+    'assistant.attachImage': 'Adicionar uma imagem',
+    'assistant.removeImage': 'Remover imagem',
+    'assistant.image': 'Imagem',
+    'assistant.imageDropped': '{name} ficou de fora: as imagens têm de ser PNG, JPEG, GIF ou WebP e ter menos de 5 MB.',
     'assistant.stop': 'Parar',
     'assistant.askAbout': 'Pergunte sobre {about}',
     'assistant.costHint': 'Custo estimado desta conversa, cobrado por token',

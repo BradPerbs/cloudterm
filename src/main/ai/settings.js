@@ -106,9 +106,11 @@ const DEFAULTS = {
     // How much terminal output a single read hands back.
     transcriptLines: 240,
     // Whether the assistant may touch this machine (its filesystem, its shell)
-    // as well as the servers. Off: the panel is for managing remote hosts, and
-    // a local shell is a much larger surface than anyone asked for.
-    allowLocalTools: false,
+    // as well as the servers. On: the agent has the same tools it has in its
+    // own terminal, and every call still stops at the approval card. Off is
+    // there for anyone who wants the panel to reach servers and nothing else.
+    // Looking things up on the web is not behind this switch: see the providers.
+    allowLocalTools: true,
     // Commands that never need approval no matter the mode above, matched on
     // the first word. Seeded with the ones whose whole purpose is to look.
     autoApproveCommands: ['ls', 'cat', 'head', 'tail', 'grep', 'ps', 'df', 'du', 'uptime', 'whoami', 'systemctl status', 'journalctl'],

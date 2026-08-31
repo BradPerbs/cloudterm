@@ -2,6 +2,7 @@ const settings = require('./settings');
 const prompt = require('./prompt');
 const catalog = require('./tools');
 const archive = require('./archive');
+const { readImages } = require('./images');
 const transcript = require('../transcript');
 const activity = require('../activity');
 
@@ -665,18 +666,28 @@ function summarise(input) {
  * user is exactly the thing that moves while they work. Sending it only on
  * change keeps the cached prefix intact for the turns where nothing moved.
  */
-async function send(conversationId, text) {
+async function send(conversationId, text, attachments = []) {
     hydrate();
 
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: false, message: 'That conversation is gone' };
 
     const body = String(text || '').trim();
-    if (!body) return { success: false, message: 'Nothing to send' };
+    const { images, error } = readImages(attachments);
+    if (error) return { success: false, message: error };
+    if (!body && images.length === 0) return { success: false, message: 'Nothing to send' };
 
-    if (!conversation.title) conversation.title = body.replace(/\s+/g, ' ').slice(0, 80);
+    // Refused here rather than quietly dropped: a question about a screenshot
+    // the model never saw would get an answer that reads as if it had.
+    if (images.length > 0 && PROVIDERS[resolved().provider]?.supportsImages !== true) {
+        return { success: false, message: 'This agent cannot read images. Switch to Claude Code to send one.' };
+    }
 
-    emit(conversation, { type: 'user-message', text: body });
+    if (!conversation.title) {
+        conversation.title = (body || images[0].name).replace(/\s+/g, ' ').slice(0, 80);
+    }
+
+    emit(conversation, { type: 'user-message', text: body, ...(images.length ? { images } : {}) });
     conversation.busy = true;
 
     try {
@@ -698,10 +709,10 @@ async function send(conversationId, text) {
         let payload = body;
         if (context !== conversation.lastContext) {
             conversation.lastContext = context;
-            payload = `<app-context>\n${context}\n</app-context>\n\n${body}`;
+            payload = `<app-context>\n${context}\n</app-context>${body ? `\n\n${body}` : ''}`;
         }
 
-        session.send(payload);
+        session.send(payload, images);
         return { success: true };
     } catch (error) {
         conversation.busy = false;
@@ -908,6 +919,9 @@ function status() {
         ready: Boolean(PROVIDERS[current.provider]),
         provider: current.provider,
         providers: Object.keys(PROVIDERS),
+        // Which of them can be sent a picture, so the composer offers the
+        // attach button only where it would work.
+        imageProviders: Object.keys(PROVIDERS).filter(name => PROVIDERS[name].supportsImages === true),
         settings: current,
         // Null until a conversation has run once. The settings page says so
         // rather than guessing, because "no plan found" and "not asked yet"

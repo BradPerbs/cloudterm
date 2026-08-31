@@ -610,7 +610,10 @@ contextBridge.exposeInMainWorld('api', {
         setScope: (conversationId, target) =>
             ipcRenderer.invoke('ai-scope', { conversationId, ...(target || {}) }),
 
-        send: (conversationId, text) => ipcRenderer.invoke('ai-send', { conversationId, text }),
+        // `images` is optional: `[{ name, mediaType, data }]` with the bytes
+        // as base64. Main checks them and refuses the message if the agent in
+        // use cannot read pictures.
+        send: (conversationId, text, images) => ipcRenderer.invoke('ai-send', { conversationId, text, images }),
         interrupt: (conversationId) => ipcRenderer.invoke('ai-interrupt', conversationId),
 
         // Every message, tool call and result for a conversation.
