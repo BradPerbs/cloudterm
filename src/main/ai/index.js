@@ -680,7 +680,7 @@ async function send(conversationId, text, attachments = []) {
     // Refused here rather than quietly dropped: a question about a screenshot
     // the model never saw would get an answer that reads as if it had.
     if (images.length > 0 && PROVIDERS[resolved().provider]?.supportsImages !== true) {
-        return { success: false, message: 'This agent cannot read images. Switch to Claude Code to send one.' };
+        return { success: false, message: 'This agent cannot read images. Claude Code and Codex can.' };
     }
 
     if (!conversation.title) {
