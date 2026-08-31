@@ -634,6 +634,33 @@ contextBridge.exposeInMainWorld('api', {
         onAction: (callback) => subscribe('ai-action', callback),
         respondToAction: (requestId, result) =>
             ipcRenderer.invoke('ai-action-response', { requestId, ...result }),
+
+        // Windows of the assistant's own. `detach` opens one holding these
+        // conversations; a window asks `windowTabs` for what it holds and
+        // reports changes with `setWindowTabs`; `reattach` hands some or all
+        // back to the main window, and `closeWindow` closes without handing
+        // anything back. `onAdoptTabs` is the main window being handed them.
+        detach: (conversationIds) => ipcRenderer.invoke('ai-window-open', { conversationIds }),
+        windowTabs: () => ipcRenderer.invoke('ai-window-tabs'),
+        setWindowTabs: (conversationIds) => ipcRenderer.invoke('ai-window-tabs-set', conversationIds),
+        reattach: (conversationIds) => ipcRenderer.invoke('ai-window-reattach', conversationIds),
+        closeWindow: () => ipcRenderer.invoke('ai-window-close'),
+        onAdoptTabs: (callback) => subscribe('ai-tabs-adopt', callback),
+        // Another window has opened these, so this one is to let them go: a
+        // conversation is shown in one place.
+        onReleaseTabs: (callback) => subscribe('ai-tabs-release', callback),
+
+        // What a detached window cannot see for itself: the open sessions,
+        // the saved hosts and the one in front. The main window publishes it;
+        // a detached one reads it once and then follows changes.
+        publishContext: (context) => ipcRenderer.invoke('ai-context-set', context),
+        context: () => ipcRenderer.invoke('ai-context'),
+        onContext: (callback) => subscribe('ai-context', callback),
+
+        // A detached window asking the main one to show a page it has not
+        // got: 'settings' or 'snippets'. The main window listens on the other.
+        navigateMain: (nav) => ipcRenderer.invoke('ai-navigate-main', nav),
+        onNavigate: (callback) => subscribe('ai-navigate', callback),
     },
 
     // Which OS this is, for the handful of places the interface has to differ:

@@ -10,9 +10,12 @@ import { questionKey } from '../lib/approvals';
  * makes a window reload survivable: on mount it asks for the events it missed
  * and replays them through the same reducer the live stream uses, so a
  * restored panel and one that never closed cannot disagree.
+ *
+ * Which conversation it is on is the caller's to remember: the tab that owns
+ * this hook hands in the id it was left with and is told whenever the hook
+ * moves to another one. The hook used to keep that in localStorage itself,
+ * which was fine for one conversation and wrong for several.
  */
-
-const STORAGE_KEY = 'assistant.conversation';
 
 /** A blank turn-in-progress, for the streaming text bubble. */
 function emptyDraft() {
@@ -285,6 +288,10 @@ export default function useAssistant({
     sessionIds = [],
     hostIds = [],
     enabled = true,
+    /** The conversation to pick up, if the caller was left holding one. */
+    conversationId: given = '',
+    /** Told the id whenever this hook starts or switches to a conversation. */
+    onConversationChange,
 }) {
     const [state, setState] = useState(INITIAL);
     const [conversationId, setConversationId] = useState('');
@@ -292,6 +299,17 @@ export default function useAssistant({
     const [failure, setFailure] = useState('');
     const [conversations, setConversations] = useState([]);
     const conversationRef = useRef('');
+
+    // The callback as it stands, so the effects below need not be rebuilt for
+    // a caller that passes a new function each render.
+    const onChangeRef = useRef(onConversationChange);
+    onChangeRef.current = onConversationChange;
+
+    /** Adopt an id: locally, and by telling whoever remembers it. */
+    const adopt = useCallback((id) => {
+        setConversationId(id);
+        onChangeRef.current?.(id);
+    }, []);
 
     /**
      * Answers given for calls that have not asked yet.
@@ -333,12 +351,11 @@ export default function useAssistant({
 
         (async () => {
             try {
-                const remembered = window.localStorage.getItem(STORAGE_KEY) || '';
-                if (remembered) {
-                    const past = await window.api.ai.history(remembered);
+                if (given) {
+                    const past = await window.api.ai.history(given);
                     if (cancelled) return;
                     if (past?.found) {
-                        setConversationId(remembered);
+                        adopt(given);
                         setState(past.events.reduce(applyEvent, INITIAL));
                         setStarting(false);
                         return;
@@ -347,8 +364,7 @@ export default function useAssistant({
 
                 const created = await window.api.ai.start(targetRef.current);
                 if (cancelled) return;
-                setConversationId(created.conversationId);
-                window.localStorage.setItem(STORAGE_KEY, created.conversationId);
+                adopt(created.conversationId);
                 setStarting(false);
             } catch (error) {
                 if (!cancelled) {
@@ -411,9 +427,22 @@ export default function useAssistant({
         return off;
     }, [enabled, settle]);
 
-    /* Follow the pane the panel is pointed at, or the set it is pinned to. */
+    /**
+     * Follow the pane the panel is pointed at, or the set it is pinned to.
+     *
+     * Not on the turn a conversation is adopted: main already holds that
+     * conversation's selection, and it is the one the tab is about to read
+     * back and show. Pushing the tab's own starting point first would
+     * overwrite the stored selection with "follow" before it was read, which
+     * is how a pinned set used to be lost on the way to another window.
+     */
+    const scopedFor = useRef('');
     useEffect(() => {
         if (!conversationId) return;
+        if (scopedFor.current !== conversationId) {
+            scopedFor.current = conversationId;
+            return;
+        }
         window.api.ai.setScope(conversationId, targetRef.current);
         // `targetKey` is the target, flattened to something a dependency list
         // can compare. See the note where it is built.
@@ -483,10 +512,9 @@ export default function useAssistant({
         held.current.clear();
         if (conversationId) await window.api.ai.park(conversationId);
         const created = await window.api.ai.start(targetRef.current);
-        setConversationId(created.conversationId);
-        window.localStorage.setItem(STORAGE_KEY, created.conversationId);
+        adopt(created.conversationId);
         setState(INITIAL);
-    }, [conversationId]);
+    }, [conversationId, adopt]);
 
     /** Go back to an earlier conversation, replaying it through the reducer. */
     const open = useCallback(async (id) => {
@@ -498,10 +526,9 @@ export default function useAssistant({
             return;
         }
         if (conversationId) await window.api.ai.park(conversationId);
-        setConversationId(id);
-        window.localStorage.setItem(STORAGE_KEY, id);
+        adopt(id);
         setState(past.events.reduce(applyEvent, INITIAL));
-    }, [conversationId, refreshConversations]);
+    }, [conversationId, refreshConversations, adopt]);
 
     /**
      * Throw one away for good. Deleting the conversation being read leaves the
@@ -513,12 +540,11 @@ export default function useAssistant({
         await window.api.ai.close(id);
         if (id === conversationId) {
             const created = await window.api.ai.start(targetRef.current);
-            setConversationId(created.conversationId);
-            window.localStorage.setItem(STORAGE_KEY, created.conversationId);
+            adopt(created.conversationId);
             setState(INITIAL);
         }
         await refreshConversations();
-    }, [conversationId, refreshConversations]);
+    }, [conversationId, refreshConversations, adopt]);
 
     return {
         items: state.items,

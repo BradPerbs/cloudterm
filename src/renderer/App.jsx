@@ -1183,6 +1183,25 @@ function App() {
         setReachedForPage(count => count + 1);
     }, []);
 
+    // A detached assistant window asking for one of those pages. It has no
+    // Home of its own, so the request comes here and the window comes forward.
+    useEffect(() => window.api.ai.onNavigate?.(({ nav }) => {
+        if (nav === 'settings') handleOpenAssistantSettings();
+        else if (nav === 'snippets') handleOpenSnippets();
+    }), [handleOpenAssistantSettings, handleOpenSnippets]);
+
+    /**
+     * Tabs handed to the panel from a window of the assistant's own: one that
+     * was closed, or one asked to put them back. The panel opens to show them,
+     * since a tab arriving in a shut panel is a tab nobody sees arrive.
+     */
+    const [adoptedTabs, setAdoptedTabs] = useState(null);
+    useEffect(() => window.api.ai.onAdoptTabs?.(({ conversationIds }) => {
+        if (!Array.isArray(conversationIds) || conversationIds.length === 0) return;
+        setAdoptedTabs(current => ({ conversationIds, seq: (current?.seq || 0) + 1 }));
+        setAssistantOpen(true);
+    }), []);
+
     /**
      * The things the assistant cannot do for itself.
      *
@@ -1521,6 +1540,14 @@ function App() {
         return pane?.mode === 'terminal' && pane.connected ? pane.id : '';
     }, [tabs, activeTabId]);
 
+    // What the assistant's own windows cannot see: the same three things the
+    // panel in this window is handed, published to main and relayed on.
+    useEffect(() => {
+        if (!assistantShown) return;
+        window.api.ai.publishContext?.({ sessions: assistantSessions, hosts, activeSessionId })
+            .catch(() => {});
+    }, [assistantShown, assistantSessions, hosts, activeSessionId]);
+
     return (
         // `app-drag` turns the gutter around the shell into a window frame you
         // can drag; `#app-layout` below opts back out for the content.
@@ -1772,6 +1799,7 @@ function App() {
                         onWidthChange={setAssistantWidth}
                         onOpenSettings={handleOpenAssistantSettings}
                         onOpenSnippets={handleOpenSnippets}
+                        adopt={adoptedTabs}
                         onOpen={() => setAssistantOpen(true)}
                         onClose={() => setAssistantOpen(false)}
                     />

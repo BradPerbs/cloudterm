@@ -5,6 +5,7 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import LockScreen from './components/LockScreen';
 import ScreenshotView from './components/ScreenshotView';
+import AssistantWindow from './components/assistant/AssistantWindow';
 import { applyAppColors } from './lib/app-colors';
 import { DEFAULT_TOAST_MS, MAX_TOAST_MS, TOAST_EXIT_MS } from './lib/toast';
 
@@ -49,9 +50,12 @@ import './input.css';
     }
 })();
 
-// Screenshot viewers are separate BrowserWindows loading this same bundle;
-// the hash tells us which capture to show instead of the main app.
-const screenshotId = new URLSearchParams(window.location.hash.slice(1)).get('screenshot');
+// Screenshot viewers and the assistant's own windows are separate
+// BrowserWindows loading this same bundle; the hash says which to draw
+// instead of the main app.
+const hashParams = new URLSearchParams(window.location.hash.slice(1));
+const screenshotId = hashParams.get('screenshot');
+const assistantWindowId = hashParams.get('assistant');
 
 /**
  * Holds the app behind the lock screen.
@@ -107,7 +111,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             this a render error takes the whole window down to the body colour
             and says nothing about why. */}
         <ErrorBoundary>
-            {screenshotId ? <ScreenshotView id={screenshotId} /> : <Root />}
+            {screenshotId
+                ? <ScreenshotView id={screenshotId} />
+                : assistantWindowId
+                    ? <AssistantWindow />
+                    : <Root />}
         </ErrorBoundary>
     </React.StrictMode>
 );

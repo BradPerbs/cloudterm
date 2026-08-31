@@ -1,4 +1,4 @@
-const { ipcMain, dialog, app, shell, clipboard, powerMonitor } = require('electron');
+const { ipcMain, dialog, app, shell, clipboard, powerMonitor, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
@@ -29,6 +29,7 @@ const cloudSnapshot = require('./cloud-snapshot');
 const activity = require('./activity');
 const sessionLog = require('./session-log');
 const assistant = require('./ai');
+const aiWindows = require('./ai/windows');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -202,7 +203,18 @@ function register(getWindow) {
     updates.start(notify);
 
     remoteEdit.setNotifier(notify);
-    assistant.setNotifier(notify);
+
+    // The assistant is the one thing drawn in more than one window: a
+    // conversation can be lifted into a window of its own, and the events
+    // that draw it have to reach whichever window is showing it. Every window
+    // gets them; each filters by the conversations it holds.
+    const broadcast = (channel, payload) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+            if (!window.isDestroyed()) window.webContents.send(channel, payload);
+        }
+    };
+    assistant.setNotifier(broadcast);
+    aiWindows.setMainNotifier(notify);
     tunnels.setNotifier(notify);
     vnc.setNotifier(notify);
     rdp.setNotifier(notify);
@@ -1647,6 +1659,32 @@ function register(getWindow) {
     handle('ai-approval-response', (event, payload) => assistant.respondToApproval(payload || {}));
     handle('ai-action-response', (event, payload) => assistant.respondToAction(payload || {}));
 
+    /* ---------------- Assistant: windows of its own ---------------- */
+
+    // Lifting tabs into a window, and what that window is told. See
+    // `ai/windows.js`. The parent is whichever window asked, so a window
+    // detached from a detached window opens beside that one.
+    handle('ai-window-open', (event, payload) =>
+        aiWindows.open(BrowserWindow.fromWebContents(event.sender) || getWindow(), payload?.conversationIds || []));
+    handle('ai-window-tabs', (event) => aiWindows.tabs(event.sender));
+    handle('ai-window-tabs-set', (event, conversationIds) => aiWindows.setTabs(event.sender, conversationIds));
+    handle('ai-window-reattach', (event, conversationIds) => aiWindows.reattach(event.sender, conversationIds));
+    handle('ai-window-close', (event) => aiWindows.closeWindow(event.sender));
+
+    // The main window saying which terminals are open and which is in front,
+    // relayed to every detached window; and a detached window asking to be
+    // taken to a page only the main window has.
+    handle('ai-context-set', (event, context) => aiWindows.setContext(context));
+    handle('ai-context', () => aiWindows.getContext());
+    handle('ai-navigate-main', (event, nav) => {
+        const window = getWindow();
+        if (!window || window.isDestroyed()) return { success: false };
+        if (window.isMinimized()) window.restore();
+        window.focus();
+        window.webContents.send('ai-navigate', { nav: String(nav || '') });
+        return { success: true };
+    });
+
     /* ---------------- Startup ---------------- */
 
     // Read from the system on every call rather than cached, because the user
@@ -1656,16 +1694,20 @@ function register(getWindow) {
 
     /* ---------------- Window ---------------- */
 
-    ipcMain.on('window-minimize', () => getWindow()?.minimize());
-    ipcMain.on('window-maximize', () => {
-        const window = getWindow();
+    // The window the call came from, not the main window: the assistant's own
+    // windows are frameless too and draw the same three buttons.
+    const windowOf = (event) => BrowserWindow.fromWebContents(event.sender) || getWindow();
+
+    ipcMain.on('window-minimize', (event) => windowOf(event)?.minimize());
+    ipcMain.on('window-maximize', (event) => {
+        const window = windowOf(event);
         if (!window) return;
         if (window.isMaximized()) window.unmaximize();
         else window.maximize();
     });
-    ipcMain.on('window-close', () => getWindow()?.close());
-    ipcMain.on('open-devtools', () => getWindow()?.webContents.toggleDevTools());
-    ipcMain.on('reload-window', () => getWindow()?.reload());
+    ipcMain.on('window-close', (event) => windowOf(event)?.close());
+    ipcMain.on('open-devtools', (event) => windowOf(event)?.webContents.toggleDevTools());
+    ipcMain.on('reload-window', (event) => windowOf(event)?.reload());
     ipcMain.on('force-quit', () => app.quit());
 }
 

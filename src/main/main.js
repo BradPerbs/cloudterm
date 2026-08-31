@@ -2,6 +2,7 @@ const { app, BrowserWindow, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const ipc = require('./ipc');
+const aiWindows = require('./ai/windows');
 const transport = require('./transport');
 const cloudSnapshot = require('./cloud-snapshot');
 
@@ -144,6 +145,10 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         ipc.cancelPendingPrompts();
+        // The assistant's own windows draw conversations the main window
+        // runs; with it gone they have nothing to show and nothing to hand
+        // their tabs back to.
+        aiWindows.closeAll();
         mainWindow = null;
     });
 

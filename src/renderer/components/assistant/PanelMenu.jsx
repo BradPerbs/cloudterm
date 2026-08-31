@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Delete02Icon, Tick02Icon } from 'hugeicons-react';
 import { useTooltip } from '../ui/Tooltip';
 import { useEnterOn } from '../../hooks/useEnter';
@@ -14,8 +15,12 @@ import { useT } from '../../i18n';
  * borrows MenuButton's styling, radius and item shape, so the two never read as
  * different kinds of dropdown.
  *
- * No portal. Everything this opens over belongs to the panel, which is a plain
- * column with nothing clipping it, unlike a menu in a terminal pane header.
+ * No portal by default. Everything this opens over belongs to the panel, which
+ * is a plain column with nothing clipping it, unlike a menu in a terminal pane
+ * header. `portal` is for the one trigger that does sit inside a clip: the
+ * scope selector on a tab, in a strip that scrolls sideways and so cuts off
+ * anything hanging below it. Portalled, the menu is placed from the trigger's
+ * rectangle and drawn on the body, the way `ui/MenuButton` does it.
  *
  * Sections carry their own value and setter, which is what lets one menu hold
  * two unrelated choices: the composer's chip sets the model and the effort from
@@ -230,6 +235,7 @@ export default function PanelMenu({
     direction = 'down',
     menuClassName = 'w-64',
     className = '',
+    portal = false,
 }) {
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef(null);
@@ -239,11 +245,33 @@ export default function PanelMenu({
     // for each time it opens. See lib/enterMotion.
     useEnterOn(menuRef, open && 'dialog');
 
+    /** Where a portalled menu goes, from the trigger's rectangle. */
+    const [position, setPosition] = useState(null);
+
+    useLayoutEffect(() => {
+        if (!open || !portal || !wrapperRef.current) {
+            setPosition(null);
+            return;
+        }
+        const rect = wrapperRef.current.getBoundingClientRect();
+        const width = menuRef.current?.offsetWidth || 256;
+        const left = align === 'right' ? rect.right - width : rect.left;
+        setPosition({
+            // Never off the edge of the window, whichever side it opens from.
+            left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+            ...(direction === 'up'
+                ? { bottom: window.innerHeight - rect.top + 4 }
+                : { top: rect.bottom + 4 }),
+        });
+    }, [open, portal, align, direction]);
+
     useEffect(() => {
         if (!open) return undefined;
 
         const onPointerDown = (event) => {
-            if (!wrapperRef.current?.contains(event.target)) setOpen(false);
+            if (wrapperRef.current?.contains(event.target)) return;
+            if (menuRef.current?.contains(event.target)) return;
+            setOpen(false);
         };
         const onKeyDown = (event) => {
             if (event.key === 'Escape') {
@@ -253,33 +281,50 @@ export default function PanelMenu({
             }
         };
 
+        // A portalled menu is placed from a rectangle that a resize or a
+        // scroll of the strip would move out from under it.
+        const close = () => setOpen(false);
+
         document.addEventListener('mousedown', onPointerDown, true);
         document.addEventListener('keydown', onKeyDown, true);
+        if (portal) {
+            window.addEventListener('resize', close);
+            window.addEventListener('blur', close);
+        }
         return () => {
             document.removeEventListener('mousedown', onPointerDown, true);
             document.removeEventListener('keydown', onKeyDown, true);
+            if (portal) {
+                window.removeEventListener('resize', close);
+                window.removeEventListener('blur', close);
+            }
         };
-    }, [open]);
+    }, [open, portal]);
 
-    const place = [
-        direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1',
-        align === 'right' ? 'right-0' : 'left-0',
-    ].join(' ');
+    const place = portal
+        ? 'fixed z-[9999]'
+        : [
+            'absolute z-40',
+            direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1',
+            align === 'right' ? 'right-0' : 'left-0',
+        ].join(' ');
 
-    return (
-        <div ref={wrapperRef} className={`relative ${className}`}>
-            {trigger({ open, toggle: () => setOpen(value => !value) })}
-
-            {open && (
-                <div
-                    ref={menuRef}
-                    role="menu"
-                    className={`absolute ${place} ${menuClassName} z-40 rounded-xl
-                        max-h-80 flex flex-col
-                        bg-white dark:bg-surface-raised
-                        border border-gray-200 dark:border-surface-control
-                        shadow-xl shadow-black/10 dark:shadow-black/40`}
-                >
+    const menu = open && (
+        <div
+            ref={menuRef}
+            role="menu"
+            className={`${place} ${menuClassName} rounded-xl
+                max-h-80 flex flex-col
+                bg-white dark:bg-surface-raised
+                border border-gray-200 dark:border-surface-control
+                shadow-xl shadow-black/10 dark:shadow-black/40`}
+            style={portal ? {
+                ...(position || {}),
+                // Placed before it is measured, so hold it back for one frame
+                // rather than letting it flash in the wrong spot.
+                visibility: position ? 'visible' : 'hidden',
+            } : undefined}
+        >
                     {/* Above the scroller rather than inside it, so a search
                         field stays put while the list it filters moves. */}
                     {header && <div className="shrink-0 p-1 pb-0">{header}</div>}
@@ -338,7 +383,12 @@ export default function PanelMenu({
                         ))}
                     </div>
                 </div>
-            )}
+    );
+
+    return (
+        <div ref={wrapperRef} className={`relative ${className}`}>
+            {trigger({ open, toggle: () => setOpen(value => !value) })}
+            {portal ? createPortal(menu, document.body) : menu}
         </div>
     );
 }

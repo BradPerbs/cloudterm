@@ -193,6 +193,78 @@ export function collapseTab(node, done) {
     });
 }
 
+/* ------------------------------------------------------------------ *
+ * Chips: the assistant's tabs
+ *
+ * The same two movements, for a tab that is sized by what is written on it
+ * rather than by the strip's flex weights. Width is measured off the chip as
+ * it stands and animated outright, with `minWidth` taken down to nothing for
+ * the duration so the stylesheet's floor cannot hold the chip open, and every
+ * inline value is cleared at the end so the chip goes back to being sized by
+ * its content.
+ * ------------------------------------------------------------------ */
+
+const CHIP_PROPS = 'width,minWidth,opacity,overflow';
+
+/** A chip arriving: from nothing to the width it was drawn at. */
+export function openChip(node) {
+    if (!node || prefersReducedMotion()) return null;
+
+    const width = node.getBoundingClientRect().width;
+    return gsap.fromTo(
+        node,
+        { width: 0, minWidth: 0, opacity: 0, overflow: 'hidden' },
+        {
+            width,
+            minWidth: 0,
+            opacity: 1,
+            duration: seconds(DURATION.open),
+            ease: EASE_TAB,
+            clearProps: CHIP_PROPS,
+            data: KIND.open,
+        },
+    );
+}
+
+/** Land an opening chip at its full size at once. See `finishTabOpen`. */
+export function finishChipOpen(node) {
+    if (!node) return;
+
+    const opening = tweensOf(node, KIND.open);
+    if (!opening.length) return;
+
+    for (const tween of opening) {
+        tween.progress(1);
+        tween.kill();
+    }
+    gsap.set(node, { clearProps: CHIP_PROPS });
+}
+
+/**
+ * A chip collapsing out of the strip, holding its place while it goes. Nothing
+ * is cleared at the end: it keeps the nothing it lands on until it is taken
+ * out of the strip for good.
+ */
+export function collapseChip(node, done) {
+    if (!node) return null;
+
+    const width = node.getBoundingClientRect().width;
+    return gsap.fromTo(
+        node,
+        { width, minWidth: 0, overflow: 'hidden' },
+        {
+            width: 0,
+            minWidth: 0,
+            opacity: 0,
+            duration: seconds(DURATION.collapse),
+            ease: EASE_TAB,
+            overwrite: 'auto',
+            data: KIND.collapse,
+            onComplete: done,
+        },
+    );
+}
+
 /**
  * How far a tab is currently pushed sideways, a tween in flight included.
  *

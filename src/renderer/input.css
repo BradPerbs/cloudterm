@@ -1533,3 +1533,11 @@ body.tab-dragging .session-tab {
     background: rgb(var(--app-raised));
     border-radius: 16px;
 }
+/* A scroller with no bar drawn: the assistant tab strip, which is a row of
+   chips and scrolls sideways past what fits. */
+.scrollbar-none {
+    scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}

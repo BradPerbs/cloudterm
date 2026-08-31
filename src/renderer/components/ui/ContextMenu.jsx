@@ -62,7 +62,11 @@ export default function ContextMenu({ x, y, items, onClose }) {
     return createPortal(
         <div
             ref={ref}
-            className="fixed z-[300] min-w-[190px] p-1 rounded-xl bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control shadow-2xl"
+            // `w-max`: the menu is measured where the click landed, and a
+            // fixed box near the right edge would otherwise shrink to what is
+            // left of the viewport and wrap its labels before being moved
+            // left. Sized to its content, it is measured once and then placed.
+            className="fixed z-[300] min-w-[190px] w-max max-w-[calc(100vw-16px)] p-1 rounded-xl bg-white dark:bg-surface-raised border border-gray-200 dark:border-surface-control shadow-2xl"
             style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}
             onMouseDown={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}

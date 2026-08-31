@@ -140,6 +140,22 @@ export function toWire(scope, activeSessionId) {
 }
 
 /**
+ * The other direction: a selection read back from the main process, which
+ * keeps one per conversation and hands it out with the conversation's history.
+ * That is how a tab opened in another window, or after a restart, is pointed
+ * at the same servers it was. A bound single session comes back as follow:
+ * it was only ever the session in front, and that is what follow means.
+ */
+export function fromWire(record) {
+    if (!record || typeof record !== 'object') return followScope();
+    if (record.scope === GLOBAL) return globalScope();
+    if (record.scope === TARGETS) {
+        return normalize({ mode: TARGETS, sessionIds: record.sessionIds, hostIds: record.hostIds });
+    }
+    return followScope();
+}
+
+/**
  * What the panel calls itself, in two lengths.
  *
  * `label` is the header button. With several servers pinned it is only the

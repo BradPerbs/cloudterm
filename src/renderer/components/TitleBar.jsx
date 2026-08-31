@@ -21,6 +21,7 @@ import { collapseTab, finishTabOpen, openTab, resizeTab, setTabSize, spinPlus } 
 import { useEnterOn } from '../hooks/useEnter';
 import { playRipple } from '../lib/enterMotion';
 import ContextMenu from './ui/ContextMenu';
+import WindowControls from './ui/WindowControls';
 import NotificationsMenu from './NotificationsMenu';
 import Tooltip from './ui/Tooltip';
 import { TAB_COLORS, segmentStrip, tabColor, withAlpha } from '../lib/tabs';
@@ -599,10 +600,6 @@ function TitleBar({
 
     const t = useT();
 
-    const handleMinimize = () => window.api.window.minimize();
-    const handleMaximize = () => window.api.window.maximize();
-    const handleClose = () => window.api.window.close();
-
     // Separate home tab from session tabs
     const homeTab = tabs.find(tab => tab.type === 'home');
     const sessionTabs = tabs.filter(tab => tab.type !== 'home');
@@ -1076,34 +1073,7 @@ function TitleBar({
 
                 {/* macOS has its own three, over on the left. Drawing a second
                     set here would be one pair too many. */}
-                {!IS_MAC && (
-                    <>
-                        <button
-                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                            onClick={handleMinimize}
-                        >
-                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
-                                <rect y="5" width="12" height="1" fill="currentColor" />
-                            </svg>
-                        </button>
-                        <button
-                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                            onClick={handleMaximize}
-                        >
-                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" viewBox="0 0 12 12">
-                                <rect width="10" height="10" x="1" y="1" rx="1" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                            </svg>
-                        </button>
-                        <button
-                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent hover:bg-red-500 hover:text-white transition-colors group"
-                            onClick={handleClose}
-                        >
-                            <svg className="w-3 h-3 text-gray-500 dark:text-gray-400 group-hover:text-white" viewBox="0 0 12 12">
-                                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.2" />
-                            </svg>
-                        </button>
-                    </>
-                )}
+                {!IS_MAC && <WindowControls />}
             </div>
 
             {menu && menuItems.length > 0 && (

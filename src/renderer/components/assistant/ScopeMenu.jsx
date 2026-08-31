@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown01Icon, GlobalIcon, ServerStack03Icon } from 'hugeicons-react';
+import { ArrowDown01Icon, GlobalIcon, PlusSignSquareIcon, ServerStack03Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 import TargetStack from './TargetStack';
 import SearchField from '../ui/SearchField';
@@ -114,6 +114,18 @@ export default function ScopeMenu({
     activeSessionId = '',
     followLabel,
     scopeLabel,
+    /**
+     * As the face of a tab rather than a panel title: a short trigger with no
+     * surface of its own, since the tab around it draws that, and a menu of
+     * fixed width under it rather than one as wide as the panel.
+     */
+    compact = false,
+    /**
+     * Drawn but not answering: the face of a tab that is not in front, where
+     * a press should bring the tab forward rather than open this. Still a
+     * real button, so the press ripples across it like any other.
+     */
+    inert = false,
 }) {
     const t = useT();
     const [query, setQuery] = useState('');
@@ -302,7 +314,10 @@ export default function ScopeMenu({
     return (
         <PanelMenu
             className="min-w-0 flex-1"
-            menuClassName="w-full min-w-[260px]"
+            menuClassName={compact ? 'w-72' : 'w-full min-w-[260px]'}
+            // A tab sits in a strip that scrolls sideways and clips, so its
+            // menu has to be drawn outside it.
+            portal={compact}
             sections={sections}
             header={total > SEARCH_AT ? (
                 <ScopeSearch value={query} onChange={setQuery} />
@@ -310,15 +325,22 @@ export default function ScopeMenu({
             trigger={({ open, toggle }) => (
                 <button
                     type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={open}
-                    onClick={toggle}
-                    className={`w-full h-8 pl-2.5 pr-2 rounded-xl flex items-center gap-1.5 transition-colors
+                    aria-haspopup={inert ? undefined : 'menu'}
+                    aria-expanded={inert ? undefined : open}
+                    aria-label={compact ? scopeLabel : undefined}
+                    title={compact ? scopeLabel : undefined}
+                    tabIndex={inert ? -1 : 0}
+                    onClick={inert ? undefined : toggle}
+                    className={`${compact
+                        ? 'w-full h-7 pl-2 pr-6 rounded-lg'
+                        : 'w-full h-8 pl-2.5 pr-2 rounded-xl'} flex items-center gap-1.5 transition-colors
                         outline-none focus-visible:ring-2
                         focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
-                        ${open
-                            ? 'bg-gray-100 dark:bg-white/[0.07]'
-                            : 'hover:bg-gray-100 dark:hover:bg-white/[0.06]'}`}
+                        ${compact
+                            ? ''
+                            : open
+                                ? 'bg-gray-100 dark:bg-white/[0.07]'
+                                : 'hover:bg-gray-100 dark:hover:bg-white/[0.06]'}`}
                 >
                     {/* The servers themselves, not a logo. The header's job is
                         to say which machine you are talking about, and these
@@ -329,18 +351,39 @@ export default function ScopeMenu({
                         They also carry the names, on hover, which is what lets
                         the text beside them shrink to a count once there are
                         several. */}
+                    {/* On a tab the affordance leads rather than trails: the
+                        right end is where the close button is, and two small
+                        marks side by side there read as one control. A plus
+                        in a square, since what it does is add servers, and a
+                        chevron is what a dropdown wears. Only while there is
+                        nothing picked: once there are servers, their marks
+                        are the thing to click, and the plus would be a third
+                        icon on a tab that only has room to say one thing. */}
+                    {compact && marks.length === 0 && (
+                        <PlusSignSquareIcon
+                            size={14}
+                            strokeWidth={1.75}
+                            className={`shrink-0 transition-colors
+                                ${open ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`}
+                        />
+                    )}
+
                     <TargetStack marks={marks} />
 
-                    <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold
-                        text-gray-800 dark:text-gray-200">
+                    {/* In a tab the colour is the tab's: dim while it is not
+                        in front, bright when it is. */}
+                    <span className={`min-w-0 flex-1 truncate text-left
+                        ${compact ? 'text-xs font-medium text-current' : 'text-xs font-semibold text-gray-800 dark:text-gray-200'}`}>
                         {scopeLabel}
                     </span>
-                    <ArrowDown01Icon
-                        size={12}
-                        strokeWidth={2}
-                        className={`shrink-0 text-gray-400 dark:text-gray-600 transition-transform
-                            ${open ? 'rotate-180' : ''}`}
-                    />
+                    {!compact && (
+                        <ArrowDown01Icon
+                            size={12}
+                            strokeWidth={2}
+                            className={`shrink-0 text-gray-400 dark:text-gray-600 transition-transform
+                                ${open ? 'rotate-180' : ''}`}
+                        />
+                    )}
                 </button>
             )}
         />
