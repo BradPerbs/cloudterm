@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown01Icon, GlobalIcon, PlusSignSquareIcon, ServerStack03Icon } from 'hugeicons-react';
+import { ArrowDown01Icon, GlobalIcon, ServerStack03Icon } from 'hugeicons-react';
 import PanelMenu from './PanelMenu';
 import TargetStack from './TargetStack';
 import SearchField from '../ui/SearchField';
@@ -332,7 +332,7 @@ export default function ScopeMenu({
                     tabIndex={inert ? -1 : 0}
                     onClick={inert ? undefined : toggle}
                     className={`${compact
-                        ? 'w-full h-7 pl-2 pr-6 rounded-lg'
+                        ? 'w-full h-8 pl-6 pr-2.5 rounded-xl'
                         : 'w-full h-8 pl-2.5 pr-2 rounded-xl'} flex items-center gap-1.5 transition-colors
                         outline-none focus-visible:ring-2
                         focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
@@ -351,38 +351,37 @@ export default function ScopeMenu({
                         They also carry the names, on hover, which is what lets
                         the text beside them shrink to a count once there are
                         several. */}
-                    {/* On a tab the affordance leads rather than trails: the
-                        right end is where the close button is, and two small
-                        marks side by side there read as one control. A plus
-                        in a square, since what it does is add servers, and a
-                        chevron is what a dropdown wears. Only while there is
-                        nothing picked: once there are servers, their marks
-                        are the thing to click, and the plus would be a third
-                        icon on a tab that only has room to say one thing. */}
-                    {compact && marks.length === 0 && (
-                        <PlusSignSquareIcon
-                            size={14}
-                            strokeWidth={1.75}
-                            className={`shrink-0 transition-colors
-                                ${open ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`}
-                        />
-                    )}
-
-                    <TargetStack marks={marks} />
-
-                    {/* In a tab the colour is the tab's: dim while it is not
-                        in front, bright when it is. */}
-                    <span className={`min-w-0 flex-1 truncate text-left
-                        ${compact ? 'text-xs font-medium text-current' : 'text-xs font-semibold text-gray-800 dark:text-gray-200'}`}>
-                        {scopeLabel}
-                    </span>
-                    {!compact && (
-                        <ArrowDown01Icon
-                            size={12}
-                            strokeWidth={2}
-                            className={`shrink-0 text-gray-400 dark:text-gray-600 transition-transform
-                                ${open ? 'rotate-180' : ''}`}
-                        />
+                    {compact ? (
+                        <>
+                            {/* On a tab: the words, then the servers at the
+                                right end, drawn as the tiles the stack uses.
+                                With nothing picked the slot holds one empty
+                                tile with a plus in it, the same shape the
+                                servers will take, so the eye learns one place
+                                to look. The colour is the tab's: dim while it
+                                is not in front, bright when it is. */}
+                            <span className="min-w-0 flex-1 truncate text-left text-xs font-medium text-current">
+                                {scopeLabel}
+                            </span>
+                            {/* Nothing stands in for the servers until there
+                                are some: the words alone are the button, and
+                                a placeholder only spent width saying so. */}
+                            <TargetStack marks={marks} />
+                        </>
+                    ) : (
+                        <>
+                            <TargetStack marks={marks} />
+                            <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold
+                                text-gray-800 dark:text-gray-200">
+                                {scopeLabel}
+                            </span>
+                            <ArrowDown01Icon
+                                size={12}
+                                strokeWidth={2}
+                                className={`shrink-0 text-gray-400 dark:text-gray-600 transition-transform
+                                    ${open ? 'rotate-180' : ''}`}
+                            />
+                        </>
                     )}
                 </button>
             )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { collapseChip, finishChipOpen, openChip } from '../../lib/tabMotion';
+import { collapseChip, finishChipOpen, openChip, spinPlus } from '../../lib/tabMotion';
 import {
     Cancel01Icon,
     PlusSignIcon,
@@ -14,6 +14,7 @@ import PanelMenu from './PanelMenu';
 import ScopeMenu from './ScopeMenu';
 import AssistantConversation, { HAIRLINE } from './AssistantConversation';
 import { useT } from '../../i18n';
+import { PANE_HEADER_HEIGHT } from '../../lib/layout';
 import {
     FOLLOW,
     GLOBAL,
@@ -108,8 +109,9 @@ function readStoredTabs() {
  * the conversation was about is the tooltip and the chat list.
  *
  * The selector's button spans the whole tab, with the close button laid over
- * its right end, so the press ripple (which plays on the nearest button)
- * crosses under the × rather than stopping short of it.
+ * its left end, so the press ripple (which plays on the nearest button)
+ * crosses under the × rather than stopping short of it. Close on the left and
+ * the servers on the right, so the two are never side by side.
  *
  * It arrives and leaves the way the title bar's tabs do, on the same tweens
  * from `lib/tabMotion`: opening from nothing on mount, and while `closing`,
@@ -172,8 +174,8 @@ function Tab({
                 onMenu(event.clientX, event.clientY);
             }}
             title={title}
-            className={`group/tab relative shrink-0 h-7 max-w-[14rem] min-w-[6rem]
-                flex items-center rounded-lg text-xs select-none cursor-pointer
+            className={`group/tab relative shrink-0 h-8 max-w-[14rem] min-w-[6rem]
+                flex items-center rounded-xl text-xs select-none cursor-pointer
                 outline-none transition-colors
                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
                 ${closing ? 'pointer-events-none' : ''}
@@ -182,17 +184,17 @@ function Tab({
                     : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/[0.04] '
                         + 'hover:text-gray-900 dark:hover:text-gray-200'}`}
         >
+            <div className="min-w-0 flex-1 flex">
+                <ScopeMenu compact inert={!active || closing} scope={scope} {...scopeProps} />
+            </div>
             {/* Working, said as a dot: a tab that is answering while another is
                 in front should be visibly doing so. */}
             {status?.busy && (
                 <span
                     aria-hidden="true"
-                    className="shrink-0 ml-2 -mr-1 w-1.5 h-1.5 rounded-full bg-current animate-pulse"
+                    className="shrink-0 mr-2 w-1.5 h-1.5 rounded-full bg-current animate-pulse"
                 />
             )}
-            <div className="min-w-0 flex-1 flex">
-                <ScopeMenu compact inert={!active || closing} scope={scope} {...scopeProps} />
-            </div>
             <button
                 type="button"
                 aria-label={closeLabel}
@@ -200,7 +202,7 @@ function Tab({
                     event.stopPropagation();
                     onClose();
                 }}
-                className={`absolute right-1 top-1/2 -translate-y-1/2 z-20 w-4 h-4 rounded
+                className={`absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-4 h-4 rounded
                     flex items-center justify-center transition-opacity
                     text-gray-400 dark:text-neutral-500
                     hover:text-gray-900 dark:hover:text-white
@@ -663,6 +665,9 @@ export default function AssistantWorkspace({
     /** `{ tabId, x, y }` while a tab's own menu is open. */
     const [menu, setMenu] = useState(null);
 
+    /** The plus glyph, which turns under the pointer. */
+    const plusRef = useRef(null);
+
     const menuItems = useMemo(() => {
         if (!menu) return [];
         const several = tabs.length > 1;
@@ -754,7 +759,12 @@ export default function AssistantWorkspace({
             <div
                 role="tablist"
                 data-assistant-tabs=""
-                className={`shrink-0 h-9 pl-1.5 pr-1 flex items-center gap-1 border-b ${HAIRLINE}`}
+                // The pane headers' grid: a 44px row, 32px controls with a 12px
+                // radius, 6px in from the card's edge. That is the inset that
+                // keeps a 12px corner concentric with the card's 16px one; the
+                // 8px chips at 4px this used to have sat visibly off it.
+                className={`shrink-0 px-1.5 flex items-center gap-1 border-b ${HAIRLINE}`}
+                style={{ height: PANE_HEADER_HEIGHT }}
             >
                 <div
                     className="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto scrollbar-none py-1"
@@ -782,19 +792,26 @@ export default function AssistantWorkspace({
                             closeLabel={t('assistant.closeTab')}
                         />
                     ))}
+                    {/* The title bar's plus, to the letter: the same glyph,
+                        and the same quarter turn under the pointer, on the
+                        same tween. */}
                     <Tooltip label={t('assistant.newTab')} hint="Ctrl+T" placement="bottom">
                         <button
                             type="button"
                             aria-label={t('assistant.newTab')}
                             onClick={() => addTab()}
-                            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg
+                            onPointerEnter={() => spinPlus(plusRef.current, true)}
+                            onPointerLeave={() => spinPlus(plusRef.current, false)}
+                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl
                                 transition-colors outline-none
-                                text-gray-500 dark:text-gray-400
-                                hover:bg-gray-100 hover:text-gray-900
+                                text-gray-400 dark:text-gray-500
+                                hover:bg-gray-900/[0.06] hover:text-gray-900
                                 dark:hover:bg-surface-control dark:hover:text-white
                                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25"
                         >
-                            <PlusSignIcon size={14} strokeWidth={2} />
+                            <svg ref={plusRef} className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M12 5v14M5 12h14" />
+                            </svg>
                         </button>
                     </Tooltip>
                 </div>
@@ -814,7 +831,7 @@ export default function AssistantWorkspace({
                                 if (!open) refreshConversations();
                                 toggle();
                             }}
-                            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg
+                            className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-xl
                                 transition-colors outline-none
                                 focus-visible:ring-2 focus-visible:ring-gray-900/20 dark:focus-visible:ring-white/25
                                 ${open
