@@ -833,7 +833,8 @@ module.exports = {
     WEB_TOOLS,
     SERVER_NAME,
     // The SDK takes image blocks in a user turn, which is the whole of what
-    // "attach a screenshot" needs. The other agents are driven through a text
-    // prompt and have no such slot, so the composer only offers it here.
+    // "attach a screenshot" needs. Codex takes them as files instead (see its
+    // provider); the agents driven through a text prompt have no slot at all,
+    // and the composer only offers the button where main says it works.
     supportsImages: true,
 };

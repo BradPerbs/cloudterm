@@ -318,29 +318,36 @@ async function start({
     let abort = null;
 
     /** One turn, from the text going in to the transcript coming out. */
-    async function turn(text) {
+    async function turn(text, images = []) {
         const current = getSettings();
         abort = new AbortController();
 
         const body = preamble ? `${preamble}\n\n---\n\n${text}` : text;
         preamble = '';
 
-        const { events } = await thread.runStreamed(body, { signal: abort.signal });
+        // On disk only for the turn: the CLI reads the files as it starts and
+        // sends the pixels itself, so once the turn is over nothing needs them.
+        const staged = await stageImages(images);
+        try {
+            const { events } = await thread.runStreamed(turnInput(body, staged.paths), { signal: abort.signal });
 
-        for await (const event of events) {
-            translate(event, onEvent);
+            for await (const event of events) {
+                translate(event, onEvent);
 
-            if (event.type === 'thread.started' && !announced) {
-                announced = true;
-                onEvent({ type: 'session', sessionId: thread.id || '', model: current.model || '' });
+                if (event.type === 'thread.started' && !announced) {
+                    announced = true;
+                    onEvent({ type: 'session', sessionId: thread.id || '', model: current.model || '' });
+                }
             }
+        } finally {
+            await staged.cleanup();
         }
     }
 
     return {
-        send(text) {
+        send(text, images = []) {
             running = (running || Promise.resolve())
-                .then(() => turn(text))
+                .then(() => turn(text, images))
                 .catch((error) => {
                     if (!abort?.signal.aborted) onEvent({ type: 'error', message: describeFailure(error) });
                 })
@@ -369,6 +376,54 @@ async function start({
             await mcpHost.release();
         },
     };
+}
+
+const IMAGE_EXTENSIONS = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+};
+
+/**
+ * Put the images where Codex can be pointed at them.
+ *
+ * Codex takes a picture as a path, not as bytes: the SDK hands each one to
+ * `codex exec --image`, and the CLI reads the file itself. So the base64 that
+ * came over the bridge is written out to a private directory of its own,
+ * fresh for every turn, and `cleanup` takes the directory away again.
+ *
+ * Returns `{ paths, cleanup }`; with nothing to stage both are no-ops.
+ */
+async function stageImages(images, root = os.tmpdir()) {
+    if (!images.length) return { paths: [], cleanup: async () => {} };
+
+    const dir = await fs.promises.mkdtemp(path.join(root, 'cloudterm-images-'));
+    const paths = [];
+    for (const [index, image] of images.entries()) {
+        const file = path.join(dir, `image-${index + 1}${IMAGE_EXTENSIONS[image.mediaType] || '.bin'}`);
+        await fs.promises.writeFile(file, Buffer.from(image.data, 'base64'));
+        paths.push(file);
+    }
+
+    return {
+        paths,
+        cleanup: () => fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {}),
+    };
+}
+
+/**
+ * One turn's input as the SDK takes it: the string alone when there are no
+ * pictures, otherwise the pictures followed by the words about them.
+ *
+ * The CLI wants some prompt text with the images, so a screenshot sent on its
+ * own goes with the one line that says what it is.
+ */
+function turnInput(text, paths = []) {
+    if (!paths.length) return text;
+    const input = paths.map(file => ({ type: 'local_image', path: file }));
+    input.push({ type: 'text', text: text || (paths.length > 1 ? 'See the attached images.' : 'See the attached image.') });
+    return input;
 }
 
 /** One Codex event, as the transcript events the panel already draws. */
@@ -572,4 +627,16 @@ function detect() {
     return { ok: Boolean(findCodex()), reason: 'notFound' };
 }
 
-module.exports = { start, listModels, detect, findCodex, codexAppRoots, codexRoots, SERVER_NAME };
+module.exports = {
+    start,
+    listModels,
+    detect,
+    findCodex,
+    codexAppRoots,
+    codexRoots,
+    stageImages,
+    turnInput,
+    SERVER_NAME,
+    // Pictures go in as files on the turn's command line: see `stageImages`.
+    supportsImages: true,
+};
