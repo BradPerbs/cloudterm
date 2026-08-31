@@ -6,12 +6,16 @@ import {
     StopCircleIcon,
     Image01Icon,
     ImageAdd01Icon,
+    Note01Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
 import Markdown from '../../lib/markdown';
 import useAssistant from '../../hooks/useAssistant';
 import useTypewriter from '../../hooks/useTypewriter';
+import { useSnippets } from '../../hooks/useSnippets';
+import { isSpec } from '../../lib/snippets';
+import SpecMenu from './SpecMenu';
 import { APP_GUTTER, PANE_HEADER_HEIGHT } from '../../lib/layout';
 import { revealAssistant, setAssistantWidth } from '../../lib/panelMotion';
 import ToolCall from './ToolCall';
@@ -218,6 +222,7 @@ function AssistantConversation({
     hosts = [],
     activeSessionId,
     onOpenSettings,
+    onOpenSnippets,
     onClose,
 }) {
     const t = useT();
@@ -256,6 +261,28 @@ function AssistantConversation({
     const [imageProviders, setImageProviders] = useState([]);
     /** Why the last file did not make it in, shown under the thumbnails. */
     const [imageNotice, setImageNotice] = useState('');
+
+    /**
+     * The specs going with the message, by id. Ids rather than records, so a
+     * spec edited in the library while it sits in the composer is sent as it
+     * now reads; main looks each one up when the message goes.
+     */
+    const [specIds, setSpecIds] = useState([]);
+    const { snippets } = useSnippets();
+    const specs = useMemo(() => snippets.filter(isSpec), [snippets]);
+
+    // Resolved against the live library, so a spec deleted while attached
+    // falls off the message rather than being sent as an id nothing answers.
+    const attached = useMemo(
+        () => specIds.map(id => specs.find(spec => spec.id === id)).filter(Boolean),
+        [specIds, specs],
+    );
+
+    const toggleSpec = useCallback((id) => {
+        setSpecIds(current => (
+            current.includes(id) ? current.filter(entry => entry !== id) : [...current, id]
+        ));
+    }, []);
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
@@ -375,14 +402,19 @@ function AssistantConversation({
 
     const submit = useCallback(() => {
         const body = text.trim();
-        if ((!body && images.length === 0) || assistant.busy) return;
+        if ((!body && images.length === 0 && attached.length === 0) || assistant.busy) return;
         setText('');
         setImages([]);
         setImageNotice('');
+        setSpecIds([]);
         stickToBottom.current = true;
         if (inputRef.current) inputRef.current.style.height = 'auto';
-        assistant.send(body, images.map(({ name, mediaType, data }) => ({ name, mediaType, data })));
-    }, [text, images, assistant]);
+        assistant.send(
+            body,
+            images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
+            attached.map(spec => spec.id),
+        );
+    }, [text, images, attached, assistant]);
 
     /**
      * Take in image files, however they arrived. One at a time, so a handful
@@ -615,6 +647,25 @@ function AssistantConversation({
                                     {/* The pictures, or a chip naming each one for a
                                         message read back from disk, which keeps the
                                         name and not the bytes. */}
+                                    {/* The documents that went with it, by
+                                        name. The text is in the library, and
+                                        a bubble holding a runbook would be
+                                        the whole panel. */}
+                                    {item.specs?.length > 0 && (
+                                        <div className={`flex flex-wrap gap-1.5 ${item.text || item.images?.length ? 'mb-1.5' : ''}`}>
+                                            {item.specs.map((spec, index) => (
+                                                <span
+                                                    key={spec.id || index}
+                                                    title={t('assistant.spec')}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                                                        text-xs bg-white/15 dark:bg-black/10"
+                                                >
+                                                    <Note01Icon size={12} strokeWidth={2} />
+                                                    {spec.name || t('assistant.spec')}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                     {item.images?.length > 0 && (
                                         <div className={`flex flex-wrap gap-1.5 ${item.text ? 'mb-1.5' : ''}`}>
                                             {item.images.map((image, index) => (image.data ? (
@@ -749,6 +800,37 @@ function AssistantConversation({
                     onDrop={onDrop}
                     onDragOver={onDragOver}
                 >
+                    {/* The specs going with the message, as chips. Each can be
+                        taken back until it is sent; the menu below toggles the
+                        same set. */}
+                    {attached.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+                            {attached.map(spec => (
+                                <span
+                                    key={spec.id}
+                                    className="inline-flex items-center gap-1 pl-2 pr-1 h-6 rounded-md
+                                        text-xs font-medium select-none
+                                        bg-gray-100 dark:bg-surface-control
+                                        text-gray-700 dark:text-gray-200"
+                                >
+                                    <Note01Icon size={12} strokeWidth={2} className="shrink-0 opacity-70" />
+                                    <span className="max-w-[12rem] truncate">{spec.name}</span>
+                                    <button
+                                        type="button"
+                                        aria-label={t('assistant.removeSpec')}
+                                        onClick={() => toggleSpec(spec.id)}
+                                        className="w-4 h-4 flex items-center justify-center rounded
+                                            text-gray-500 dark:text-gray-400
+                                            hover:text-gray-900 dark:hover:text-white
+                                            hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors"
+                                    >
+                                        <Cancel01Icon size={10} strokeWidth={2.5} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
                     {/* What is going with the message, above the words about
                         it. Each thumbnail can be taken back until it is sent. */}
                     {images.length > 0 && (
@@ -805,6 +887,16 @@ function AssistantConversation({
                         {settings && (
                             <ApprovalMenu settings={settings} onChange={changeSettings} />
                         )}
+
+                        {/* The documents from the library that go with the
+                            message. Every agent can read text, so this is
+                            there whichever one is answering. */}
+                        <SpecMenu
+                            specs={specs}
+                            selected={specIds}
+                            onToggle={toggleSpec}
+                            onCreate={onOpenSnippets}
+                        />
 
                         {/* The picker, for the agents that can read a picture.
                             Paste and drop work without it; this is for the
@@ -877,7 +969,7 @@ function AssistantConversation({
                                         <StopCircleIcon size={15} strokeWidth={2} />
                                     </button>
                                 </Tooltip>
-                            ) : (text.trim() || images.length > 0) ? (
+                            ) : (text.trim() || images.length > 0 || attached.length > 0) ? (
                                 <Tooltip label={t('assistant.send')} hint="Enter" placement="top">
                                     <button
                                         type="button"
@@ -930,6 +1022,7 @@ export default function AssistantPanel({
     width,
     onWidthChange,
     onOpenSettings,
+    onOpenSnippets,
     onOpen,
     onClose,
 }) {
@@ -1117,6 +1210,7 @@ export default function AssistantPanel({
                         hosts={hosts}
                         activeSessionId={activeSessionId}
                         onOpenSettings={onOpenSettings}
+                        onOpenSnippets={onOpenSnippets}
                         onClose={onClose}
                     />
                 </aside>

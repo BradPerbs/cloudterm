@@ -10,7 +10,7 @@ import {
 import SegmentedControl from '../ui/SegmentedControl';
 import Tooltip from '../ui/Tooltip';
 import { MONO_FIELD_CLASS } from '../ui/Field';
-import { composeSnippet, emptyStep, isPackage, MAX_STEPS } from '../../lib/snippets';
+import { composeSnippet, emptyStep, isCommand, MAX_STEPS } from '../../lib/snippets';
 
 /**
  * The step list for a package.
@@ -126,9 +126,10 @@ export default function PackageSteps({ form, library = [], onChange }) {
     const steps = form.steps || [];
 
     // Only commands can be referenced. A package referencing a package is what
-    // would make a cycle possible, so the option is never offered.
+    // would make a cycle possible, and a spec is prose for the assistant, not
+    // something to type at a prompt, so neither is offered.
     const referable = useMemo(
-        () => library.filter(entry => !isPackage(entry) && entry.id !== form.id),
+        () => library.filter(entry => isCommand(entry) && entry.id !== form.id),
         [library, form.id]
     );
 

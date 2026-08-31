@@ -3,6 +3,7 @@ import {
     FilterIcon,
     GridViewIcon,
     LeftToRightListBulletIcon,
+    NoteAddIcon,
     PackageAddIcon,
     PlusSignIcon,
 } from 'hugeicons-react';
@@ -17,13 +18,14 @@ const VIEWS = [
     { value: 'list', titleKey: 'hosts.viewList', icon: <LeftToRightListBulletIcon size={14} strokeWidth={2} /> },
 ];
 
-const KINDS = ['all', 'command', 'package'];
+const KINDS = ['all', 'command', 'package', 'spec'];
 
 /**
  * The Snippets page's header, built to the same plan as the Hosts one: a search
  * field that takes the width, then the controls that change what you are
  * looking at, in the same order: a filter menu, the layout switch, then the
- * two ways to add something.
+ * three ways to add something, with the plain command last and largest since
+ * it is the one added most.
  *
  * No title and no summary line, for the reason Hosts has none: the sidebar item
  * is already lit and the cards are plainly snippets, so both only spent the
@@ -49,6 +51,7 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
     counts,
     view,
     onViewChange,
+    onNewSpec,
     onNewPackage,
     onNewSnippet,
     compact = false,
@@ -92,6 +95,11 @@ const SnippetsToolbar = forwardRef(function SnippetsToolbar({
                     so the two primary actions do not read as a fourth filter. */}
                 <span className="w-px h-6 bg-gray-200 dark:bg-surface-control mx-0.5" aria-hidden="true" />
 
+                <IconButton
+                    onClick={onNewSpec}
+                    title={t('snippets.newSpec')}
+                    icon={<NoteAddIcon size={18} strokeWidth={1.75} />}
+                />
                 <IconButton
                     onClick={onNewPackage}
                     title={t('snippets.newPackage')}

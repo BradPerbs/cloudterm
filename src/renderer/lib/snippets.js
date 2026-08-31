@@ -26,6 +26,21 @@ export const emptySnippet = () => ({
 
 export const isPackage = (snippet) => snippet?.kind === 'package';
 
+/**
+ * A document for the assistant rather than a command for a shell. It is never
+ * offered to a terminal, and it is what the assistant panel's spec menu lists.
+ */
+export const isSpec = (snippet) => snippet?.kind === 'spec';
+
+/** A record a package step may point at: a plain command, and nothing else. */
+export const isCommand = (snippet) => !isPackage(snippet) && !isSpec(snippet);
+
+/** Roughly how long a spec is, for a card: words are what prose is measured in. */
+export const wordCount = (text) => {
+    const trimmed = String(text || '').trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+};
+
 /** A blank step, ready to be filled in. Inline unless a `ref` is given. */
 export const emptyStep = (ref = '') => ({
     id: `step-${Date.now()}-${Math.round(performance.now() * 1000)}`,
@@ -41,6 +56,11 @@ export function validateSnippet(snippet) {
             String(step?.ref || '').trim() || String(step?.command || '').trim());
         if (usable.length === 0) return 'A package needs at least one step';
         if (usable.length > MAX_STEPS) return `A package holds at most ${MAX_STEPS} steps`;
+        return '';
+    }
+
+    if (isSpec(snippet)) {
+        if (!String(snippet?.command || '').trim()) return 'Write something for the assistant to read';
         return '';
     }
 
@@ -75,7 +95,8 @@ export function joinSteps(parts, chain) {
  *
  * A step referencing another package counts as missing too. One level of
  * nesting is all this allows, which is what makes a cycle impossible rather
- * than something that has to be detected.
+ * than something that has to be detected. So does a step referencing a spec:
+ * a document for the assistant typed into a shell is a page of errors.
  */
 export function composeSnippet(snippet, library = []) {
     if (!isPackage(snippet)) {
@@ -90,7 +111,7 @@ export function composeSnippet(snippet, library = []) {
     for (const step of snippet.steps || []) {
         if (step.ref) {
             const target = byId.get(step.ref);
-            if (!target || isPackage(target)) {
+            if (!target || !isCommand(target)) {
                 missing.push({ id: step.id, ref: step.ref, name: target?.name || '' });
                 continue;
             }
@@ -202,9 +223,12 @@ function score(snippet, query, body) {
 /**
  * The snippets available on a host, filtered by the query and ranked.
  * Ties keep the library's own order, so the list is stable while typing.
+ *
+ * Specs are left out whatever the query: this feeds the terminal palette, and
+ * a spec is the one kind that must never be typed into a shell.
  */
 export function filterSnippets(snippets, { hostId, query = '' } = {}) {
-    const available = snippets.filter(snippet => matchesHost(snippet, hostId));
+    const available = snippets.filter(snippet => !isSpec(snippet) && matchesHost(snippet, hostId));
     const needle = query.trim().toLowerCase();
     if (!needle) return available;
 

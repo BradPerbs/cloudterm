@@ -1174,6 +1174,16 @@ function App() {
     }, []);
 
     /**
+     * The assistant offering to take the user to the Snippets page, which is
+     * where a spec for it is written. Same shape as the settings jump above.
+     */
+    const handleOpenSnippets = useCallback(() => {
+        setActiveTabId('home');
+        setActiveNav('snippets');
+        setReachedForPage(count => count + 1);
+    }, []);
+
+    /**
      * The things the assistant cannot do for itself.
      *
      * Opening a session means creating a tab, and tabs live here. So the main
@@ -1761,6 +1771,7 @@ function App() {
                         width={assistantWidth}
                         onWidthChange={setAssistantWidth}
                         onOpenSettings={handleOpenAssistantSettings}
+                        onOpenSnippets={handleOpenSnippets}
                         onOpen={() => setAssistantOpen(true)}
                         onClose={() => setAssistantOpen(false)}
                     />

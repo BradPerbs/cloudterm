@@ -55,8 +55,15 @@ function applyEvent(state, event) {
     switch (event.type) {
         case 'user-message':
             // Images carry their bytes while the app runs; one read back from
-            // disk has only a name and a type, and is drawn as a chip.
-            items.push({ kind: 'user', id: event.at, text: event.text, images: event.images || [] });
+            // disk has only a name and a type, and is drawn as a chip. A spec
+            // is only ever a name here: its text lives in the library.
+            items.push({
+                kind: 'user',
+                id: event.at,
+                text: event.text,
+                images: event.images || [],
+                specs: event.specs || [],
+            });
             busy = true;
             draft = emptyDraft();
             break;
@@ -413,9 +420,10 @@ export default function useAssistant({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [conversationId, targetKey]);
 
-    const send = useCallback(async (text, images = []) => {
+    /** `specs` is a list of spec snippet ids; main reads their text itself. */
+    const send = useCallback(async (text, images = [], specs = []) => {
         if (!conversationId) return;
-        const result = await window.api.ai.send(conversationId, text, images);
+        const result = await window.api.ai.send(conversationId, text, images, specs);
         if (!result?.success && result?.message) {
             setState(previous => applyEvent(previous, {
                 type: 'error', message: result.message, at: Date.now(),

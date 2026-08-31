@@ -612,8 +612,11 @@ contextBridge.exposeInMainWorld('api', {
 
         // `images` is optional: `[{ name, mediaType, data }]` with the bytes
         // as base64. Main checks them and refuses the message if the agent in
-        // use cannot read pictures.
-        send: (conversationId, text, images) => ipcRenderer.invoke('ai-send', { conversationId, text, images }),
+        // use cannot read pictures. `specs` is optional too: the ids of spec
+        // snippets to send along as instructions. Main reads their text from
+        // the library rather than taking it from here.
+        send: (conversationId, text, images, specs) =>
+            ipcRenderer.invoke('ai-send', { conversationId, text, images, specs }),
         interrupt: (conversationId) => ipcRenderer.invoke('ai-interrupt', conversationId),
 
         // Every message, tool call and result for a conversation.

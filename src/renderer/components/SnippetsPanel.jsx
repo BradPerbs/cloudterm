@@ -12,6 +12,8 @@ import {
     placeholdersIn,
     composeSnippet,
     isPackage,
+    isSpec,
+    isCommand,
 } from '../lib/snippets';
 import { toastOptions } from '../lib/toast';
 import { useT } from '../i18n';
@@ -39,9 +41,14 @@ const COMPACT_AT = 560;
  *
  * Laid out the way Hosts is, because it is the same kind of page: a toolbar
  * that says what you are looking at and changes it, a row of context under it,
- * and a list that scrolls on its own. Commands and packages share the list
- * since they share one palette; the tile's icon and step count tell them apart.
+ * and a list that scrolls on its own. Commands, packages and specs share the
+ * list since they are one library; the tile's icon and its meta line tell them
+ * apart. A spec never reaches the terminal palette: it is picked from the
+ * assistant panel instead, and sent to the agent as instructions.
  */
+
+/** The word for one record of each kind, for toasts and confirmations. */
+const nounFor = (snippet) => (isPackage(snippet) ? 'package' : isSpec(snippet) ? 'spec' : 'snippet');
 
 /** How the page was left last time. Not worth a round trip to the store. */
 const VIEW_KEY = 'snippets.view';
@@ -82,8 +89,9 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
 
     const counts = useMemo(() => ({
         all: snippets.length,
-        command: snippets.filter(entry => !isPackage(entry)).length,
+        command: snippets.filter(isCommand).length,
         package: snippets.filter(isPackage).length,
+        spec: snippets.filter(isSpec).length,
     }), [snippets]);
 
     /**
@@ -100,7 +108,8 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
             body: text,
             steps: steps.length,
             broken: missing.length > 0,
-            values: placeholdersIn(text).length,
+            // A spec is read, not filled in, so braces in it are not asked for.
+            values: isSpec(snippet) ? 0 : placeholdersIn(text).length,
             scope: describeScope(snippet, allHosts),
         };
     }), [snippets, allHosts]);
@@ -130,8 +139,9 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
         const needle = query.trim().toLowerCase();
 
         return resolved.filter(({ snippet, body }) => {
-            if (kind === 'command' && isPackage(snippet)) return false;
+            if (kind === 'command' && !isCommand(snippet)) return false;
             if (kind === 'package' && !isPackage(snippet)) return false;
+            if (kind === 'spec' && !isSpec(snippet)) return false;
             if (tag && !snippet.tags?.includes(tag)) return false;
             if (!needle) return true;
 
@@ -158,13 +168,11 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
 
     const handleSave = useCallback(async (snippet) => {
         const isEdit = Boolean(snippet.id);
-        const wasPackage = isPackage(snippet);
+        const noun = nounFor(snippet);
         setEditing(null);
         await save(snippet);
         toast.success(
-            isEdit
-                ? (wasPackage ? 'Package updated' : 'Snippet updated')
-                : (wasPackage ? 'Package added' : 'Snippet added'),
+            `${noun[0].toUpperCase()}${noun.slice(1)} ${isEdit ? 'updated' : 'added'}`,
             toastOptions({ duration: 1800 })
         );
     }, [save]);
@@ -179,19 +187,20 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
     const handleDelete = useCallback((snippet) => {
         // A command another package references is not gone quietly: the package
         // stops running rather than running short, so it is worth saying which.
-        const usedBy = isPackage(snippet)
-            ? []
-            : snippets.filter(entry =>
-                isPackage(entry) && (entry.steps || []).some(step => step.ref === snippet.id));
+        const usedBy = isCommand(snippet)
+            ? snippets.filter(entry =>
+                isPackage(entry) && (entry.steps || []).some(step => step.ref === snippet.id))
+            : [];
+        const noun = nounFor(snippet);
 
         setConfirming({
-            title: isPackage(snippet) ? 'Delete this package?' : 'Delete this snippet?',
+            title: `Delete this ${noun}?`,
             message: usedBy.length > 0
                 ? `“${snippet.name}” is a step in ${usedBy.length === 1
                     ? `“${usedBy[0].name}”`
                     : `${usedBy.length} packages`}. Deleting it will stop ${usedBy.length === 1 ? 'that package' : 'them'} from running until the step is taken out.`
                 : `“${snippet.name}” will be removed from the library.`,
-            confirmLabel: isPackage(snippet) ? 'Delete package' : 'Delete snippet',
+            confirmLabel: `Delete ${noun}`,
             onConfirm: async () => {
                 setConfirming(null);
                 await remove(snippet.id);
@@ -252,6 +261,7 @@ function SnippetsPanel({ isActive = true, reachedForPage = 0, allHosts = [] }) {
                 counts={counts}
                 view={view}
                 onViewChange={setView}
+                onNewSpec={() => setEditing({ kind: 'spec' })}
                 onNewPackage={() => setEditing({ kind: 'package' })}
                 onNewSnippet={() => setEditing({ kind: 'command' })}
             />

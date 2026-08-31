@@ -6,10 +6,12 @@ import {
     MoreVerticalIcon,
     CodeIcon,
     Layers01Icon,
+    Note01Icon,
 } from 'hugeicons-react';
 import IconTile from '../hosts/IconTile';
 import MenuButton from '../ui/MenuButton';
 import Tooltip from '../ui/Tooltip';
+import { wordCount } from '../../lib/snippets';
 
 /**
  * One snippet, as a tile in the grid or a row in the list.
@@ -45,6 +47,8 @@ function SnippetCard({
 }) {
     const isList = view === 'list';
     const asPackage = snippet.kind === 'package';
+    const asSpec = snippet.kind === 'spec';
+    const noun = asPackage ? 'package' : asSpec ? 'spec' : 'snippet';
 
     const handleClick = useCallback((event) => {
         if (event.target.closest('[data-action]')) return;
@@ -61,18 +65,26 @@ function SnippetCard({
     }, [onEdit]);
 
     // Only ever what is true of this snippet. Ordered so the two that change
-    // what happens when you pick it come first.
-    const extras = [
-        asPackage ? `${steps} step${steps === 1 ? '' : 's'}` : '',
-        asPackage && snippet.chain ? 'stops on failure' : '',
-        snippet.runImmediately ? 'runs on insert' : '',
-        values > 0 ? `${values} value${values === 1 ? '' : 's'}` : '',
-        scope,
-        ...(snippet.tags || []),
-    ].filter(Boolean);
+    // what happens when you pick it come first. A spec has none of those: it
+    // is read by the assistant, so what is worth knowing is how long it is
+    // and where it goes.
+    const extras = asSpec
+        ? [
+            'for the AI agent',
+            `${wordCount(body)} word${wordCount(body) === 1 ? '' : 's'}`,
+            ...(snippet.tags || []),
+        ]
+        : [
+            asPackage ? `${steps} step${steps === 1 ? '' : 's'}` : '',
+            asPackage && snippet.chain ? 'stops on failure' : '',
+            snippet.runImmediately ? 'runs on insert' : '',
+            values > 0 ? `${values} value${values === 1 ? '' : 's'}` : '',
+            scope,
+            ...(snippet.tags || []),
+        ].filter(Boolean);
 
     const menuItems = [
-        { label: asPackage ? 'Edit package' : 'Edit snippet', icon: <Edit02Icon size={14} strokeWidth={2} />, onSelect: onEdit },
+        { label: `Edit ${noun}`, icon: <Edit02Icon size={14} strokeWidth={2} />, onSelect: onEdit },
         { label: 'Duplicate', icon: <Copy01Icon size={14} strokeWidth={2} />, onSelect: onDuplicate },
         { separator: true },
         { label: 'Delete', icon: <Delete02Icon size={14} strokeWidth={2} />, danger: true, onSelect: onDelete },
@@ -94,7 +106,9 @@ function SnippetCard({
                     <span className={broken ? 'text-red-500' : 'text-gray-500 dark:text-neutral-400'}>
                         {asPackage
                             ? <Layers01Icon size={isList ? 16 : 18} strokeWidth={2} />
-                            : <CodeIcon size={isList ? 16 : 18} strokeWidth={2} />}
+                            : asSpec
+                                ? <Note01Icon size={isList ? 16 : 18} strokeWidth={2} />
+                                : <CodeIcon size={isList ? 16 : 18} strokeWidth={2} />}
                     </span>
                     {/* A package that cannot run is the one thing about a record
                         that stops it working, so it is marked on the icon rather
@@ -123,7 +137,9 @@ function SnippetCard({
                         {/* Same tone as HostCard's second line: `neutral-500`
                             is #565f89, which on a #24283b card is barely 2:1. */}
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
-                            <span className={`font-mono ${broken ? 'text-red-500 dark:text-red-400' : ''}`}>
+                            {/* Prose reads as prose; only a command is set in
+                                the shell's face. */}
+                            <span className={asSpec ? '' : `font-mono ${broken ? 'text-red-500 dark:text-red-400' : ''}`}>
                                 {broken ? 'A step was deleted, so this will not run' : firstLine(body)}
                             </span>
                             {!isList && extras.map(entry => (

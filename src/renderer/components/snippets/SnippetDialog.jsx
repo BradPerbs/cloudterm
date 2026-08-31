@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { FileImportIcon } from 'hugeicons-react';
 import Sheet from '../ui/Sheet';
 import Button from '../ui/Button';
 import Checkbox from '../ui/Checkbox';
@@ -11,21 +12,28 @@ import {
     placeholdersIn,
     composeSnippet,
     isPackage,
+    isSpec,
+    wordCount,
 } from '../../lib/snippets';
+
+/** What a spec can be read in from. Text of any kind; the name is a hint. */
+const SPEC_FILE_TYPES = '.md,.markdown,.txt,text/markdown,text/plain';
 
 /**
  * Add or edit one snippet. Purely a form: it hands a record back and lets the
  * caller decide what saving means.
  *
- * A record is either a single command or a package of steps. Switching between
- * the two keeps both forms' work, so changing your mind halfway does not throw
- * away what you already typed; only the one matching the chosen kind is
- * validated, and only it decides what gets sent.
+ * A record is a single command, a package of steps, or a spec: a document for
+ * the assistant. Switching between the kinds keeps every form's work, so
+ * changing your mind halfway does not throw away what you already typed; only
+ * the one matching the chosen kind is validated, and only it decides what gets
+ * sent.
  */
 export default function SnippetDialog({ snippet, hosts = [], library = [], dismiss, onSave, onClose }) {
     const [form, setForm] = useState(() => ({ ...emptySnippet(), ...(snippet || {}) }));
     const [tagText, setTagText] = useState(() => (snippet?.tags || []).join(', '));
     const [touched, setTouched] = useState(false);
+    const fileRef = useRef(null);
 
     const set = useCallback((field, value) => {
         setForm(previous => ({ ...previous, [field]: value }));
@@ -39,7 +47,31 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
     const placeholders = useMemo(() => placeholdersIn(composed.text), [composed.text]);
 
     const asPackage = isPackage(form);
+    const asSpec = isSpec(form);
+    const noun = asPackage ? 'package' : asSpec ? 'spec' : 'snippet';
     const scoped = form.hostIds.length > 0;
+
+    /**
+     * Read a spec in from a file on disk. Most people who keep instructions
+     * for an agent already have them as a Markdown file somewhere, and
+     * retyping one into a textarea is not a way anyone wants to spend an
+     * afternoon. The file's name stands in for a name not yet given.
+     */
+    const importFile = useCallback((event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            setForm(previous => ({
+                ...previous,
+                command: String(reader.result || ''),
+                name: previous.name || file.name.replace(/\.[^.]+$/, ''),
+            }));
+        };
+        reader.readAsText(file);
+    }, []);
 
     const toggleHost = useCallback((hostId) => {
         setForm(previous => ({
@@ -63,19 +95,19 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
 
     return (
         <Sheet
-            title={snippet?.id
-                ? (asPackage ? 'Edit package' : 'Edit snippet')
-                : (asPackage ? 'New package' : 'New snippet')}
+            title={`${snippet?.id ? 'Edit' : 'New'} ${noun}`}
             subtitle={asPackage
                 ? 'A series of commands, sent into a session in order.'
-                : 'A command you keep around, sent into a session from the palette.'}
+                : asSpec
+                    ? 'A document for the AI agent, attached to a message from the chat.'
+                    : 'A command you keep around, sent into a session from the palette.'}
             dismiss={dismiss}
             onClose={onClose}
             footer={
                 <>
                     <Button onClick={onClose}>Cancel</Button>
                     <Button variant="primary" onClick={submit} disabled={Boolean(error)}>
-                        {snippet?.id ? 'Save' : (asPackage ? 'Add package' : 'Add snippet')}
+                        {snippet?.id ? 'Save' : `Add ${noun}`}
                     </Button>
                 </>
             }
@@ -93,13 +125,16 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                         segments={[
                             { value: 'command', label: 'Command' },
                             { value: 'package', label: 'Package' },
+                            { value: 'spec', label: 'Spec', title: 'Instructions for the AI agent' },
                         ]}
                         className="w-full"
                     />
                     <span className="text-[11px] text-gray-500 dark:text-neutral-500">
                         {asPackage
                             ? 'Steps run in the order you set. A step can be written here or taken from the library.'
-                            : 'One piece of text, dropped at the prompt.'}
+                            : asSpec
+                                ? 'A runbook, house rules, a brief. Never typed into a terminal: the agent reads it alongside your message.'
+                                : 'One piece of text, dropped at the prompt.'}
                     </span>
                 </div>
 
@@ -108,13 +143,51 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                         data-autofocus
                         value={form.name}
                         onChange={(event) => set('name', event.target.value)}
-                        placeholder={asPackage ? 'e.g. Deploy and restart' : 'e.g. Tail nginx errors'}
+                        placeholder={asPackage
+                            ? 'e.g. Deploy and restart'
+                            : asSpec
+                                ? 'e.g. Deploy checklist'
+                                : 'e.g. Tail nginx errors'}
                         className={FIELD_CLASS}
                     />
                 </Field>
 
                 {asPackage ? (
                     <PackageSteps form={form} library={library} onChange={set} />
+                ) : asSpec ? (
+                    <Field
+                        label="Instructions"
+                        hint="Markdown works. Pick it from the chat's spec menu and it goes to the agent with your message."
+                    >
+                        <textarea
+                            value={form.command}
+                            onChange={(event) => set('command', event.target.value)}
+                            rows={14}
+                            spellCheck
+                            placeholder={'# Deploy checklist\n\n1. Pull the latest tag on the app box.\n2. Run the migrations, then restart the service.\n3. Check the health endpoint before saying it is done.'}
+                            className={`${MONO_FIELD_CLASS} resize-y`}
+                        />
+                        <div className="flex items-center justify-between gap-3 mt-2">
+                            <input
+                                ref={fileRef}
+                                type="file"
+                                accept={SPEC_FILE_TYPES}
+                                className="hidden"
+                                onChange={importFile}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileRef.current?.click()}
+                                className="h-8 px-3 rounded-lg border border-gray-300 dark:border-surface-control text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-surface-control transition-colors flex items-center gap-1.5"
+                            >
+                                <FileImportIcon size={13} strokeWidth={2.5} />
+                                Import a .md file
+                            </button>
+                            <span className="text-[11px] tabular-nums text-gray-400 dark:text-neutral-500">
+                                {wordCount(form.command)} words
+                            </span>
+                        </div>
+                    </Field>
                 ) : (
                     <Field
                         label="Command"
@@ -131,7 +204,10 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                     </Field>
                 )}
 
-                {placeholders.length > 0 && (
+                {/* A spec is read, not filled in, so braces in it are just
+                    braces: a Markdown document about templating has every
+                    right to mention them. */}
+                {placeholders.length > 0 && !asSpec && (
                     <div className="flex items-center gap-1.5 flex-wrap -mt-2">
                         <span className="text-[11px] text-gray-500 dark:text-neutral-500">
                             Will ask for
@@ -166,7 +242,11 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                     />
                 </Field>
 
-                {/* Scope */}
+                {/* Scope. Not for a spec: it is picked in the assistant panel,
+                    which may be talking about several hosts at once, and it
+                    is never offered to a terminal where the host would narrow
+                    it. */}
+                {!asSpec && (
                 <div className="flex flex-col gap-2">
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         Available on
@@ -222,7 +302,9 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                         </p>
                     )}
                 </div>
+                )}
 
+                {!asSpec && (
                 <Checkbox
                     variant="card"
                     checked={form.runImmediately}
@@ -232,6 +314,7 @@ export default function SnippetDialog({ snippet, hosts = [], library = [], dismi
                         ? 'Presses Enter for you, which starts the whole series. Leave off to drop the steps at the prompt so they can be read before anything runs.'
                         : 'Presses Enter for you. Leave off to drop the command at the prompt so it can be read before it runs.'}
                 />
+                )}
 
                 {touched && error && (
                     <p className="text-xs text-red-500 font-medium">{error}</p>

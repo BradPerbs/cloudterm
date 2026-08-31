@@ -15,6 +15,8 @@ const {
     placeholdersIn,
     fillPlaceholders,
     MAX_STEPS,
+    MAX_COMMAND_LENGTH,
+    MAX_SPEC_LENGTH,
 } = require(path.join(__dirname, '..', 'src', 'main', 'snippet-config.js'));
 
 let passed = 0;
@@ -298,6 +300,52 @@ check('chained packages survive normalisation', () => {
         steps: [{ ref: 'c1' }, { ref: 'c2' }],
     });
     assert.strictEqual(composeSnippet(pkg, library).text, 'git pull && npm ci && npm run build');
+});
+
+/* ---------------- specs ---------------- */
+
+console.log('\nspecs');
+
+check('a spec is a kind of its own', () => {
+    const record = normalizeSnippet({ name: 'Rules', kind: 'spec', command: '# Rules\n\nBe careful.' });
+    assert.strictEqual(record.kind, 'spec');
+    assert.strictEqual(record.command, '# Rules\n\nBe careful.');
+});
+
+check('a spec composes to its own text', () => {
+    const record = normalizeSnippet({ name: 'Rules', kind: 'spec', command: 'Be careful.' });
+    assert.deepStrictEqual(composeSnippet(record, library), { text: 'Be careful.', missing: [], steps: [] });
+});
+
+check('a spec may be longer than a command', () => {
+    const long = 'x'.repeat(MAX_COMMAND_LENGTH + 100);
+    assert.strictEqual(normalizeSnippet({ name: 's', kind: 'spec', command: long }).command.length, long.length);
+    assert.strictEqual(normalizeSnippet({ name: 'c', command: long }).command.length, MAX_COMMAND_LENGTH);
+});
+
+check('a spec is cut at its own cap', () => {
+    const long = 'x'.repeat(MAX_SPEC_LENGTH + 1);
+    assert.strictEqual(normalizeSnippet({ name: 's', kind: 'spec', command: long }).command.length, MAX_SPEC_LENGTH);
+});
+
+check('a spec needs text, and says so in its own words', () => {
+    assert.match(validateSnippet({ name: 's', kind: 'spec', command: '  ' }), /assistant/);
+    assert.strictEqual(validateSnippet({ name: 's', kind: 'spec', command: 'Do the thing.' }), '');
+});
+
+check('a package step cannot point at a spec', () => {
+    const withSpec = [...library, normalizeSnippet({ id: 'spec-1', name: 'Rules', kind: 'spec', command: 'Be careful.' })];
+    const pkg = { kind: 'package', steps: [{ id: 's1', ref: 'c1' }, { id: 's2', ref: 'spec-1' }] };
+    const { text, missing } = composeSnippet(pkg, withSpec);
+    assert.strictEqual(text, 'git pull');
+    assert.deepStrictEqual(missing.map(entry => entry.ref), ['spec-1']);
+});
+
+check('a spec keeps its text when switched to a command, cut to the shorter cap', () => {
+    const long = 'y'.repeat(MAX_COMMAND_LENGTH + 5);
+    const spec = normalizeSnippet({ name: 's', kind: 'spec', command: long });
+    const asCommand = normalizeSnippet({ ...spec, kind: 'command' });
+    assert.strictEqual(asCommand.command, long.slice(0, MAX_COMMAND_LENGTH));
 });
 
 console.log(`\n${passed} checks passed${process.exitCode ? ', with failures above' : ''}\n`);

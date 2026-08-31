@@ -11,25 +11,38 @@
  * user is standing when they answer for them. Nothing here expands anything: a
  * stored snippet is stored exactly as it was written.
  *
- * A snippet is one of two kinds:
+ * A snippet is one of three kinds:
  *
  *   command   one piece of text, the original thing
  *   package   an ordered series of steps, each either inline text or a
  *             reference to a command in the library
+ *   spec      a document, usually Markdown, written for the assistant rather
+ *             than for a shell: a runbook, a set of house rules, a brief. It
+ *             never goes into a terminal; it is attached to a message in the
+ *             assistant panel, where the model reads it as instructions.
  *
- * Packages are the same record rather than a second collection, so scoping,
- * tags, search and the palette all keep working without being taught about a
- * new type. What a package sends is worked out by `composeSnippet`.
+ * Packages and specs are the same record rather than a second collection, so
+ * scoping, tags, search, backup and sync all keep working without being taught
+ * about a new type. What a package sends is worked out by `composeSnippet`. A
+ * spec keeps its text in `command`, the field every other kind keeps its text
+ * in, so duplicating one or switching a record between kinds loses nothing.
  */
 
 /** Long enough for a real here-doc, short enough that the store stays sane. */
 const MAX_COMMAND_LENGTH = 10000;
 const MAX_NAME_LENGTH = 120;
 
+/**
+ * A spec is prose and gets read, not typed, so it is allowed to be a real
+ * document. Sixty thousand characters is a long runbook and still well inside
+ * what one message to any of the agents can carry.
+ */
+const MAX_SPEC_LENGTH = 60000;
+
 /** Well past any real runbook, and a bound on what one insert can send. */
 const MAX_STEPS = 50;
 
-const KINDS = ['command', 'package'];
+const KINDS = ['command', 'package', 'spec'];
 
 /** `{{ name }}`: the inner text is the prompt label, trimmed. */
 const PLACEHOLDER_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
@@ -69,10 +82,10 @@ function normalizeHostIds(raw) {
 }
 
 /** Only the trailing newline goes; interior lines and leading space are the text. */
-const normalizeCommandText = (raw) => String(raw ?? '')
+const normalizeCommandText = (raw, limit = MAX_COMMAND_LENGTH) => String(raw ?? '')
     .replace(/\r\n/g, '\n')
     .replace(/\n+$/, '')
-    .slice(0, MAX_COMMAND_LENGTH);
+    .slice(0, limit);
 
 /**
  * One step of a package: either a reference to a snippet in the library, or a
@@ -97,19 +110,22 @@ const normalizeSteps = (list) => (Array.isArray(list) ? list : [])
     .slice(0, MAX_STEPS);
 
 function normalizeSnippet(raw = {}) {
+    // Anything unrecognised is a command, which is what every record written
+    // before packages existed is. No migration needed.
+    const kind = KINDS.includes(raw.kind) ? raw.kind : 'command';
+
     return {
         id: clean(raw.id) || nextId(),
         name: clean(raw.name).slice(0, MAX_NAME_LENGTH),
-        // Anything unrecognised is a command, which is what every record
-        // written before packages existed is. No migration needed.
-        kind: KINDS.includes(raw.kind) ? raw.kind : 'command',
+        kind,
         steps: normalizeSteps(raw.steps),
         // Only meaningful for a package: join the steps with `&&` so the series
         // stops at the first failure, instead of running each in turn.
         chain: Boolean(raw.chain),
-        // Kept even on a package, so switching a record between the two kinds
-        // and back does not throw the other form's work away.
-        command: normalizeCommandText(raw.command),
+        // Kept even on a package, so switching a record between the kinds and
+        // back does not throw the other form's work away. A spec gets the
+        // longer cap; the cut is made at the kind it is saved as.
+        command: normalizeCommandText(raw.command, kind === 'spec' ? MAX_SPEC_LENGTH : MAX_COMMAND_LENGTH),
         description: clean(raw.description).slice(0, MAX_NAME_LENGTH * 4),
         tags: normalizeTags(raw.tags),
         hostIds: normalizeHostIds(raw.hostIds),
@@ -133,6 +149,14 @@ function validateSnippet(snippet) {
             clean(step?.ref) || String(step?.command ?? '').trim());
         if (usable.length === 0) return 'A package needs at least one step';
         if (usable.length > MAX_STEPS) return `A package holds at most ${MAX_STEPS} steps`;
+        return '';
+    }
+
+    if (snippet?.kind === 'spec') {
+        if (!String(snippet?.command ?? '').trim()) return 'Write something for the assistant to read';
+        if (String(snippet.command).length > MAX_SPEC_LENGTH) {
+            return `A spec is longer than ${MAX_SPEC_LENGTH} characters`;
+        }
         return '';
     }
 
@@ -173,7 +197,10 @@ function joinSteps(parts, chain) {
  *
  * A step referencing another *package* counts as missing too. One level of
  * nesting is all this allows, which is what makes a cycle impossible rather
- * than something that has to be detected.
+ * than something that has to be detected. So does a step referencing a spec:
+ * a document for the assistant typed into a shell is a page of errors.
+ *
+ * A spec composes to its own text, the way a command does.
  */
 function composeSnippet(snippet, library = []) {
     if (snippet?.kind !== 'package') {
@@ -188,7 +215,7 @@ function composeSnippet(snippet, library = []) {
     for (const step of snippet.steps || []) {
         if (step.ref) {
             const target = byId.get(step.ref);
-            if (!target || target.kind === 'package') {
+            if (!target || target.kind !== 'command') {
                 missing.push({ id: step.id, ref: step.ref, name: target?.name || '' });
                 continue;
             }
@@ -236,6 +263,7 @@ function fillPlaceholders(command, values = {}) {
 
 module.exports = {
     MAX_COMMAND_LENGTH,
+    MAX_SPEC_LENGTH,
     MAX_NAME_LENGTH,
     MAX_STEPS,
     PLACEHOLDER_PATTERN,
