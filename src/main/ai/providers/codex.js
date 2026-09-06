@@ -274,7 +274,7 @@ async function start({
             + 'or install the CLI and make sure its executable is on PATH.');
     }
 
-    const { url, token } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    const { url, token, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
 
     const env = { ...process.env, CLOUDBLAST_MCP_TOKEN: token };
     if (settings.apiKey) env.OPENAI_API_KEY = settings.apiKey;
@@ -373,7 +373,7 @@ async function start({
         async close() {
             abort?.abort();
             await running?.catch(() => {});
-            await mcpHost.release();
+            await release();
         },
     };
 }

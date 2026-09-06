@@ -385,7 +385,7 @@ async function start({
     }
 
     const directory = app.getPath('userData');
-    const { url: mcpUrl, token } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    const { url: mcpUrl, token, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
     let server;
 
     try {
@@ -396,7 +396,7 @@ async function start({
             maxTurns: settings.maxTurns,
         }), directory);
     } catch (error) {
-        await mcpHost.release();
+        await release();
         throw error;
     }
 
@@ -425,12 +425,12 @@ async function start({
         }
     } catch (error) {
         closeProcess(server.child);
-        await mcpHost.release();
+        await release();
         throw error;
     }
     if (!session?.id) {
         closeProcess(server.child);
-        await mcpHost.release();
+        await release();
         throw new Error('OpenCode started but did not create a session');
     }
 
@@ -470,7 +470,7 @@ async function start({
     } catch (error) {
         abortEvents.abort();
         closeProcess(server.child);
-        await mcpHost.release();
+        await release();
         throw error;
     }
     const pump = (async () => {
@@ -527,7 +527,7 @@ async function start({
             await running.catch(() => {});
             closeProcess(server.child);
             await pump.catch(() => {});
-            await mcpHost.release();
+            await release();
         },
     };
 }

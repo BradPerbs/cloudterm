@@ -894,14 +894,14 @@ async function start(options) {
     }
 
     const { home, workspace } = directories();
-    const { tokenUrl } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    const { tokenUrl, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
 
     try {
         // Once per query. What it points at is a directory, not a copy, so it
         // stays right for as long as their login does.
         borrowLogin({ home, source });
     } catch (error) {
-        await mcpHost.release();
+        await release();
         throw new Error('The Kimi Code login on this machine could not be reached from the '
             + `directory these runs use: ${error.message}`);
     }
@@ -1031,7 +1031,7 @@ async function start(options) {
             stopped = true;
             stopProcess(child);
             await running.catch(() => {});
-            await mcpHost.release();
+            await release();
         },
     };
 }

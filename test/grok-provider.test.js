@@ -114,6 +114,8 @@ async function run() {
     assert.strictEqual(first[first.indexOf('--model') + 1], 'grok-build-0.1');
     assert.strictEqual(first[first.indexOf('--effort') + 1], 'high');
     assert.ok(first.includes('--always-approve'), 'our own gate is the one that asks');
+    assert.ok(first.includes('--trust'), 'the app workspace must load project MCP tools in headless mode');
+    assert.strictEqual(first[first.indexOf('--cwd') + 1], '/tmp/work');
     assert.ok(first.includes('--no-auto-update'), 'no downloads in the middle of a turn');
     assert.strictEqual(
         first[first.indexOf('--disallowed-tools') + 1],
@@ -130,6 +132,7 @@ async function run() {
     });
     assert.strictEqual(later[later.indexOf('--resume') + 1], 'abc-123', 'the second turn resumes');
     assert.ok(!later.includes('--session-id'));
+    assert.ok(later.includes('--trust'), 'resumed turns must load the tools too');
     assert.ok(!later.includes('--model'), 'nothing pinned means whatever the agent is set to');
     assert.ok(!later.includes('--disallowed-tools'), 'the switch being on lets its own tools through');
     assert.strictEqual(later[later.indexOf('--effort') + 1], 'max', 'a level above this scale rounds down');
@@ -310,6 +313,16 @@ async function run() {
 
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-config-'));
     try {
+        const firstWorkspace = provider._test.workspace('chat-a', directory);
+        const secondWorkspace = provider._test.workspace('chat-b', directory);
+        assert.notStrictEqual(firstWorkspace, secondWorkspace, 'tabs must not overwrite each other’s MCP config');
+        assert.strictEqual(provider._test.workspace('chat-a', directory), firstWorkspace, 'resume keeps its workspace');
+        provider.writeMcpConfig(firstWorkspace, 'http://127.0.0.1:51234/mcp/first');
+        provider.writeMcpConfig(secondWorkspace, 'http://127.0.0.1:51235/mcp/second');
+        assert.strictEqual(
+            JSON.parse(fs.readFileSync(path.join(firstWorkspace, '.mcp.json'), 'utf8')).mcpServers.remote.url,
+            'http://127.0.0.1:51234/mcp/first'
+        );
         const url = 'http://127.0.0.1:51234/mcp/deadbeef';
         provider.writeMcpConfig(directory, url);
 

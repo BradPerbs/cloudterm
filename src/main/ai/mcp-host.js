@@ -24,7 +24,7 @@ const catalog = require('./tools');
  *     Authorization header or in the URL path, compared in constant time.
  *     Anything else gets 401 before it is parsed
  *   - it is started on demand by a provider that needs it, and stopped when
- *     the last one is done
+ *     that conversation is done
  *
  * The approval policy is the same one the other provider uses, applied in the
  * same place it matters: before the handler runs. A call that needs a person
@@ -32,13 +32,8 @@ const catalog = require('./tools');
  * the user whichever agent asked it.
  */
 
-let server = null;
-let ready = null;
-let token = '';
-let users = 0;
-
 /** Constant time, because a token check that returns early leaks the token. */
-function tokenMatches(offered) {
+function tokenMatches(offered, token) {
     const a = Buffer.from(String(offered || ''));
     const b = Buffer.from(token);
     return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -82,18 +77,14 @@ function readBody(request) {
 }
 
 /**
- * Start the server, or hand back the one already running.
- *
- * `context` is read per call rather than captured, so a tool always acts on
- * the session in front of the user now and under the settings as they are now,
- * exactly as the in-process path does.
+ * Each provider session owns its endpoint and callbacks. Sharing these across
+ * tabs sends approvals and server scope to whichever conversation started first.
+ * The context getter still reads that conversation's current selection/settings.
  */
 async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
-    users += 1;
-
-    if (ready) return ready;
-
-    token = crypto.randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(32).toString('hex');
+    let closed = false;
+    let closing = null;
 
     const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
     const { StreamableHTTPServerTransport } = await import(
@@ -157,6 +148,13 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
                     }
                 }
 
+                if (closed) {
+                    return {
+                        content: [{ type: 'text', text: 'This assistant conversation has closed.' }],
+                        isError: true,
+                    };
+                }
+
                 try {
                     const result = await definition.handler(input || {}, context);
                     return {
@@ -180,9 +178,9 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
     // Stateless: a server and a transport per request, torn down with the
     // response. There is no session id to track and nothing to leak between
     // turns, which for a socket this process is hosting is the point.
-    ready = new Promise((resolve, reject) => {
-        server = http.createServer(async (request, response) => {
-            if (!tokenMatches(offeredToken(request))) {
+    return new Promise((resolve, reject) => {
+        const server = http.createServer(async (request, response) => {
+            if (closed || !tokenMatches(offeredToken(request), token)) {
                 if (process.env.CLOUDBLAST_MCP_DEBUG) console.error('[mcp] 401', request.method, request.url);
                 response.writeHead(401).end();
                 return;
@@ -218,26 +216,22 @@ async function acquire({ toolContext, requestApproval, onEvent = () => {} }) {
             resolve({
                 url: `http://127.0.0.1:${port}/mcp`,
                 token,
+                release() {
+                    if (closing) return closing;
+                    closed = true;
+                    closing = new Promise((done) => {
+                        server.close(done);
+                        // An idle stream or approval must not keep a closed tab alive.
+                        server.closeAllConnections();
+                    });
+                    return closing;
+                },
                 // The same endpoint with the token already in it, for a client
                 // that can only be handed an address. See `offeredToken`.
                 tokenUrl: `http://127.0.0.1:${port}/mcp/${token}`,
             });
         });
     });
-
-    return ready;
 }
 
-/** Let go. The last one out closes the door. */
-async function release() {
-    users = Math.max(0, users - 1);
-    if (users > 0 || !server) return;
-
-    const closing = server;
-    server = null;
-    ready = null;
-    token = '';
-    await new Promise(resolve => closing.close(resolve));
-}
-
-module.exports = { acquire, release, _test: { offeredToken } };
+module.exports = { acquire, _test: { offeredToken } };

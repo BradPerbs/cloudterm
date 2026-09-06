@@ -270,8 +270,10 @@ function cachedModels({ source = grokHome() } = {}) {
  * is on the servers, reached through tools, and an empty folder is the honest
  * description of what it has local access to.
  */
-function workspace() {
-    const directory = path.join(app.getPath('userData'), 'grok-build');
+function workspace(sessionId = crypto.randomUUID(), root = app.getPath('userData')) {
+    // A separate working directory prevents another tab from replacing its MCP URL.
+    const key = crypto.createHash('sha256').update(sessionId).digest('hex');
+    const directory = path.join(root, 'grok-build', key);
     try {
         fs.mkdirSync(directory, { recursive: true });
     } catch {
@@ -518,6 +520,9 @@ function runArguments({ current, sessionId, resume, directory, prompt }) {
         '-p', prompt,
         '--output-format', 'streaming-json',
         '--cwd', directory,
+        // Only this app-created workspace is trusted. Headless mode cannot
+        // answer the folder-trust prompt, so project MCP tools otherwise stay off.
+        '--trust',
         // Our own gate is the one that asks. Grok Build putting a second
         // question on a channel with nobody reading it would stop every tool
         // call dead, which is exactly what happened to Codex before its
@@ -682,13 +687,15 @@ async function start(options) {
             + 'and sign in with "grok" in a terminal, then switch it on again.');
     }
 
-    const directory = workspace();
-    const { tokenUrl } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    // Keep the workspace stable across restarts, and separate for each chat.
+    const sessionId = resumeSessionId || crypto.randomUUID();
+    const directory = workspace(sessionId);
+    const { tokenUrl, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
 
     try {
         writeMcpConfig(directory, tokenUrl);
     } catch (error) {
-        await mcpHost.release();
+        await release();
         throw new Error(`The Grok Build configuration could not be written: ${error.message}`);
     }
 
@@ -700,10 +707,6 @@ async function start(options) {
         return env;
     };
 
-    // A session id we choose, so the conversation can be resumed by the same
-    // id after the app has been closed and reopened. A UUID because that is
-    // what the CLI's own sessions are named.
-    const sessionId = resumeSessionId || crypto.randomUUID();
     let resume = Boolean(resumeSessionId);
 
     onEvent({ type: 'session', sessionId, model: settings.model || '' });
@@ -804,7 +807,7 @@ async function start(options) {
             stopped = true;
             stopProcess(child);
             await running.catch(() => {});
-            await mcpHost.release();
+            await release();
         },
     };
 }
