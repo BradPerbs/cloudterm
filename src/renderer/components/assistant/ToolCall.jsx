@@ -28,6 +28,7 @@ const TITLES = {
     write_file: 'assistant.didWrite',
     connect_host: 'assistant.didConnect',
     disconnect_session: 'assistant.didDisconnect',
+    AskUserQuestion: 'assistant.didAsk',
 };
 
 /** The dot carries the status, so the row height never changes with it. */
@@ -75,6 +76,17 @@ export function describeCall(name, input = {}) {
             };
         case 'connect_host':
             return { mono: false, text: input.hostId || '' };
+        // The question itself, not its machinery. The options are on the card
+        // while it stands and in the answer once it is over, so a row that
+        // listed them again would be the same thing three times.
+        case 'AskUserQuestion':
+            return {
+                mono: false,
+                text: (Array.isArray(input.questions) ? input.questions : [])
+                    .map(entry => entry?.question || '')
+                    .filter(Boolean)
+                    .join(' · '),
+            };
         default: {
             const entries = Object.entries(input).filter(([key]) => key !== 'session');
             if (entries.length === 0) return { mono: false, text: '' };

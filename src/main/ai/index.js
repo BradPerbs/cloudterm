@@ -400,7 +400,7 @@ async function restart(conversation) {
  * answer to "may I restart this service" when nobody is there to say yes is
  * no, not an exception somewhere up the stack.
  */
-function requestApproval(conversation, { toolName, name, input, local }) {
+function requestApproval(conversation, { toolName, name, input, local, question = false }) {
     return new Promise((resolve) => {
         const definition = catalog.BY_NAME.get(name);
         const requestId = nextId('approve');
@@ -415,7 +415,10 @@ function requestApproval(conversation, { toolName, name, input, local }) {
             // card as though it were still waiting, and clicking it does
             // nothing because the id it names is long gone.
             emit(conversation, { type: 'approval-settled', requestId, status });
-            resolve(verdict);
+            // Only a question's card has anything to hand back. Dropped for
+            // every other call so that a stray payload can never rewrite the
+            // arguments of a command on its way to a server.
+            resolve(question ? verdict : { ...verdict, input: null });
         };
 
         const timer = setTimeout(() => {
@@ -424,7 +427,11 @@ function requestApproval(conversation, { toolName, name, input, local }) {
 
         pendingApprovals.set(requestId, { resolve: settle, timer, conversationId: conversation.id });
 
-        const target = input?.session || conversation.boundSessionId || '';
+        // A question is put to the person, not to a server, so it is not drawn
+        // against one. Looking one up here would hang the panel's scope on a
+        // card that has nothing to do with it and name a machine on a menu of
+        // two labels.
+        const target = question ? '' : (input?.session || conversation.boundSessionId || '');
         const info = target ? transcript.info(target) : null;
 
         emit(conversation, {
@@ -434,6 +441,9 @@ function requestApproval(conversation, { toolName, name, input, local }) {
             rawName: toolName,
             title: definition?.title || (local ? `Local: ${toolName}` : toolName),
             local: Boolean(local),
+            // The card this draws is the tool: options to pick from rather
+            // than an allow and a decline. See the claude-code provider.
+            question: Boolean(question),
             readOnly: Boolean(definition?.readOnly),
             input,
             // Both, because they answer different questions. The id is what the
@@ -475,11 +485,21 @@ function requestAction(conversation, payload) {
     });
 }
 
-function respondToApproval({ requestId, approved, message }) {
+/**
+ * `input` is what the card collected, when the card collects anything. Only a
+ * question does today: its answers are the whole point of the call, and the
+ * provider is what decides which of them it will pass on. An ordinary approval
+ * sends nothing here and the call runs on the input the model wrote.
+ */
+function respondToApproval({ requestId, approved, message, input }) {
     const entry = pendingApprovals.get(requestId);
     if (!entry) return false;
     entry.resolve(
-        { approved: Boolean(approved), message: message || '' },
+        {
+            approved: Boolean(approved),
+            message: message || '',
+            input: input && typeof input === 'object' ? input : null,
+        },
         approved ? 'approved' : 'denied'
     );
     return true;

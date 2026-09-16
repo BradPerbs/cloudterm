@@ -287,8 +287,60 @@ const LOCAL_TOOLS = [
  */
 const WEB_TOOLS = ['WebFetch', 'WebSearch'];
 
-/** Claude Code's own tools that may be used with the local-tools switch off. */
-const OPEN_TOOLS = new Set(WEB_TOOLS);
+/**
+ * The tool the model uses to put a question to the user.
+ *
+ * It runs nothing and reaches nothing. The whole of it is a question with two
+ * to four answers, and the answer is collected by whoever is driving the
+ * runtime: the SDK hands the call to `canUseTool`, and the answers ride back
+ * on `updatedInput.answers`, keyed by the question text. A host that allows
+ * the call without putting them there gets "The user did not answer the
+ * questions" as the tool's result, which is what this panel did until now, and
+ * a host that denies it gets a model that has learned it cannot ask.
+ *
+ * So it is neither a local tool nor a remote one. It is the one call whose
+ * approval card *is* the tool: see `askQuestion` below.
+ */
+const QUESTION_TOOL = 'AskUserQuestion';
+
+/**
+ * Claude Code's own tools that may be used with the local-tools switch off.
+ *
+ * Asking the user something is not touching their machine, so it belongs here
+ * next to reading a web page: someone who has pointed this panel at servers
+ * and nothing else has not asked to be unable to answer a question.
+ */
+const OPEN_TOOLS = new Set([...WEB_TOOLS, QUESTION_TOOL]);
+
+/**
+ * The answers, as the runtime takes them back.
+ *
+ * Only the questions that were actually asked, matched on their exact text,
+ * because that text is the key the runtime pairs an answer to a question by.
+ * Anything else the card sends is dropped rather than passed through: the
+ * input handed back to the model is not a place to let unchecked keys in.
+ *
+ * Returns null when nothing usable came back, which the caller turns into a
+ * decline rather than an unanswered call.
+ */
+function questionAnswers(input, answers) {
+    if (!answers || typeof answers !== 'object') return null;
+
+    const asked = Array.isArray(input?.questions) ? input.questions : [];
+    const kept = {};
+    let count = 0;
+
+    for (const question of asked) {
+        const key = question?.question;
+        if (typeof key !== 'string' || !(key in answers)) continue;
+        const value = answers[key];
+        if (typeof value !== 'string' || !value.trim()) continue;
+        kept[key] = value;
+        count += 1;
+    }
+
+    return count > 0 ? kept : null;
+}
 
 let sdkPromise = null;
 
@@ -542,6 +594,35 @@ async function start({
             const local = localName(toolName);
             const current = getSettings();
 
+            // A question, answered rather than approved. The card collects the
+            // answers and they go back on the input, which is the only way the
+            // runtime has of hearing them. Declining is a real answer too: the
+            // model is told nobody picked, which is what it needs to know.
+            if (toolName === QUESTION_TOOL) {
+                const verdict = await requestApproval({
+                    toolName,
+                    name: toolName,
+                    input: toolInput,
+                    local: false,
+                    question: true,
+                });
+
+                const answers = verdict.approved
+                    ? questionAnswers(toolInput, verdict.input?.answers)
+                    : null;
+
+                if (!answers) {
+                    return {
+                        behavior: 'deny',
+                        message: verdict.message
+                            || 'The user did not answer. Ask in the conversation instead, or carry on '
+                                + 'without that answer.',
+                    };
+                }
+
+                return { behavior: 'allow', updatedInput: { ...toolInput, answers } };
+            }
+
             if (!local) {
                 if (!current.allowLocalTools && !OPEN_TOOLS.has(toolName)) {
                     return {
@@ -724,7 +805,11 @@ function translate(message, onEvent) {
                     id: block.id,
                     name: localName(block.name) || block.name,
                     rawName: block.name,
-                    local: !localName(block.name),
+                    // A question runs on nobody's machine, so it is not local
+                    // in the sense the row means by it: the warning that comes
+                    // with that word would be about a menu of two labels.
+                    local: !localName(block.name) && block.name !== QUESTION_TOOL,
+                    question: block.name === QUESTION_TOOL,
                     input: block.input,
                 });
             }
@@ -831,6 +916,8 @@ module.exports = {
     userContent,
     LOCAL_TOOLS,
     WEB_TOOLS,
+    QUESTION_TOOL,
+    questionAnswers,
     SERVER_NAME,
     // The SDK takes image blocks in a user turn, which is the whole of what
     // "attach a screenshot" needs. Codex takes them as files instead (see its

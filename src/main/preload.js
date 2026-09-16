@@ -626,8 +626,11 @@ contextBridge.exposeInMainWorld('api', {
         // back on the matching request id.
         // How an approval was settled, including a timeout, arrives on the
         // ordinary event stream, so there is no second channel to watch.
-        approve: (requestId, approved, message) =>
-            ipcRenderer.invoke('ai-approval-response', { requestId, approved, message }),
+        // `input` is what a card collected, when it collects anything: today
+        // only a question's answers. Main decides what of it a tool call is
+        // allowed to keep.
+        approve: (requestId, approved, message, input = null) =>
+            ipcRenderer.invoke('ai-approval-response', { requestId, approved, message, input }),
 
         // Main asking the window to open or close a session, which only the
         // window can do because that means touching the tab tree.

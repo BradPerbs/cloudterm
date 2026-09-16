@@ -101,6 +101,7 @@ function applyEvent(state, event) {
                 id: event.id,
                 name: event.name,
                 local: event.local,
+                question: Boolean(event.question),
                 input: event.input || {},
                 status: 'running',
                 result: '',
@@ -138,6 +139,7 @@ function applyEvent(state, event) {
                 title: event.title,
                 input: event.input || {},
                 local: event.local,
+                question: Boolean(event.question),
                 readOnly: event.readOnly,
                 sessionId: event.sessionId || '',
                 host: event.host,
@@ -387,7 +389,7 @@ export default function useAssistant({
      * clicked, and waiting for the round trip to grey it out reads as a dropped
      * click.
      */
-    const settle = useCallback((requestId, approved, message) => {
+    const settle = useCallback((requestId, approved, message, input = null) => {
         setState(previous => applyEvent(previous, {
             type: 'approval-settled',
             requestId,
@@ -398,7 +400,8 @@ export default function useAssistant({
         window.api.ai.approve(
             requestId,
             approved,
-            approved ? '' : (message || 'The user declined that.')
+            approved ? '' : (message || 'The user declined that.'),
+            input
         );
     }, []);
 
@@ -472,11 +475,14 @@ export default function useAssistant({
      * reads it as the answer to the call it just made rather than as a new
      * instruction that arrived from nowhere.
      *
+     * `input` is what the card collected, for the one card that collects
+     * anything: a question's answers. Main decides what a call may keep of it.
+     *
      * The calls still queued behind this question are not answered here, since
      * they have not asked yet. The verdict is held for them under the servers
      * the card named, and applied as each one arrives. See `held`.
      */
-    const respond = useCallback((group, approved, message = '') => {
+    const respond = useCallback((group, approved, message = '', input = null) => {
         if (group.queued.length > 0) {
             held.current.set(group.key, {
                 approved,
@@ -484,7 +490,7 @@ export default function useAssistant({
                 sessions: new Set(group.queued.map(entry => entry.sessionId)),
             });
         }
-        for (const approval of group.items) settle(approval.requestId, approved, message);
+        for (const approval of group.items) settle(approval.requestId, approved, message, input);
     }, [settle]);
 
     /** What the history menu lists. Asked for rather than pushed. */

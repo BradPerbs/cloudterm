@@ -18,6 +18,7 @@ import { isSpec } from '../../lib/snippets';
 import SpecMenu from './SpecMenu';
 import ToolCall from './ToolCall';
 import ApprovalRequest from './ApprovalRequest';
+import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
 import { useT } from '../../i18n';
@@ -673,12 +674,24 @@ export default function AssistantConversation({
                 <div className={`shrink-0 max-h-[55%] overflow-y-auto px-3 pt-3 pb-1 space-y-2
                     border-t ${HAIRLINE}`}>
                     {asking.map(group => (
-                        <ApprovalRequest
-                            key={group.key}
-                            group={group}
-                            sessions={sessions}
-                            onRespond={assistant.respond}
-                        />
+                        // A question is not an approval, and its card is not a
+                        // variant of one: there is nothing to allow, the
+                        // options are the answer, and no server is named. See
+                        // `QuestionRequest`.
+                        group.items[0]?.question ? (
+                            <QuestionRequest
+                                key={group.key}
+                                group={group}
+                                onRespond={assistant.respond}
+                            />
+                        ) : (
+                            <ApprovalRequest
+                                key={group.key}
+                                group={group}
+                                sessions={sessions}
+                                onRespond={assistant.respond}
+                            />
+                        )
                     ))}
                 </div>
             )}

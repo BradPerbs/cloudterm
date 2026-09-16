@@ -151,6 +151,49 @@ async function run() {
         statSync: () => ({ size: 1 }),
     }), '');
 
+    // The question tool.
+    //
+    // Its answers ride back on the tool's own input, keyed by the exact text of
+    // the question the model wrote. The runtime pairs them on that text, so a
+    // key that does not match one of the questions asked is an answer to
+    // nothing, and a call allowed with no answers on it comes back as "the user
+    // did not answer the questions", which is the bug this was written for.
+    assert.strictEqual(provider.QUESTION_TOOL, 'AskUserQuestion');
+    assert(!provider.LOCAL_TOOLS.includes(provider.QUESTION_TOOL),
+        'asking a question is not a tool that touches this machine');
+
+    const asked = {
+        questions: [
+            { question: 'Which database?', header: 'Database', multiSelect: false, options: [] },
+            { question: 'Which region?', header: 'Region', multiSelect: false, options: [] },
+        ],
+    };
+
+    assert.deepStrictEqual(
+        provider.questionAnswers(asked, { 'Which database?': 'Postgres', 'Which region?': 'eu-west-1' }),
+        { 'Which database?': 'Postgres', 'Which region?': 'eu-west-1' }
+    );
+
+    // A question left alone is left out rather than sent back empty.
+    assert.deepStrictEqual(
+        provider.questionAnswers(asked, { 'Which database?': 'Postgres' }),
+        { 'Which database?': 'Postgres' }
+    );
+
+    // Nothing that was not asked gets through, so the input handed back to the
+    // model is the one it wrote plus answers to its own questions.
+    assert.deepStrictEqual(
+        provider.questionAnswers(asked, { 'Which database?': 'Postgres', 'rm -rf /': 'yes' }),
+        { 'Which database?': 'Postgres' }
+    );
+
+    // Null rather than an empty map, which is what the caller turns into a
+    // decline: a call allowed with no answers is worse than one refused.
+    assert.strictEqual(provider.questionAnswers(asked, {}), null);
+    assert.strictEqual(provider.questionAnswers(asked, { 'Which region?': '   ' }), null);
+    assert.strictEqual(provider.questionAnswers(asked, null), null);
+    assert.strictEqual(provider.questionAnswers(asked, { 'Which region?': 3 }), null);
+
     console.log('claude-provider tests passed');
 }
 
