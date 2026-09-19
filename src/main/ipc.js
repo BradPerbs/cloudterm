@@ -33,6 +33,7 @@ const aiWindows = require('./ai/windows');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
+const deepLink = require('./deep-link');
 const { parseAddress } = require('./address');
 const { describeTunnel } = require('./tunnel-config');
 const { describeDesktop } = require('./desktop-config');
@@ -203,6 +204,10 @@ function register(getWindow) {
     updates.start(notify);
 
     remoteEdit.setNotifier(notify);
+
+    // Sessions opened by a cloudterm:// link. Given the window too, to bring
+    // it forward when the link arrives from a browser behind it.
+    deepLink.setNotifier(notify, getWindow);
 
     // The assistant is the one thing drawn in more than one window: a
     // conversation can be lifted into a window of its own, and the events
@@ -604,9 +609,21 @@ function register(getWindow) {
         if (result.success) {
             transport.destroyAll();
             store.forgetQuickConnects();
+            // The renderer unmounts behind the lock screen, so a link that
+            // arrives now waits for it to come back.
+            deepLink.reset();
             notify('app-locked', {});
         }
         return logLock('lock.lock', result);
+    });
+
+    /* ---------------- cloudterm:// links ---------------- */
+
+    // The renderer announcing it is listening. A link that arrived before the
+    // window existed, or while it was locked, is delivered on this call.
+    handle('deep-link-ready', () => {
+        deepLink.markReady();
+        return { success: true };
     });
 
     /* ---------------- Host keys ---------------- */

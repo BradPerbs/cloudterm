@@ -1344,6 +1344,23 @@ function App() {
         if (report && !report.error && !report.skipped) loadData();
     }), [loadData]);
 
+    // A session asked for by a `cloudterm://connect` link from a browser or
+    // another program. Main has already resolved it into an ad-hoc host; this
+    // opens it in a new tab like any other quick connect, and tells the user
+    // what main had to say.
+    useEffect(() => {
+        const unsubscribe = window.api.deepLink.onConnect(({ host, notice, level }) => {
+            if (notice) {
+                (level === 'error' ? toast.error : toast)(notice, { style: getToastStyle() });
+            }
+            if (host) handleConnect(host);
+        });
+        // Only now: a link that arrived before this listener was in place is
+        // held in main and delivered on this call.
+        window.api.deepLink.ready();
+        return unsubscribe;
+    }, [handleConnect]);
+
     // Same for a setup pulled down from another device.
     useEffect(() => window.api.cloudSnapshot.onState((state) => {
         if (state?.pulled && state.added > 0) {

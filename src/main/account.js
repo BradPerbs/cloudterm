@@ -576,6 +576,35 @@ async function credentials(uuid) {
     };
 }
 
+/**
+ * Redeem a connect code from a `cloudterm://connect` link for a server's login.
+ *
+ * The console issues these and decides who may redeem them; all this end does
+ * is present the code with this device's token. Single use: a second call
+ * with the same code is refused, and this does not retry.
+ */
+async function redeemConnectCode(code) {
+    const result = await authed('/api/v2/connect-codes/redeem', {
+        method: 'POST',
+        body: { code: String(code || '') },
+    });
+
+    if (!result.ok) throw new Error(apiError(result, 'The account did not accept this connect link'));
+
+    const data = result.payload?.data || {};
+
+    if (!data.host) throw new Error('The account answered with no address to dial');
+
+    return {
+        host: String(data.host),
+        port: Number(data.port) || 22,
+        username: data.username || 'root',
+        password: data.password || '',
+        passwordStatus: data.password_status || 'ready',
+        name: data.server?.name || '',
+    };
+}
+
 /* ------------------------------------------------------------------ *
  * Setup snapshot
  *
@@ -665,6 +694,7 @@ module.exports = {
     refresh,
     servers,
     credentials,
+    redeemConnectCode,
     snapshotKey,
     snapshotMeta,
     snapshotGet,

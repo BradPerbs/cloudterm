@@ -5,8 +5,20 @@ const ipc = require('./ipc');
 const aiWindows = require('./ai/windows');
 const transport = require('./transport');
 const cloudSnapshot = require('./cloud-snapshot');
+const deepLink = require('./deep-link');
 
 let mainWindow = null;
+
+/*
+ * One running copy. A `cloudterm://` link opened from a browser starts the
+ * app again with the link on its command line; with the lock held, that
+ * second process hands its arguments to this one (`second-instance` below)
+ * and exits, instead of coming up as a second window with its own sessions.
+ */
+const gotInstanceLock = app.requestSingleInstanceLock();
+if (!gotInstanceLock) {
+    app.quit();
+}
 
 const getWindow = () => mainWindow;
 
@@ -145,6 +157,8 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         ipc.cancelPendingPrompts();
+        // Whatever link arrives next waits for the renderer that replaces this one.
+        deepLink.reset();
         // The assistant's own windows draw conversations the main window
         // runs; with it gone they have nothing to show and nothing to hand
         // their tabs back to.
@@ -166,6 +180,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // The copy that lost the lock is on its way out; it must not open a
+    // window, register handlers or start syncing on the way.
+    if (!gotInstanceLock) return;
+
     /*
      * Windows attributes a notification to an Application User Model ID, and
      * without one set it uses the host executable's: toasts from the monitor
@@ -177,12 +195,42 @@ app.whenReady().then(() => {
      */
     app.setAppUserModelId('com.cloudblast.ssh');
 
+    deepLink.register();
+
     ipc.register(getWindow);
     createWindow();
+
+    // A link this process was started with (Windows and Linux put it on the
+    // command line). It resolves while the window is still loading and opens
+    // as soon as the renderer says it is listening.
+    const startupLink = deepLink.extract(process.argv.slice(1));
+    if (startupLink) deepLink.open(startupLink);
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+});
+
+// A link while already running, on Windows and Linux: the second copy's
+// arguments, delivered here before it quits.
+app.on('second-instance', (event, argv) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+    } else if (app.isReady()) {
+        createWindow();
+    }
+
+    const link = deepLink.extract(argv);
+    if (link) deepLink.open(link);
+});
+
+// The same thing on macOS, where the system hands the URL to the running app
+// (or launches it and then hands it over) rather than putting it in argv.
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createWindow();
+    deepLink.open(url);
 });
 
 app.on('before-quit', () => {

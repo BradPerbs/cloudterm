@@ -786,6 +786,11 @@ function findHost(hostId) {
  * The same address asked for twice is the same record, so a second tab to a
  * machine already reached does not ask for the login again, and both panes go
  * on sharing it the way two panes on a saved host do.
+ *
+ * A `password` and a `name` may come along with the address. A cloudterm://
+ * link with a redeemed connect code arrives that way (see deep-link.js): the
+ * login came back from the connected account, so the pane has nothing to ask.
+ * Both are held exactly as a typed answer is, in memory and for this run.
  */
 function openQuickConnect(address) {
     const host = String(address?.host || '').trim();
@@ -794,9 +799,16 @@ function openQuickConnect(address) {
     const username = String(address?.username || '').trim();
     const port = Number(address?.port) || defaultPort('ssh');
     const asked = `${username} ${host} ${port}`;
+    const password = typeof address?.password === 'string' ? address.password : '';
+    const label = String(address?.name || '').trim();
 
     for (const record of quickConnects.values()) {
-        if (record.asked === asked) return redactHost(record);
+        if (record.asked !== asked) continue;
+        // A login that came with the address is better than a blank one; a
+        // login already learned at the prompt is not replaced by a blank.
+        if (password) record.password = password;
+        if (label) record.name = label;
+        return redactHost(record);
     }
 
     quickCounter += 1;
@@ -812,12 +824,13 @@ function openQuickConnect(address) {
         host,
         port,
         username,
-        // Nothing is configured, which is exactly what an address on its own
-        // means. The connection layer asks on the pane that is dialling.
+        // An address on its own has nothing configured, and the connection
+        // layer asks on the pane that is dialling. One that came with a
+        // login dials straight away.
         authMethod: 'password',
-        password: '',
+        password,
     };
-    record.name = describeAddress(record);
+    record.name = label || describeAddress(record);
 
     quickConnects.set(record.id, record);
     return redactHost(record);

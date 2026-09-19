@@ -185,6 +185,7 @@ Whichever you choose, the agent:
 - **2FA prompts** handled properly
 - **Automatic reconnect** after a drop or a laptop waking up
 - **Run on connect** commands, replayed every time
+- **`cloudterm://connect?address=user@host` links** open a session from a browser, a script or another program. A connected account can hand over a one-time code with the link so the login comes with it. Sessions opened this way are never saved
 
 ### Files and networking
 

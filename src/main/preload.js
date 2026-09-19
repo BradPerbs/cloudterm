@@ -422,6 +422,18 @@ contextBridge.exposeInMainWorld('api', {
         onState: (callback) => subscribe('account-state', callback),
     },
 
+    /**
+     * Sessions asked for from outside the app, by a `cloudterm://connect`
+     * link. Main has already turned the link into a quick-connect host; the
+     * renderer only opens it.
+     */
+    deepLink: {
+        // Say so once the listener below is in place: links that arrived
+        // earlier are held in main until then.
+        ready: () => ipcRenderer.invoke('deep-link-ready'),
+        onConnect: (callback) => subscribe('deep-link-connect', callback),
+    },
+
     serverSync: {
         status: () => ipcRenderer.invoke('server-sync-status'),
         setEnabled: (enabled) => ipcRenderer.invoke('server-sync-set-enabled', enabled),
