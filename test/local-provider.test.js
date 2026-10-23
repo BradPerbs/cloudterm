@@ -452,6 +452,70 @@ async function run() {
         'anything unrecognised is passed through rather than dressed up'
     );
 
+    /* ---------------- Which models are offered ---------------- */
+
+    // A catalogue far longer than the menu. The panel keeps the first hundred
+    // rows of whatever it is told, so the models someone actually wants can sit
+    // past the cut — which is why the filter is applied before it, not after.
+    const catalogue = Array.from({ length: 160 }, (_, index) => ({
+        id: `vendor/model-${String(index).padStart(3, '0')}`,
+    }));
+    catalogue.push({ id: 'deepseek/deepseek-flash-latest' });
+    catalogue.push({ id: 'openai/gpt-6-luna-pro' });
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({ settings: BASE_SETTINGS });
+
+            assert.strictEqual(rows.length, 100, 'unfiltered, the menu is the first hundred rows');
+            assert.strictEqual(
+                rows.some(row => row.value.includes('deepseek-flash')),
+                false,
+                'and the model past that cut is not in it at all'
+            );
+        }
+    );
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({
+                settings: { ...BASE_SETTINGS, localModelFilter: ['deepseek-flash', 'gpt-6-luna'] },
+            });
+
+            assert.deepStrictEqual(
+                rows.map(row => row.value),
+                ['deepseek/deepseek-flash-latest', 'openai/gpt-6-luna-pro'],
+                'filtered, the two named models are the whole list, in the server order'
+            );
+            assert.strictEqual(rows[0].preferred, true, 'the first match is what an unpinned chat gets');
+        }
+    );
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({
+                settings: { ...BASE_SETTINGS, localModelFilter: ['nothing-matches-this'] },
+            });
+
+            assert.strictEqual(rows, null, 'a filter matching nothing is an empty menu, not every model');
+        }
+    );
+
+    // And the model a conversation runs on follows the same list.
+    local._test.forget();
+    const unpinned = await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        () => local.resolveModel({ ...BASE_SETTINGS, model: '', localModelFilter: ['gpt-6-luna'] })
+    );
+    assert.strictEqual(
+        unpinned,
+        'openai/gpt-6-luna-pro',
+        'an unpinned conversation takes the first match, not the first row of the catalogue'
+    );
+
     console.log('local provider tests passed');
 }
 

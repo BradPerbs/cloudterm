@@ -545,8 +545,14 @@ async function start({
  * Every one of these publishes `/models`, and it is the only honest source for
  * the menu: which models are loaded is a decision the user made in LM Studio
  * or Ollama a minute ago, and no list written here could know it.
+ *
+ * `only` narrows that answer to the models the user actually wants offered, and
+ * it is applied before the cap rather than after. That ordering is the whole
+ * point of it: a catalogue of several hundred — a hosted endpoint, or a proxy in
+ * front of one — is longer than a menu, and a model the user names can easily
+ * sit past row 100. Filtering afterwards would drop it for being late.
  */
-async function listModels({ baseUrl, apiKey = '', headers = {}, label = 'The server' }) {
+async function listModels({ baseUrl, apiKey = '', headers = {}, label = 'The server', only = [] }) {
     if (!baseUrl) return null;
 
     const request = { ...headers };
@@ -562,9 +568,17 @@ async function listModels({ baseUrl, apiKey = '', headers = {}, label = 'The ser
 
     const payload = await response.json();
     const rows = Array.isArray(payload?.data) ? payload.data : [];
+    const wanted = (Array.isArray(only) ? only : [])
+        .map(entry => String(entry || '').trim().toLowerCase())
+        .filter(Boolean);
 
     return rows
         .filter(row => row && typeof row.id === 'string' && row.id)
+        // A substring rather than an exact id on purpose: the same model is
+        // published under a dated id, a `~` alias and a regional suffix, and
+        // "deepseek-flash" is the way someone names it to themselves.
+        .filter(row => wanted.length === 0
+            || wanted.some(needle => row.id.toLowerCase().includes(needle)))
         .map(row => ({
             value: row.id,
             resolved: row.id,

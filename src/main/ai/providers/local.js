@@ -25,6 +25,12 @@ const settings = require('../settings');
 
 const LABEL = 'The local model server';
 
+/** The models the user asked to be offered, as a list of substrings. */
+function filterFor(current) {
+    const list = current?.localModelFilter;
+    return Array.isArray(list) ? list.map(entry => String(entry || '').trim()).filter(Boolean) : [];
+}
+
 /** Where to reach it, as a settings value that always has a shape. */
 function baseUrl(current) {
     return current?.localBaseUrl || settings.DEFAULT_LOCAL_URL;
@@ -57,18 +63,22 @@ async function resolveModel(current) {
     if (current.model) return current.model;
 
     const url = baseUrl(current);
-    if (known.url === url && known.model) return known.model;
+    // The filter is part of what was read: what a menu should offer changes
+    // with it, so an answer given under a different one is not this answer.
+    const stamp = `${url}|${filterFor(current).join(',')}`;
+    if (known.url === stamp && known.model) return known.model;
 
     const rows = await engine.listModels({
         baseUrl: url,
         apiKey: current.apiKey || '',
         label: LABEL,
+        only: filterFor(current),
     });
     if (!rows?.length) {
         throw new Error(`${LABEL} has no models loaded. Load one in the server, then try again.`);
     }
 
-    known = { url, model: rows[0].value };
+    known = { url: stamp, model: rows[0].value };
     return known.model;
 }
 
@@ -96,6 +106,7 @@ async function listModels({ settings: current = {} } = {}) {
         baseUrl: baseUrl(current),
         apiKey: current.apiKey || '',
         label: LABEL,
+        only: filterFor(current),
     });
     if (!rows?.length) return null;
 

@@ -520,6 +520,17 @@ export default {
     'settings.assistant.keyRejected': 'The server refused that key. Check it and try again.',
     'settings.assistant.keyAccepted_one': 'Key accepted, with 1 model to choose from.',
     'settings.assistant.keyAccepted_other': 'Key accepted, with {count} models to choose from.',
+    'settings.assistant.filter': 'Models to show',
+    'settings.assistant.filterDesc': 'Only offer the models whose id contains one of these, '
+        + 'separated by commas. Leave it empty to be offered everything the server lists.',
+    'settings.assistant.filterNote': 'Worth setting when the server publishes hundreds of models: '
+        + 'the menu keeps the first 100 of whatever it is told, so a model further down never '
+        + 'appears at all.',
+    'settings.assistant.filterCleared': 'Showing every model the server lists.',
+    'settings.assistant.filterNone': 'No model the server lists matches that. Check the ids '
+        + 'against the address above.',
+    'settings.assistant.filterSaved_one': 'Showing the 1 model that matches.',
+    'settings.assistant.filterSaved_other': 'Showing the {count} models that match.',
     'settings.assistant.commandMode': 'Where commands run',
     'settings.assistant.commandMode.terminal': 'In my terminal',
     'settings.assistant.commandMode.background': 'Out of sight',

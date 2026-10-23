@@ -166,6 +166,24 @@ async function run() {
             'the configuration object still has no key field to copy out');
     });
 
+    await check('the models to offer are kept as typed, and capped', () => {
+        // The same part of the file as the address, because it is the same
+        // question: what this server should offer. Nonsense is dropped rather
+        // than stored, and the list cannot grow without bound.
+        const next = settings.set({
+            localModelFilter: ['  deepseek-flash  ', '', 'gpt-6-luna', ...Array(30).fill('x')],
+        });
+
+        assert.deepStrictEqual(next.localModelFilter.slice(0, 2), ['deepseek-flash', 'gpt-6-luna']);
+        assert.strictEqual(next.localModelFilter.length, 20, 'twenty at most');
+        assert.ok(!next.localModelFilter.includes(''), 'blanks are dropped');
+    });
+
+    await check('clearing it is a list, not a reset to something else', () => {
+        const next = settings.set({ localModelFilter: [] });
+        assert.deepStrictEqual(next.localModelFilter, []);
+    });
+
     /* ---------------- Reaching the provider, and the wire ---------------- */
 
     await check('the provider is handed it in the shape it reads', () => {

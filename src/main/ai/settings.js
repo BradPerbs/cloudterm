@@ -99,6 +99,14 @@ const DEFAULTS = {
     // provider file because it is a setting the user types, and the settings
     // page is what has to hand it back to them next time.
     localBaseUrl: DEFAULT_LOCAL_URL,
+    // Empty means every model the server lists. Otherwise these are matched
+    // against model ids as substrings and only the matches are offered.
+    //
+    // It exists because a catalogue is not a menu: a hosted endpoint, or a
+    // proxy in front of one, publishes hundreds of rows, and the panel keeps
+    // the first hundred of whatever it is told. The one model someone means
+    // can sit past that cut, where no filter applied afterwards would find it.
+    localModelFilter: [],
     // Empty means whatever the installed agent is already set to use.
     // Inheriting is the right default for a feature whose selling point is
     // that it is the user's own agent: a model pinned here would
@@ -209,6 +217,7 @@ function sanitize(raw) {
         autoApproveCommands: [...DEFAULTS.autoApproveCommands],
         blockedCommands: [...DEFAULTS.blockedCommands],
         quickPrompts: [...DEFAULTS.quickPrompts],
+        localModelFilter: [...DEFAULTS.localModelFilter],
     };
     if (raw && typeof raw === 'object') {
         if ('enabled' in raw) next.enabled = Boolean(raw.enabled);
@@ -221,6 +230,14 @@ function sanitize(raw) {
         // leaving a model menu that cannot offer what is selected.
         if (!next.providers.includes(next.provider)) next.provider = next.providers[0];
         if ('localBaseUrl' in raw) next.localBaseUrl = cleanUrl(raw.localBaseUrl, DEFAULTS.localBaseUrl);
+        // A list of substrings, in the order they were typed: the menu keeps
+        // the server's order, so the first entry is not the first row.
+        if (Array.isArray(raw.localModelFilter)) {
+            next.localModelFilter = raw.localModelFilter
+                .map(entry => String(entry || '').replace(/\s+/g, ' ').trim().slice(0, 120))
+                .filter(Boolean)
+                .slice(0, 20);
+        }
         // Long enough for the publisher-and-repository ids a local server
         // reports, which run past the 80 characters an alias needs.
         if (typeof raw.model === 'string') next.model = raw.model.trim().slice(0, 160);

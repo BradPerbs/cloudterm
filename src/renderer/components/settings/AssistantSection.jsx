@@ -73,6 +73,10 @@ export default function AssistantSection() {
     // every time the page opens, and empty on save means "clear it".
     const [keyDraft, setKeyDraft] = useState('');
     const [keyState, setKeyState] = useState('');
+    // The models to offer, as typed. Kept as text rather than as the list it
+    // becomes, because a comma and a space are part of writing it.
+    const [filterDraft, setFilterDraft] = useState('');
+    const [filterState, setFilterState] = useState('');
     const [commands, setCommands] = useState('');
     const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
@@ -85,6 +89,7 @@ export default function AssistantSection() {
             setProviders(status.providers || []);
             setTools(status.tools || []);
             setEndpoint(status.settings.localBaseUrl || '');
+            setFilterDraft((status.settings.localModelFilter || []).join(', '));
             setCommands((status.settings.autoApproveCommands || []).join('\n'));
             setBlocked((status.settings.blockedCommands || []).join('\n'));
             setPrompts((status.settings.quickPrompts || []).join('\n'));
@@ -205,6 +210,31 @@ export default function AssistantSection() {
             ? t('settings.assistant.keyAccepted', { count: rows.length })
             : t('settings.assistant.keyRejected'));
     }, [keyDraft, t]);
+
+    /**
+     * Save the list of models to offer, then say how many the server matches.
+     *
+     * The count is the check: a filter that matches nothing leaves an empty
+     * menu, which looks the same as a server that answered with nothing.
+     */
+    const saveFilter = useCallback(async () => {
+        const list = filterDraft
+            .split(/[,\n]/)
+            .map(entry => entry.trim())
+            .filter(Boolean);
+        const next = await update({ localModelFilter: list });
+        setFilterDraft((next.localModelFilter || []).join(', '));
+
+        if (!list.length) {
+            setFilterState(t('settings.assistant.filterCleared'));
+            return;
+        }
+
+        const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
+        setFilterState(rows?.length
+            ? t('settings.assistant.filterSaved', { count: rows.length })
+            : t('settings.assistant.filterNone'));
+    }, [filterDraft, update, t]);
 
     const saveCommands = useCallback(async () => {
         const list = commands.split('\n').map(line => line.trim()).filter(Boolean);
@@ -387,6 +417,38 @@ export default function AssistantSection() {
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {keyState || t('settings.assistant.keyNote')}
+                            </p>
+                        </div>
+                    </SettingRow>
+                    <SettingRow
+                        className={DIVIDED}
+                        title={t('settings.assistant.filter')}
+                        description={t('settings.assistant.filterDesc')}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    aria-label={t('settings.assistant.filter')}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder="deepseek-flash, gpt-6-luna"
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={filterDraft}
+                                    onChange={(event) => {
+                                        setFilterDraft(event.target.value);
+                                        setFilterState('');
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') saveFilter();
+                                    }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveFilter}>
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {filterState || t('settings.assistant.filterNote')}
                             </p>
                         </div>
                     </SettingRow>
