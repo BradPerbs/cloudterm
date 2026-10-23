@@ -360,7 +360,14 @@ function reconfigure(before, after) {
     // so what was read from the last one is not an answer about this one. The
     // list is dropped rather than refreshed here: reading it means a request,
     // and someone typing an address has not finished typing it.
-    if (before.localBaseUrl !== after.localBaseUrl) dropCatalog('local');
+    //
+    // A different filter is the same argument one step smaller: what was held
+    // is a menu built for the old list, so a later unforced ask would hand back
+    // rows the filter no longer allows — or hide rows it now does. Dropped, not
+    // refreshed, for the same reason: the ask belongs to the page that changed it.
+    const filterChanged = (before.localModelFilter || []).join('\n')
+        !== (after.localModelFilter || []).join('\n');
+    if (before.localBaseUrl !== after.localBaseUrl || filterChanged) dropCatalog('local');
 
     if (before.provider !== after.provider || before.localBaseUrl !== after.localBaseUrl) {
         if (before.provider !== after.provider) lastAccount = null;

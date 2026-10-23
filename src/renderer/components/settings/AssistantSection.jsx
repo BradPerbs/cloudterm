@@ -167,6 +167,10 @@ export default function AssistantSection() {
     const saveEndpoint = useCallback(async () => {
         const next = await update({ localBaseUrl: endpoint });
         setEndpoint(next.localBaseUrl || '');
+        if (next?.writeError) {
+            setEndpointState(next.writeError);
+            return;
+        }
         setEndpointState(t('settings.assistant.endpointChecking'));
 
         // Named, because the local server is not necessarily the agent that is
@@ -228,6 +232,14 @@ export default function AssistantSection() {
             .filter(Boolean);
         const next = await update({ localModelFilter: list });
         setFilterDraft((next.localModelFilter || []).join(', '));
+
+        // The file would not take it, so the list on screen is not the list in
+        // force. Said here rather than reported as saved, because "saved" is
+        // what the next restart disproves.
+        if (next?.writeError) {
+            setFilterState(next.writeError);
+            return;
+        }
 
         if (!list.length) {
             setFilterState(t('settings.assistant.filterCleared'));

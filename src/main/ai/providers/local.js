@@ -39,7 +39,14 @@ function filterFor(current) {
  */
 function isLoopback(host) {
     const name = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
-    return name === 'localhost' || name === '::1' || /^127\./.test(name);
+    if (name === 'localhost' || name === '::1') return true;
+
+    // A dotted quad in 127.0.0.0/8 and nothing else. A prefix test would accept
+    // a DNS name like 127.evil.example — the URL parser hands that back as a
+    // hostname, not an address — and the key would go out in the clear to it.
+    const parts = name.split('.');
+    if (parts.length !== 4 || parts[0] !== '127') return false;
+    return parts.slice(1).every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255);
 }
 
 /**

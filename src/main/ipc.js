@@ -1620,7 +1620,17 @@ function register(getWindow) {
     handle('ai-detect', (event, provider) => assistant.detect(provider));
     handle('ai-settings-set', (event, patch) => {
         const before = assistant.settings.get();
-        const next = assistant.settings.set(patch);
+        let next;
+        try {
+            next = assistant.settings.set(patch);
+        } catch (error) {
+            // The file could not be written, so nothing changed. Answered with
+            // the settings as they still are plus the reason, rather than as a
+            // rejected promise every caller of `update` would have to catch: the
+            // page's own state is then the truth, and it can say why.
+            notify('ai-settings', before);
+            return { ...before, writeError: error?.message || 'The settings were not saved.' };
+        }
         // Tells any live conversation which of these it has to restart for.
         // The model chip in the composer is expected to change the answer to
         // the next question, not to the next conversation.

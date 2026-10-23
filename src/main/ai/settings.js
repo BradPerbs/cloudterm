@@ -376,7 +376,12 @@ function set(patch) {
     }
 
     config = next;
-    persist();
+    if (!persist()) {
+        // Back to what was in force, and said out loud. A page told a change
+        // was saved loses it at the next restart with nothing to point at.
+        config = before;
+        throw new Error('The settings were not saved: the settings file could not be written.');
+    }
     return get();
 }
 

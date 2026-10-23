@@ -438,6 +438,17 @@ async function run() {
         'and the completion path refuses it too, not only the menu'
     );
 
+    // The loopback test is a dotted quad and not a prefix: `127.evil.example`
+    // is a DNS name the URL parser hands back as a hostname, so a prefix match
+    // would wave it through and the key would leave the machine in the clear.
+    for (const sneaky of ['http://127.evil.example/v1', 'http://127.0.0.1.evil.com/v1']) {
+        await assert.rejects(
+            () => local.listModels({ settings: { ...BASE_SETTINGS, localBaseUrl: sneaky, apiKey: 'secret' } }),
+            /not encrypted/i,
+            `${sneaky} must not be mistaken for loopback`
+        );
+    }
+
     await withFetch(
         () => jsonResponse({ data: [{ id: 'm' }] }),
         async () => {
@@ -446,6 +457,10 @@ async function run() {
             // that wants no key at all.
             await local.listModels({
                 settings: { ...BASE_SETTINGS, localBaseUrl: 'http://127.0.0.1:1234/v1', apiKey: 'secret' },
+            });
+            // Anywhere in 127.0.0.0/8, not only .0.1.
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://127.1.2.3:1234/v1', apiKey: 'secret' },
             });
             await local.listModels({
                 settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: '' },

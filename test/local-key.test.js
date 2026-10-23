@@ -283,6 +283,23 @@ async function run() {
         settings.setLocalApiKey('');
     });
 
+    await check('a settings write that fails leaves the previous settings in force', () => {
+        // The same rule as the key: a change the file never received is a change
+        // the user loses at the next restart, so it is a failure now.
+        const before = settings.get().maxTurns;
+        const fs = require('fs');
+        const real = fs.writeFileSync;
+        fs.writeFileSync = () => { throw new Error('EROFS: read-only file system'); };
+
+        try {
+            assert.throws(() => settings.set({ maxTurns: 99 }), /were not saved/i);
+        } finally {
+            fs.writeFileSync = real;
+        }
+
+        assert.strictEqual(settings.get().maxTurns, before, 'and it did not half-apply');
+    });
+
     /* ---------------- The one refusal ---------------- */
 
     await check('a machine that cannot encrypt refuses, and stores nothing', () => {

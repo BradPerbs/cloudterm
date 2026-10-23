@@ -102,6 +102,15 @@ async function run() {
     assert.strictEqual(ai.status().catalogs.local?.[0]?.value, 'fresh-model',
         'a current read is kept');
 
+    // A filter change is a different menu. The list held for the old one must
+    // not answer a later unforced ask, or the panel keeps offering models the
+    // filter no longer allows.
+    const before = ai.status().settings;
+    ai.reconfigure(before, { ...before, localModelFilter: ['gpt-6-luna'] });
+
+    assert.strictEqual(ai.status().catalogs.local, undefined,
+        'changing which models to offer drops the list built without the filter');
+
     console.log('catalog generation tests passed');
 }
 
