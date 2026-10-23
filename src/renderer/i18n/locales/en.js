@@ -517,9 +517,10 @@ export default {
         + 'empty box to remove it.',
     'settings.assistant.keyCleared': 'Key removed.',
     'settings.assistant.keyFailed': 'That key could not be saved.',
-    'settings.assistant.keyRejected': 'The server refused that key. Check it and try again.',
-    'settings.assistant.keyAccepted_one': 'Key accepted, with 1 model to choose from.',
-    'settings.assistant.keyAccepted_other': 'Key accepted, with {count} models to choose from.',
+    'settings.assistant.keySavedModels_one': 'Key saved. The server answered with 1 model.',
+    'settings.assistant.keySavedModels_other': 'Key saved. The server answered with {count} models.',
+    'settings.assistant.keySavedNoAnswer': 'Key saved. Nothing answered at that address, so that says '
+        + 'nothing about the key either way.',
     'settings.assistant.filter': 'Models to show',
     'settings.assistant.filterDesc': 'Only offer the models whose id contains one of these, '
         + 'separated by commas. Leave it empty to be offered everything the server lists.',

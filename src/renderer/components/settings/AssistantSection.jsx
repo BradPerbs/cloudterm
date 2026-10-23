@@ -179,13 +179,17 @@ export default function AssistantSection() {
     }, [endpoint, update, t]);
 
     /**
-     * Save the key, then ask the server again.
+     * Save the key, then say what the server did.
      *
-     * The second half is the point. A wrong key and a right one look identical
-     * until a request is made, and the model list is the cheapest request that
-     * can tell them apart — the same question the address button asks, which is
-     * why it reports in the same words. An empty box saves as "clear", because
-     * that is the only way to take a key back off the machine.
+     * That second half is not a verdict on the key. A server that wants no
+     * authentication answers with its models whatever was typed into this box,
+     * so a reply proves only that something is listening — and a stopped server,
+     * or one with nothing loaded, answers with nothing whatever the key is. So
+     * this reports which of those happened rather than translating it into
+     * "accepted", which would be a claim it cannot support.
+     *
+     * An empty box saves as clear, because that is the only way to take a key
+     * back off the machine.
      *
      * A key is not `update`: it does not travel in the settings, and it is not
      * one of the values `get` hands back.
@@ -207,8 +211,8 @@ export default function AssistantSection() {
 
         const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
         setKeyState(rows?.length
-            ? t('settings.assistant.keyAccepted', { count: rows.length })
-            : t('settings.assistant.keyRejected'));
+            ? t('settings.assistant.keySavedModels', { count: rows.length })
+            : t('settings.assistant.keySavedNoAnswer'));
     }, [keyDraft, t]);
 
     /**

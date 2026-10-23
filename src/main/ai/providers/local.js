@@ -31,6 +31,47 @@ function filterFor(current) {
     return Array.isArray(list) ? list.map(entry => String(entry || '').trim()).filter(Boolean) : [];
 }
 
+/**
+ * Whether an address never leaves this machine.
+ *
+ * Loopback is the LM Studio case: plain http on localhost is the whole shape of
+ * a model server you started yourself, and there is nothing to intercept.
+ */
+function isLoopback(host) {
+    const name = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
+    return name === 'localhost' || name === '::1' || /^127\./.test(name);
+}
+
+/**
+ * The key to send, or a refusal.
+ *
+ * A key is a credential, and a plain http address that is not this machine
+ * carries it in the clear over somebody else's network. Refused here rather
+ * than where the address is saved, because the address can be changed after a
+ * key is stored and it is the request that actually exposes the secret.
+ *
+ * No key is always allowed: a remote http server that wants none is a normal
+ * thing to have, and this only refuses to hand one over unencrypted.
+ */
+function keyFor(current) {
+    const key = current?.apiKey || '';
+    if (!key) return '';
+
+    const url = baseUrl(current);
+    let parsed;
+    try {
+        parsed = new URL(url);
+    } catch {
+        throw new Error(`${LABEL} has an address that cannot be read: ${url}`);
+    }
+    if (parsed.protocol === 'https:' || isLoopback(parsed.hostname)) return key;
+
+    throw new Error(
+        `${LABEL} is at ${url}, which is not encrypted, so the key was not sent with the `
+        + 'request. Use an https address, or a loopback one.'
+    );
+}
+
 /** Where to reach it, as a settings value that always has a shape. */
 function baseUrl(current) {
     return current?.localBaseUrl || settings.DEFAULT_LOCAL_URL;
@@ -42,7 +83,7 @@ function endpoint(current) {
         // Most of these want no key at all, and the ones that do accept
         // anything. It is sent when the user stored one, because a server
         // behind an API key on a home network is a reasonable thing to have.
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
     };
 }
@@ -70,7 +111,7 @@ async function resolveModel(current) {
 
     const rows = await engine.listModels({
         baseUrl: url,
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
         only: filterFor(current),
     });
@@ -104,7 +145,7 @@ async function start(options) {
 async function listModels({ settings: current = {} } = {}) {
     const rows = await engine.listModels({
         baseUrl: baseUrl(current),
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
         only: filterFor(current),
     });

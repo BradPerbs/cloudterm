@@ -255,6 +255,34 @@ async function run() {
         });
     });
 
+    await check('a write that fails is reported as a failed save, and undone', () => {
+        // The file is what makes a key survive a restart. A save that only ever
+        // reached memory would have the panel saying the key works right up
+        // until the next launch, which is a worse answer than refusing it.
+        settings.setLocalApiKey('sk-kept');
+
+        const fs = require('fs');
+        const real = fs.writeFileSync;
+        fs.writeFileSync = () => { throw new Error('EROFS: read-only file system'); };
+
+        try {
+            assert.throws(
+                () => settings.setLocalApiKey('sk-replacement'),
+                /could not be written/i,
+                'the caller is told the save failed'
+            );
+        } finally {
+            fs.writeFileSync = real;
+        }
+
+        assert.strictEqual(settings.readApiKey('local'), 'sk-kept',
+            'the key that was already stored is still the one in force');
+        assert.strictEqual(settings.get().hasLocalApiKey, true);
+
+        // Back to empty for the checks that follow.
+        settings.setLocalApiKey('');
+    });
+
     /* ---------------- The one refusal ---------------- */
 
     await check('a machine that cannot encrypt refuses, and stores nothing', () => {

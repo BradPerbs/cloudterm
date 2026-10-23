@@ -321,8 +321,10 @@ function persist() {
             JSON.stringify({ version: CONFIG_VERSION, config, keys: secrets }),
             'utf8'
         );
+        return true;
     } catch (error) {
         console.error('Could not save the assistant settings:', error.message);
+        return false;
     }
 }
 
@@ -427,6 +429,11 @@ function setLocalApiKey(value) {
     // it is built into an invalid token with no visible cause.
     const text = String(value ?? '').trim();
 
+    // Kept so a write that fails can be undone. A save that only ever reached
+    // memory would leave the panel saying the key works until the next restart,
+    // which is a worse answer than having refused it.
+    const before = secrets.local;
+
     if (!text) {
         delete secrets.local;
     } else {
@@ -436,7 +443,12 @@ function setLocalApiKey(value) {
         secrets.local = safeStorage.encryptString(text).toString('base64');
     }
 
-    persist();
+    if (!persist()) {
+        if (before === undefined) delete secrets.local;
+        else secrets.local = before;
+        throw new Error('The key was not saved: the settings file could not be written.');
+    }
+
     return get();
 }
 

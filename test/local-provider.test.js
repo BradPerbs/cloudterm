@@ -410,13 +410,47 @@ async function run() {
     // The address is what the request is built from, and the key travels with it.
     await withFetch(
         (url, options) => {
-            assert.strictEqual(url, 'http://192.168.1.9:8080/v1/models');
+            assert.strictEqual(url, 'https://192.168.1.9:8080/v1/models');
             assert.strictEqual(options.headers.Authorization, 'Bearer secret');
             return jsonResponse({ data: [{ id: 'm' }] });
         },
         () => local.listModels({
-            settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret' },
+            settings: { ...BASE_SETTINGS, localBaseUrl: 'https://192.168.1.9:8080/v1', apiKey: 'secret' },
         })
+    );
+
+    // A key is a credential: it does not travel unencrypted to something that is
+    // not this machine. The check is made where the request is built, not where
+    // the address is typed, because the address can change after a key is saved.
+    await assert.rejects(
+        () => local.listModels({
+            settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret' },
+        }),
+        /not encrypted/i,
+        'a plain http address that is not loopback is refused rather than sent the key'
+    );
+
+    await assert.rejects(
+        () => local.resolveModel({
+            ...BASE_SETTINGS, model: '', localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret',
+        }),
+        /not encrypted/i,
+        'and the completion path refuses it too, not only the menu'
+    );
+
+    await withFetch(
+        () => jsonResponse({ data: [{ id: 'm' }] }),
+        async () => {
+            // The two that stay allowed: loopback http, which is what a model
+            // server you started yourself looks like, and a remote http server
+            // that wants no key at all.
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://127.0.0.1:1234/v1', apiKey: 'secret' },
+            });
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: '' },
+            });
+        }
     );
 
     assert.strictEqual(
