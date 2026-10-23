@@ -507,6 +507,31 @@ export default {
     'settings.assistant.endpointFound_other': 'Answered, with {count} models to choose from.',
     'settings.assistant.endpointNone': 'Nothing answered at that address. Check the server is '
         + 'running and that its API is switched on.',
+    'settings.assistant.key': 'API key',
+    'settings.assistant.keyDesc': 'Sent as a bearer token with every request. Leave it empty for '
+        + 'LM Studio, Ollama or llama.cpp on this machine — they want no key. It is for a server '
+        + 'behind one: a proxy in front of it, or an endpoint that is not on this machine.',
+    'settings.assistant.keyPlaceholder': 'Not set',
+    'settings.assistant.keyStored': 'Stored — type to replace',
+    'settings.assistant.keyNote': 'Kept encrypted on this machine and never shown again. Save an '
+        + 'empty box to remove it.',
+    'settings.assistant.keyCleared': 'Key removed.',
+    'settings.assistant.keyFailed': 'That key could not be saved.',
+    'settings.assistant.keySavedModels_one': 'Key saved. The server answered with 1 model.',
+    'settings.assistant.keySavedModels_other': 'Key saved. The server answered with {count} models.',
+    'settings.assistant.keySavedNoAnswer': 'Key saved. Nothing answered at that address, so that says '
+        + 'nothing about the key either way.',
+    'settings.assistant.filter': 'Models to show',
+    'settings.assistant.filterDesc': 'Only offer the models whose id contains one of these, '
+        + 'separated by commas. Leave it empty to be offered everything the server lists.',
+    'settings.assistant.filterNote': 'Worth setting when the server publishes hundreds of models: '
+        + 'the menu keeps the first 100 of whatever it is told, so a model further down never '
+        + 'appears at all.',
+    'settings.assistant.filterCleared': 'Showing every model the server lists.',
+    'settings.assistant.filterNone': 'No model the server lists matches that. Check the ids '
+        + 'against the address above.',
+    'settings.assistant.filterSaved_one': 'Showing the 1 model that matches.',
+    'settings.assistant.filterSaved_other': 'Showing the {count} models that match.',
     'settings.assistant.commandMode': 'Where commands run',
     'settings.assistant.commandMode.terminal': 'In my terminal',
     'settings.assistant.commandMode.background': 'Out of sight',

@@ -410,13 +410,62 @@ async function run() {
     // The address is what the request is built from, and the key travels with it.
     await withFetch(
         (url, options) => {
-            assert.strictEqual(url, 'http://192.168.1.9:8080/v1/models');
+            assert.strictEqual(url, 'https://192.168.1.9:8080/v1/models');
             assert.strictEqual(options.headers.Authorization, 'Bearer secret');
             return jsonResponse({ data: [{ id: 'm' }] });
         },
         () => local.listModels({
-            settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret' },
+            settings: { ...BASE_SETTINGS, localBaseUrl: 'https://192.168.1.9:8080/v1', apiKey: 'secret' },
         })
+    );
+
+    // A key is a credential: it does not travel unencrypted to something that is
+    // not this machine. The check is made where the request is built, not where
+    // the address is typed, because the address can change after a key is saved.
+    await assert.rejects(
+        () => local.listModels({
+            settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret' },
+        }),
+        /not encrypted/i,
+        'a plain http address that is not loopback is refused rather than sent the key'
+    );
+
+    await assert.rejects(
+        () => local.resolveModel({
+            ...BASE_SETTINGS, model: '', localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: 'secret',
+        }),
+        /not encrypted/i,
+        'and the completion path refuses it too, not only the menu'
+    );
+
+    // The loopback test is a dotted quad and not a prefix: `127.evil.example`
+    // is a DNS name the URL parser hands back as a hostname, so a prefix match
+    // would wave it through and the key would leave the machine in the clear.
+    for (const sneaky of ['http://127.evil.example/v1', 'http://127.0.0.1.evil.com/v1']) {
+        await assert.rejects(
+            () => local.listModels({ settings: { ...BASE_SETTINGS, localBaseUrl: sneaky, apiKey: 'secret' } }),
+            /not encrypted/i,
+            `${sneaky} must not be mistaken for loopback`
+        );
+    }
+
+    await withFetch(
+        () => jsonResponse({ data: [{ id: 'm' }] }),
+        async () => {
+            // The two that stay allowed: loopback http, which is what a model
+            // server you started yourself looks like, and a remote http server
+            // that wants no key at all.
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://127.0.0.1:1234/v1', apiKey: 'secret' },
+            });
+            // Anywhere in 127.0.0.0/8, not only .0.1.
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://127.1.2.3:1234/v1', apiKey: 'secret' },
+            });
+            await local.listModels({
+                settings: { ...BASE_SETTINGS, localBaseUrl: 'http://192.168.1.9:8080/v1', apiKey: '' },
+            });
+        }
     );
 
     assert.strictEqual(
@@ -450,6 +499,70 @@ async function run() {
         engine.describeFailure(new Error('something else entirely'), 'x'),
         'something else entirely',
         'anything unrecognised is passed through rather than dressed up'
+    );
+
+    /* ---------------- Which models are offered ---------------- */
+
+    // A catalogue far longer than the menu. The panel keeps the first hundred
+    // rows of whatever it is told, so the models someone actually wants can sit
+    // past the cut — which is why the filter is applied before it, not after.
+    const catalogue = Array.from({ length: 160 }, (_, index) => ({
+        id: `vendor/model-${String(index).padStart(3, '0')}`,
+    }));
+    catalogue.push({ id: 'deepseek/deepseek-flash-latest' });
+    catalogue.push({ id: 'openai/gpt-6-luna-pro' });
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({ settings: BASE_SETTINGS });
+
+            assert.strictEqual(rows.length, 100, 'unfiltered, the menu is the first hundred rows');
+            assert.strictEqual(
+                rows.some(row => row.value.includes('deepseek-flash')),
+                false,
+                'and the model past that cut is not in it at all'
+            );
+        }
+    );
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({
+                settings: { ...BASE_SETTINGS, localModelFilter: ['deepseek-flash', 'gpt-6-luna'] },
+            });
+
+            assert.deepStrictEqual(
+                rows.map(row => row.value),
+                ['deepseek/deepseek-flash-latest', 'openai/gpt-6-luna-pro'],
+                'filtered, the two named models are the whole list, in the server order'
+            );
+            assert.strictEqual(rows[0].preferred, true, 'the first match is what an unpinned chat gets');
+        }
+    );
+
+    await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        async () => {
+            const rows = await local.listModels({
+                settings: { ...BASE_SETTINGS, localModelFilter: ['nothing-matches-this'] },
+            });
+
+            assert.strictEqual(rows, null, 'a filter matching nothing is an empty menu, not every model');
+        }
+    );
+
+    // And the model a conversation runs on follows the same list.
+    local._test.forget();
+    const unpinned = await withFetch(
+        () => jsonResponse({ data: catalogue }),
+        () => local.resolveModel({ ...BASE_SETTINGS, model: '', localModelFilter: ['gpt-6-luna'] })
+    );
+    assert.strictEqual(
+        unpinned,
+        'openai/gpt-6-luna-pro',
+        'an unpinned conversation takes the first match, not the first row of the catalogue'
     );
 
     console.log('local provider tests passed');

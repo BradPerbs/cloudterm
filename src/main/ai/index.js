@@ -90,6 +90,23 @@ let lastAccount = null;
 const modelCatalogs = new Map();
 
 /**
+ * How many times each agent's catalogue has been thrown away.
+ *
+ * A read that was already in flight when it happened would otherwise arrive
+ * afterwards and cache the answer it was given under the conditions that have
+ * just been replaced — a list fetched with the previous key, or a `null` from
+ * the 401 that prompted the retry. Each ask remembers the generation it started
+ * in and only writes if that is still the current one.
+ */
+const catalogGeneration = new Map();
+
+/** Forget an agent's catalogue, and date everything already in flight. */
+function dropCatalog(agent) {
+    modelCatalogs.delete(agent);
+    catalogGeneration.set(agent, (catalogGeneration.get(agent) ?? 0) + 1);
+}
+
+/**
  * The in-flight asks, so ten panels opening at once do not start ten of them.
  *
  * One per agent rather than one slot, for the same reason the catalogs are
@@ -343,7 +360,14 @@ function reconfigure(before, after) {
     // so what was read from the last one is not an answer about this one. The
     // list is dropped rather than refreshed here: reading it means a request,
     // and someone typing an address has not finished typing it.
-    if (before.localBaseUrl !== after.localBaseUrl) modelCatalogs.delete('local');
+    //
+    // A different filter is the same argument one step smaller: what was held
+    // is a menu built for the old list, so a later unforced ask would hand back
+    // rows the filter no longer allows — or hide rows it now does. Dropped, not
+    // refreshed, for the same reason: the ask belongs to the page that changed it.
+    const filterChanged = (before.localModelFilter || []).join('\n')
+        !== (after.localModelFilter || []).join('\n');
+    if (before.localBaseUrl !== after.localBaseUrl || filterChanged) dropCatalog('local');
 
     if (before.provider !== after.provider || before.localBaseUrl !== after.localBaseUrl) {
         if (before.provider !== after.provider) lastAccount = null;
@@ -889,7 +913,8 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
     // A forced ask drops what is held for this agent and starts again. The
     // menu offers it when a read came back with nothing, which is usually a
     // runtime that was not up yet rather than an agent with no models.
-    if (refresh) modelCatalogs.delete(asked);
+    if (refresh) dropCatalog(asked);
+    const generation = catalogGeneration.get(asked) ?? 0;
 
     if (modelCatalogs.has(asked)) return Promise.resolve(modelCatalogs.get(asked));
     if (!refresh && modelsPending.has(asked)) return modelsPending.get(asked);
@@ -900,6 +925,10 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
     const promise = provider.listModels({ settings: resolvedFor(asked) })
         .then((rows) => {
             const list = rows?.length ? rows : null;
+            // Answered either way — the caller asked. Only cached and announced
+            // if the catalogue was not thrown away while this was in flight.
+            if ((catalogGeneration.get(asked) ?? 0) !== generation) return list;
+
             // Stored against the agent that answered, whether or not that is
             // still the one selected. A later ask for a different agent reads
             // its own entry, and a switch back does not have to ask again.
@@ -1018,9 +1047,28 @@ async function shutdown() {
     hydrated = false;
 }
 
+/**
+ * The local model server's key, and the model list read without it.
+ *
+ * A key is a change of what the server will answer, so the list held for it is
+ * no longer an answer about this server: it was a refusal, most likely a 401
+ * with nothing in it. Dropped rather than refreshed here, for the reason the
+ * address gets the same treatment — reading it means a request, and the caller
+ * that just changed the key is the one in a position to make it and to say what
+ * came back.
+ */
+function setLocalKey(key) {
+    const next = settings.setLocalApiKey(key);
+    // Dated so a list already being read against the old key cannot land on top
+    // of the one the next ask will fetch with the new one.
+    dropCatalog('local');
+    return next;
+}
+
 module.exports = {
     setNotifier,
     reconfigure,
+    setLocalKey,
     create,
     get,
     send,

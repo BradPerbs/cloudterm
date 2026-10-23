@@ -10,14 +10,21 @@ const fs = require('fs');
  * snippet, and the store's shape is the thing that syncs between machines.
  * A model choice belongs to the machine the model runs on.
  *
- * The secrets here are API keys, and nothing writes them any more. The
- * assistant runs the agents already installed and already signed in on this
- * machine, which is the whole proposition of driving the user's own agent, and
- * an agent that is not on the machine is refused when it is switched on. A key
- * box beside that offered the opposite: an agent accepted on the promise of a
- * credential, and a failure saved up for the middle of a question. What remains
- * is read so that a key an older version stored is still handed to the agent it
- * belongs to, and nobody's working setup breaks on an update.
+ * The secrets here are API keys, and the only one anything writes is the local
+ * model server's. The other five are agents already installed and already
+ * signed in on this machine, which is the whole proposition of driving the
+ * user's own agent, and an agent that is not on the machine is refused when it
+ * is switched on. A key box beside those offered the opposite: an agent
+ * accepted on the promise of a credential, and a failure saved up for the
+ * middle of a question.
+ *
+ * A local model server is the other case, and it is a different one. It is not
+ * an agent with a login; it is an address, and an address can sit behind a
+ * bearer token — a proxy in front of it, a hosted endpoint that speaks the same
+ * shape, a box on a network that is not this one. `setLocalApiKey` is that one
+ * write. Everything else here is still only read, so a key an older version
+ * stored is handed to the agent it belongs to and nobody's working setup breaks
+ * on an update.
  */
 
 const CONFIG_VERSION = 2;
@@ -92,6 +99,14 @@ const DEFAULTS = {
     // provider file because it is a setting the user types, and the settings
     // page is what has to hand it back to them next time.
     localBaseUrl: DEFAULT_LOCAL_URL,
+    // Empty means every model the server lists. Otherwise these are matched
+    // against model ids as substrings and only the matches are offered.
+    //
+    // It exists because a catalogue is not a menu: a hosted endpoint, or a
+    // proxy in front of one, publishes hundreds of rows, and the panel keeps
+    // the first hundred of whatever it is told. The one model someone means
+    // can sit past that cut, where no filter applied afterwards would find it.
+    localModelFilter: [],
     // Empty means whatever the installed agent is already set to use.
     // Inheriting is the right default for a feature whose selling point is
     // that it is the user's own agent: a model pinned here would
@@ -202,6 +217,7 @@ function sanitize(raw) {
         autoApproveCommands: [...DEFAULTS.autoApproveCommands],
         blockedCommands: [...DEFAULTS.blockedCommands],
         quickPrompts: [...DEFAULTS.quickPrompts],
+        localModelFilter: [...DEFAULTS.localModelFilter],
     };
     if (raw && typeof raw === 'object') {
         if ('enabled' in raw) next.enabled = Boolean(raw.enabled);
@@ -214,6 +230,14 @@ function sanitize(raw) {
         // leaving a model menu that cannot offer what is selected.
         if (!next.providers.includes(next.provider)) next.provider = next.providers[0];
         if ('localBaseUrl' in raw) next.localBaseUrl = cleanUrl(raw.localBaseUrl, DEFAULTS.localBaseUrl);
+        // A list of substrings, in the order they were typed: the menu keeps
+        // the server's order, so the first entry is not the first row.
+        if (Array.isArray(raw.localModelFilter)) {
+            next.localModelFilter = raw.localModelFilter
+                .map(entry => String(entry || '').replace(/\s+/g, ' ').trim().slice(0, 120))
+                .filter(Boolean)
+                .slice(0, 20);
+        }
         // Long enough for the publisher-and-repository ids a local server
         // reports, which run past the 80 characters an alias needs.
         if (typeof raw.model === 'string') next.model = raw.model.trim().slice(0, 160);
@@ -297,8 +321,10 @@ function persist() {
             JSON.stringify({ version: CONFIG_VERSION, config, keys: secrets }),
             'utf8'
         );
+        return true;
     } catch (error) {
         console.error('Could not save the assistant settings:', error.message);
+        return false;
     }
 }
 
@@ -316,6 +342,10 @@ function get() {
         // know: a metered key and a plan are charged differently and it says
         // which. Whether, never which key.
         hasApiKey: Boolean(secrets[current.provider]),
+        // The local model server's key, asked about by name rather than through
+        // `hasApiKey` above: that one answers for whichever agent is running,
+        // and the server is not necessarily it. Whether, never which key.
+        hasLocalApiKey: Boolean(secrets.local),
         // What the app shipped with, so a settings page can offer the way back
         // without keeping a second copy of these lists that drifts from this
         // one. Read-only: `set` works from `load()`, not from here, so nothing
@@ -346,7 +376,12 @@ function set(patch) {
     }
 
     config = next;
-    persist();
+    if (!persist()) {
+        // Back to what was in force, and said out loud. A page told a change
+        // was saved loses it at the next restart with nothing to point at.
+        config = before;
+        throw new Error('The settings were not saved: the settings file could not be written.');
+    }
     return get();
 }
 
@@ -371,10 +406,62 @@ function readApiKey(provider = load().provider) {
     }
 }
 
+/**
+ * Store the local model server's key, or clear it with an empty string.
+ *
+ * The one write in this file, and deliberately the narrowest one it can be: it
+ * takes no provider, so there is no way to file a credential against an agent
+ * that is supposed to have signed in for itself. What makes a key the right
+ * answer here is that there is no agent to sign in — a server on the end of an
+ * address answers whoever asks, and a proxy or a hosted endpoint in front of
+ * one asks for a bearer token first.
+ *
+ * Encrypted with safeStorage and kept in `keys`, beside the ones older versions
+ * wrote, rather than in `config`. That separation is the point: nothing that
+ * reads or writes the configuration can copy it out, and the renderer is given
+ * `hasLocalApiKey` instead of the value.
+ *
+ * Refused rather than stored in the clear when the machine cannot encrypt. A
+ * save that quietly stored nothing readable would look exactly like one that
+ * worked, and the failure would arrive as a 401 in the middle of a question.
+ */
+function setLocalApiKey(value) {
+    // Read first, so the config this writes back is the one on disk rather than
+    // a null that `persist` would happily serialize over it.
+    load();
+
+    // Trimmed because this is pasted, and a trailing newline makes the header
+    // it is built into an invalid token with no visible cause.
+    const text = String(value ?? '').trim();
+
+    // Kept so a write that fails can be undone. A save that only ever reached
+    // memory would leave the panel saying the key works until the next restart,
+    // which is a worse answer than having refused it.
+    const before = secrets.local;
+
+    if (!text) {
+        delete secrets.local;
+    } else {
+        if (!safeStorage.isEncryptionAvailable()) {
+            throw new Error('This machine cannot encrypt a key, so it was not saved.');
+        }
+        secrets.local = safeStorage.encryptString(text).toString('base64');
+    }
+
+    if (!persist()) {
+        if (before === undefined) delete secrets.local;
+        else secrets.local = before;
+        throw new Error('The key was not saved: the settings file could not be written.');
+    }
+
+    return get();
+}
+
 module.exports = {
     get,
     set,
     readApiKey,
+    setLocalApiKey,
     DEFAULTS,
     APPROVALS,
     COMMAND_MODES,

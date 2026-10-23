@@ -25,6 +25,60 @@ const settings = require('../settings');
 
 const LABEL = 'The local model server';
 
+/** The models the user asked to be offered, as a list of substrings. */
+function filterFor(current) {
+    const list = current?.localModelFilter;
+    return Array.isArray(list) ? list.map(entry => String(entry || '').trim()).filter(Boolean) : [];
+}
+
+/**
+ * Whether an address never leaves this machine.
+ *
+ * Loopback is the LM Studio case: plain http on localhost is the whole shape of
+ * a model server you started yourself, and there is nothing to intercept.
+ */
+function isLoopback(host) {
+    const name = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
+    if (name === 'localhost' || name === '::1') return true;
+
+    // A dotted quad in 127.0.0.0/8 and nothing else. A prefix test would accept
+    // a DNS name like 127.evil.example — the URL parser hands that back as a
+    // hostname, not an address — and the key would go out in the clear to it.
+    const parts = name.split('.');
+    if (parts.length !== 4 || parts[0] !== '127') return false;
+    return parts.slice(1).every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
+
+/**
+ * The key to send, or a refusal.
+ *
+ * A key is a credential, and a plain http address that is not this machine
+ * carries it in the clear over somebody else's network. Refused here rather
+ * than where the address is saved, because the address can be changed after a
+ * key is stored and it is the request that actually exposes the secret.
+ *
+ * No key is always allowed: a remote http server that wants none is a normal
+ * thing to have, and this only refuses to hand one over unencrypted.
+ */
+function keyFor(current) {
+    const key = current?.apiKey || '';
+    if (!key) return '';
+
+    const url = baseUrl(current);
+    let parsed;
+    try {
+        parsed = new URL(url);
+    } catch {
+        throw new Error(`${LABEL} has an address that cannot be read: ${url}`);
+    }
+    if (parsed.protocol === 'https:' || isLoopback(parsed.hostname)) return key;
+
+    throw new Error(
+        `${LABEL} is at ${url}, which is not encrypted, so the key was not sent with the `
+        + 'request. Use an https address, or a loopback one.'
+    );
+}
+
 /** Where to reach it, as a settings value that always has a shape. */
 function baseUrl(current) {
     return current?.localBaseUrl || settings.DEFAULT_LOCAL_URL;
@@ -36,7 +90,7 @@ function endpoint(current) {
         // Most of these want no key at all, and the ones that do accept
         // anything. It is sent when the user stored one, because a server
         // behind an API key on a home network is a reasonable thing to have.
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
     };
 }
@@ -57,18 +111,22 @@ async function resolveModel(current) {
     if (current.model) return current.model;
 
     const url = baseUrl(current);
-    if (known.url === url && known.model) return known.model;
+    // The filter is part of what was read: what a menu should offer changes
+    // with it, so an answer given under a different one is not this answer.
+    const stamp = `${url}|${filterFor(current).join(',')}`;
+    if (known.url === stamp && known.model) return known.model;
 
     const rows = await engine.listModels({
         baseUrl: url,
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
+        only: filterFor(current),
     });
     if (!rows?.length) {
         throw new Error(`${LABEL} has no models loaded. Load one in the server, then try again.`);
     }
 
-    known = { url, model: rows[0].value };
+    known = { url: stamp, model: rows[0].value };
     return known.model;
 }
 
@@ -94,8 +152,9 @@ async function start(options) {
 async function listModels({ settings: current = {} } = {}) {
     const rows = await engine.listModels({
         baseUrl: baseUrl(current),
-        apiKey: current.apiKey || '',
+        apiKey: keyFor(current),
         label: LABEL,
+        only: filterFor(current),
     });
     if (!rows?.length) return null;
 

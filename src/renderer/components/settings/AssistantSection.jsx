@@ -68,6 +68,15 @@ export default function AssistantSection() {
     const [rejected, setRejected] = useState(null);
     const [endpoint, setEndpoint] = useState('');
     const [endpointState, setEndpointState] = useState('');
+    // The key row's own draft and status line. The stored key never comes back
+    // across the bridge, so there is nothing to seed this with: it is empty
+    // every time the page opens, and empty on save means "clear it".
+    const [keyDraft, setKeyDraft] = useState('');
+    const [keyState, setKeyState] = useState('');
+    // The models to offer, as typed. Kept as text rather than as the list it
+    // becomes, because a comma and a space are part of writing it.
+    const [filterDraft, setFilterDraft] = useState('');
+    const [filterState, setFilterState] = useState('');
     const [commands, setCommands] = useState('');
     const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
@@ -80,6 +89,7 @@ export default function AssistantSection() {
             setProviders(status.providers || []);
             setTools(status.tools || []);
             setEndpoint(status.settings.localBaseUrl || '');
+            setFilterDraft((status.settings.localModelFilter || []).join(', '));
             setCommands((status.settings.autoApproveCommands || []).join('\n'));
             setBlocked((status.settings.blockedCommands || []).join('\n'));
             setPrompts((status.settings.quickPrompts || []).join('\n'));
@@ -157,6 +167,10 @@ export default function AssistantSection() {
     const saveEndpoint = useCallback(async () => {
         const next = await update({ localBaseUrl: endpoint });
         setEndpoint(next.localBaseUrl || '');
+        if (next?.writeError) {
+            setEndpointState(next.writeError);
+            return;
+        }
         setEndpointState(t('settings.assistant.endpointChecking'));
 
         // Named, because the local server is not necessarily the agent that is
@@ -167,6 +181,76 @@ export default function AssistantSection() {
             ? t('settings.assistant.endpointFound', { count: rows.length })
             : t('settings.assistant.endpointNone'));
     }, [endpoint, update, t]);
+
+    /**
+     * Save the key, then say what the server did.
+     *
+     * That second half is not a verdict on the key. A server that wants no
+     * authentication answers with its models whatever was typed into this box,
+     * so a reply proves only that something is listening — and a stopped server,
+     * or one with nothing loaded, answers with nothing whatever the key is. So
+     * this reports which of those happened rather than translating it into
+     * "accepted", which would be a claim it cannot support.
+     *
+     * An empty box saves as clear, because that is the only way to take a key
+     * back off the machine.
+     *
+     * A key is not `update`: it does not travel in the settings, and it is not
+     * one of the values `get` hands back.
+     */
+    const saveKey = useCallback(async () => {
+        const result = await window.api.ai.setLocalKey(keyDraft).catch(() => null);
+        if (!result?.ok) {
+            setKeyState(result?.message || t('settings.assistant.keyFailed'));
+            return;
+        }
+
+        setSettings(result.settings);
+        setKeyDraft('');
+
+        if (!result.settings?.hasLocalApiKey) {
+            setKeyState(t('settings.assistant.keyCleared'));
+            return;
+        }
+
+        const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
+        setKeyState(rows?.length
+            ? t('settings.assistant.keySavedModels', { count: rows.length })
+            : t('settings.assistant.keySavedNoAnswer'));
+    }, [keyDraft, t]);
+
+    /**
+     * Save the list of models to offer, then say how many the server matches.
+     *
+     * The count is the check: a filter that matches nothing leaves an empty
+     * menu, which looks the same as a server that answered with nothing.
+     */
+    const saveFilter = useCallback(async () => {
+        const list = filterDraft
+            .split(/[,\n]/)
+            .map(entry => entry.trim())
+            .filter(Boolean);
+        const next = await update({ localModelFilter: list });
+        setFilterDraft((next.localModelFilter || []).join(', '));
+
+        // The file would not take it, so the list on screen is not the list in
+        // force. Said here rather than reported as saved, because "saved" is
+        // what the next restart disproves.
+        if (next?.writeError) {
+            setFilterState(next.writeError);
+            return;
+        }
+
+        if (!list.length) {
+            setFilterState(t('settings.assistant.filterCleared'));
+            return;
+        }
+
+        const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
+        setFilterState(rows?.length
+            ? t('settings.assistant.filterSaved', { count: rows.length })
+            : t('settings.assistant.filterNone'));
+    }, [filterDraft, update, t]);
 
     const saveCommands = useCallback(async () => {
         const list = commands.split('\n').map(line => line.trim()).filter(Boolean);
@@ -311,6 +395,76 @@ export default function AssistantSection() {
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {endpointState || t('settings.assistant.endpointNote')}
+                            </p>
+                        </div>
+                    </SettingRow>
+                    {/* A second row rather than a third field in the one above:
+                        it is saved by its own button and it is the only value
+                        here that is never read back, so a Save that covered
+                        both would have to say which half it stored. */}
+                    <SettingRow
+                        className={DIVIDED}
+                        title={t('settings.assistant.key')}
+                        description={t('settings.assistant.keyDesc')}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="password"
+                                    aria-label={t('settings.assistant.key')}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={settings?.hasLocalApiKey
+                                        ? t('settings.assistant.keyStored')
+                                        : t('settings.assistant.keyPlaceholder')}
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={keyDraft}
+                                    onChange={(event) => {
+                                        setKeyDraft(event.target.value);
+                                        setKeyState('');
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') saveKey();
+                                    }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveKey}>
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {keyState || t('settings.assistant.keyNote')}
+                            </p>
+                        </div>
+                    </SettingRow>
+                    <SettingRow
+                        className={DIVIDED}
+                        title={t('settings.assistant.filter')}
+                        description={t('settings.assistant.filterDesc')}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    aria-label={t('settings.assistant.filter')}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder="deepseek-flash, gpt-6-luna"
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={filterDraft}
+                                    onChange={(event) => {
+                                        setFilterDraft(event.target.value);
+                                        setFilterState('');
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') saveFilter();
+                                    }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveFilter}>
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {filterState || t('settings.assistant.filterNote')}
                             </p>
                         </div>
                     </SettingRow>
