@@ -1018,9 +1018,26 @@ async function shutdown() {
     hydrated = false;
 }
 
+/**
+ * The local model server's key, and the model list read without it.
+ *
+ * A key is a change of what the server will answer, so the list held for it is
+ * no longer an answer about this server: it was a refusal, most likely a 401
+ * with nothing in it. Dropped rather than refreshed here, for the reason the
+ * address gets the same treatment — reading it means a request, and the caller
+ * that just changed the key is the one in a position to make it and to say what
+ * came back.
+ */
+function setLocalKey(key) {
+    const next = settings.setLocalApiKey(key);
+    modelCatalogs.delete('local');
+    return next;
+}
+
 module.exports = {
     setNotifier,
     reconfigure,
+    setLocalKey,
     create,
     get,
     send,

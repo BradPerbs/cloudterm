@@ -1660,6 +1660,41 @@ function register(getWindow) {
 
         return next;
     });
+
+    // The local model server's bearer token. The key comes in and never goes
+    // back out: what this answers with is the settings view, which carries
+    // `hasLocalApiKey` and not the value, so a page that has read it once
+    // cannot be made to show it to a second person.
+    //
+    // Answered as a result rather than thrown, because the one failure that is
+    // reachable here — a machine with no way to encrypt — is something the page
+    // can say in the row the key was typed into, and a rejected IPC promise
+    // arrives there wrapped in the bridge's own wording.
+    handle('ai-local-key-set', (event, key) => {
+        let next;
+        try {
+            next = assistant.setLocalKey(key);
+        } catch (error) {
+            return { ok: false, message: error?.message || 'The key was not saved.' };
+        }
+
+        // The key itself is not in this entry, and neither is its length: a
+        // credential being set or cleared is the auditable fact.
+        activity.record({
+            category: 'security',
+            action: 'assistant.key',
+            outcome: 'info',
+            target: 'Local model server',
+            detail: next.hasLocalApiKey ? 'API key set' : 'API key cleared',
+        });
+
+        // The panel's model menu may have been read before the key existed, and
+        // that read was a refusal. Told to everyone rather than only to the
+        // page that made the change, for the same reason `ai-settings` is.
+        notify('ai-settings', next);
+
+        return { ok: true, settings: next };
+    });
     handle('ai-conversation-start', (event, payload) => assistant.create(payload || {}));
     handle('ai-conversation-list', () => assistant.list());
     handle('ai-conversation-history', (event, conversationId) => assistant.history(conversationId));

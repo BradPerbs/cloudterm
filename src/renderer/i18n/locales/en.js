@@ -507,6 +507,19 @@ export default {
     'settings.assistant.endpointFound_other': 'Answered, with {count} models to choose from.',
     'settings.assistant.endpointNone': 'Nothing answered at that address. Check the server is '
         + 'running and that its API is switched on.',
+    'settings.assistant.key': 'API key',
+    'settings.assistant.keyDesc': 'Sent as a bearer token with every request. Leave it empty for '
+        + 'LM Studio, Ollama or llama.cpp on this machine — they want no key. It is for a server '
+        + 'behind one: a proxy in front of it, or an endpoint that is not on this machine.',
+    'settings.assistant.keyPlaceholder': 'Not set',
+    'settings.assistant.keyStored': 'Stored — type to replace',
+    'settings.assistant.keyNote': 'Kept encrypted on this machine and never shown again. Save an '
+        + 'empty box to remove it.',
+    'settings.assistant.keyCleared': 'Key removed.',
+    'settings.assistant.keyFailed': 'That key could not be saved.',
+    'settings.assistant.keyRejected': 'The server refused that key. Check it and try again.',
+    'settings.assistant.keyAccepted_one': 'Key accepted, with 1 model to choose from.',
+    'settings.assistant.keyAccepted_other': 'Key accepted, with {count} models to choose from.',
     'settings.assistant.commandMode': 'Where commands run',
     'settings.assistant.commandMode.terminal': 'In my terminal',
     'settings.assistant.commandMode.background': 'Out of sight',

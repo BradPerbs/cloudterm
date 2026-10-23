@@ -68,6 +68,11 @@ export default function AssistantSection() {
     const [rejected, setRejected] = useState(null);
     const [endpoint, setEndpoint] = useState('');
     const [endpointState, setEndpointState] = useState('');
+    // The key row's own draft and status line. The stored key never comes back
+    // across the bridge, so there is nothing to seed this with: it is empty
+    // every time the page opens, and empty on save means "clear it".
+    const [keyDraft, setKeyDraft] = useState('');
+    const [keyState, setKeyState] = useState('');
     const [commands, setCommands] = useState('');
     const [blocked, setBlocked] = useState('');
     const [prompts, setPrompts] = useState('');
@@ -167,6 +172,39 @@ export default function AssistantSection() {
             ? t('settings.assistant.endpointFound', { count: rows.length })
             : t('settings.assistant.endpointNone'));
     }, [endpoint, update, t]);
+
+    /**
+     * Save the key, then ask the server again.
+     *
+     * The second half is the point. A wrong key and a right one look identical
+     * until a request is made, and the model list is the cheapest request that
+     * can tell them apart — the same question the address button asks, which is
+     * why it reports in the same words. An empty box saves as "clear", because
+     * that is the only way to take a key back off the machine.
+     *
+     * A key is not `update`: it does not travel in the settings, and it is not
+     * one of the values `get` hands back.
+     */
+    const saveKey = useCallback(async () => {
+        const result = await window.api.ai.setLocalKey(keyDraft).catch(() => null);
+        if (!result?.ok) {
+            setKeyState(result?.message || t('settings.assistant.keyFailed'));
+            return;
+        }
+
+        setSettings(result.settings);
+        setKeyDraft('');
+
+        if (!result.settings?.hasLocalApiKey) {
+            setKeyState(t('settings.assistant.keyCleared'));
+            return;
+        }
+
+        const rows = await window.api.ai.models({ provider: 'local', refresh: true }).catch(() => null);
+        setKeyState(rows?.length
+            ? t('settings.assistant.keyAccepted', { count: rows.length })
+            : t('settings.assistant.keyRejected'));
+    }, [keyDraft, t]);
 
     const saveCommands = useCallback(async () => {
         const list = commands.split('\n').map(line => line.trim()).filter(Boolean);
@@ -311,6 +349,44 @@ export default function AssistantSection() {
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {endpointState || t('settings.assistant.endpointNote')}
+                            </p>
+                        </div>
+                    </SettingRow>
+                    {/* A second row rather than a third field in the one above:
+                        it is saved by its own button and it is the only value
+                        here that is never read back, so a Save that covered
+                        both would have to say which half it stored. */}
+                    <SettingRow
+                        className={DIVIDED}
+                        title={t('settings.assistant.key')}
+                        description={t('settings.assistant.keyDesc')}
+                    >
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <input
+                                    type="password"
+                                    aria-label={t('settings.assistant.key')}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={settings?.hasLocalApiKey
+                                        ? t('settings.assistant.keyStored')
+                                        : t('settings.assistant.keyPlaceholder')}
+                                    className={`${FIELD_CLASS} flex-1 font-jetbrains text-xs`}
+                                    value={keyDraft}
+                                    onChange={(event) => {
+                                        setKeyDraft(event.target.value);
+                                        setKeyState('');
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') saveKey();
+                                    }}
+                                />
+                                <Button size="md" variant="secondary" onClick={saveKey}>
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {keyState || t('settings.assistant.keyNote')}
                             </p>
                         </div>
                     </SettingRow>

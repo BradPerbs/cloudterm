@@ -10,14 +10,21 @@ const fs = require('fs');
  * snippet, and the store's shape is the thing that syncs between machines.
  * A model choice belongs to the machine the model runs on.
  *
- * The secrets here are API keys, and nothing writes them any more. The
- * assistant runs the agents already installed and already signed in on this
- * machine, which is the whole proposition of driving the user's own agent, and
- * an agent that is not on the machine is refused when it is switched on. A key
- * box beside that offered the opposite: an agent accepted on the promise of a
- * credential, and a failure saved up for the middle of a question. What remains
- * is read so that a key an older version stored is still handed to the agent it
- * belongs to, and nobody's working setup breaks on an update.
+ * The secrets here are API keys, and the only one anything writes is the local
+ * model server's. The other five are agents already installed and already
+ * signed in on this machine, which is the whole proposition of driving the
+ * user's own agent, and an agent that is not on the machine is refused when it
+ * is switched on. A key box beside those offered the opposite: an agent
+ * accepted on the promise of a credential, and a failure saved up for the
+ * middle of a question.
+ *
+ * A local model server is the other case, and it is a different one. It is not
+ * an agent with a login; it is an address, and an address can sit behind a
+ * bearer token — a proxy in front of it, a hosted endpoint that speaks the same
+ * shape, a box on a network that is not this one. `setLocalApiKey` is that one
+ * write. Everything else here is still only read, so a key an older version
+ * stored is handed to the agent it belongs to and nobody's working setup breaks
+ * on an update.
  */
 
 const CONFIG_VERSION = 2;
@@ -316,6 +323,10 @@ function get() {
         // know: a metered key and a plan are charged differently and it says
         // which. Whether, never which key.
         hasApiKey: Boolean(secrets[current.provider]),
+        // The local model server's key, asked about by name rather than through
+        // `hasApiKey` above: that one answers for whichever agent is running,
+        // and the server is not necessarily it. Whether, never which key.
+        hasLocalApiKey: Boolean(secrets.local),
         // What the app shipped with, so a settings page can offer the way back
         // without keeping a second copy of these lists that drifts from this
         // one. Read-only: `set` works from `load()`, not from here, so nothing
@@ -371,10 +382,52 @@ function readApiKey(provider = load().provider) {
     }
 }
 
+/**
+ * Store the local model server's key, or clear it with an empty string.
+ *
+ * The one write in this file, and deliberately the narrowest one it can be: it
+ * takes no provider, so there is no way to file a credential against an agent
+ * that is supposed to have signed in for itself. What makes a key the right
+ * answer here is that there is no agent to sign in — a server on the end of an
+ * address answers whoever asks, and a proxy or a hosted endpoint in front of
+ * one asks for a bearer token first.
+ *
+ * Encrypted with safeStorage and kept in `keys`, beside the ones older versions
+ * wrote, rather than in `config`. That separation is the point: nothing that
+ * reads or writes the configuration can copy it out, and the renderer is given
+ * `hasLocalApiKey` instead of the value.
+ *
+ * Refused rather than stored in the clear when the machine cannot encrypt. A
+ * save that quietly stored nothing readable would look exactly like one that
+ * worked, and the failure would arrive as a 401 in the middle of a question.
+ */
+function setLocalApiKey(value) {
+    // Read first, so the config this writes back is the one on disk rather than
+    // a null that `persist` would happily serialize over it.
+    load();
+
+    // Trimmed because this is pasted, and a trailing newline makes the header
+    // it is built into an invalid token with no visible cause.
+    const text = String(value ?? '').trim();
+
+    if (!text) {
+        delete secrets.local;
+    } else {
+        if (!safeStorage.isEncryptionAvailable()) {
+            throw new Error('This machine cannot encrypt a key, so it was not saved.');
+        }
+        secrets.local = safeStorage.encryptString(text).toString('base64');
+    }
+
+    persist();
+    return get();
+}
+
 module.exports = {
     get,
     set,
     readApiKey,
+    setLocalApiKey,
     DEFAULTS,
     APPROVALS,
     COMMAND_MODES,

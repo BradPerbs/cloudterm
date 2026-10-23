@@ -586,6 +586,12 @@ contextBridge.exposeInMainWorld('api', {
     ai: {
         status: () => ipcRenderer.invoke('ai-status'),
         setSettings: (patch) => ipcRenderer.invoke('ai-settings-set', patch),
+        // The local model server's bearer token, write-only. Main encrypts it
+        // and answers with the settings view, which says whether one is stored
+        // rather than what it is; an empty string clears it. Resolves
+        // `{ ok, settings }` or `{ ok: false, message }`, because the one
+        // failure it can have is a machine that cannot encrypt.
+        setLocalKey: (key) => ipcRenderer.invoke('ai-local-key-set', key),
         // The settings, whenever anything changes them. Both the panel and the
         // settings page show some of these and can be open at once.
         onSettings: (callback) => subscribe('ai-settings', callback),
