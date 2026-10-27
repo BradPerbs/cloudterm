@@ -1236,6 +1236,12 @@ export default {
     'assistant.diffHidden_many': 'Ещё {count} строк не показано',
     'assistant.diffHidden_other': 'Ещё {count} строки не показаны',
 
+    'assistant.copyReply': 'Копировать ответ',
+    'assistant.copiedReply': 'Скопировано',
+    'assistant.tokensPerSecond': '{rate} ток/с',
+    'assistant.turnRateHint': 'Выходных токенов: {tokens}, генерация {seconds} с',
+    'assistant.turnRateHintWall': 'Выходных токенов: {tokens}, генерация {seconds} с, весь ход {wall} с',
+
     'assistant.send': 'Отправить',
     'assistant.attachImage': 'Добавить изображение',
     'assistant.removeImage': 'Убрать изображение',

@@ -1,6 +1,6 @@
 /**
  * What goes under a reply, as the conversation layer in `ai/index.js` makes
- * it: the change an edit carries.
+ * it: the change an edit carries, and how fast a turn wrote its answer.
  *
  * The events are played through the stub agent's `onEvent`, the road a
  * runtime's events take, so what is checked is the log a panel rebuilds
@@ -100,6 +100,23 @@ async function main() {
         const { events, say } = await started('List it');
         say({ type: 'tool-call', id: 'toolu_2', name: 'Bash', rawName: 'Bash', local: true, input: { command: 'ls' } });
         assert.strictEqual(events().find(event => event.type === 'tool-call').diff, undefined);
+    });
+
+    await check('a finished turn\'s result carries its answer rate', async () => {
+        const realNow = Date.now;
+        let clock = realNow();
+        Date.now = () => clock;
+        try {
+            const { events, say } = await started('Explain it');
+            clock += 4000;
+            say({ type: 'result', costUsd: 0, usage: { output_tokens: 80 } });
+            const result = events().find(event => event.type === 'result');
+            assert.strictEqual(result.outputTokens, 80);
+            assert.strictEqual(result.durationMs, 4000);
+            assert.strictEqual(result.tokensPerSec, 20);
+        } finally {
+            Date.now = realNow;
+        }
     });
 
     console.log(`\n${passed} passed, ${failed} failed\n`);

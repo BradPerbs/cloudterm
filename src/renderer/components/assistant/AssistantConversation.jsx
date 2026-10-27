@@ -607,6 +607,8 @@ export default function AssistantConversation({
                     onRespond={assistant.respond}
                     onLayout={keepAtBottom}
                     groupTools={groupTools}
+                    busy={assistant.busy}
+                    turnRates={assistant.turnRates}
                 />
 
                 {/* The turn in progress. Replaced by a finished block the

@@ -352,6 +352,7 @@ export default function useAssistant({
         costUsd: state.costUsd,
         account: state.account,
         rateLimit: state.rateLimit,
+        turnRates: state.turnRates,
         conversationId,
         conversations,
         starting,

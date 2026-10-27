@@ -56,6 +56,31 @@ function settleCalls(items, edit) {
 }
 
 /**
+ * A turn's answer rate, for the number under its reply: what the main process
+ * stamped on the result (see ai/turn-rate.js), with the wall time alongside
+ * when the turn took meaningfully longer than its active time. Null when it
+ * stamped nothing, and the footer then shows no number rather than a guess.
+ */
+function rateOf(event) {
+    const tps = Number(event.tokensPerSec);
+    const tokens = Number(event.outputTokens);
+    const ms = Number(event.durationMs);
+    if (!(tps > 0) || !(tokens > 0) || !(ms > 0)) return null;
+    const rate = { tps, tokens, seconds: Math.round(ms / 100) / 10 };
+    const wall = Number(event.wallMs);
+    if (wall > ms) rate.wall = Math.round(wall / 100) / 10;
+    return rate;
+}
+
+/** The rates, with this result's filed under the message that began its turn. */
+function addRate(turnRates, items, event) {
+    const rate = rateOf(event);
+    if (!rate) return turnRates;
+    const start = lastIndexWhere(items, item => item.kind === 'user');
+    return start >= 0 ? { ...turnRates, [items[start].id]: rate } : turnRates;
+}
+
+/**
  * Fold one event into the transcript.
  *
  * Pure, and the only place the shape of an item is decided, so replaying
@@ -82,6 +107,7 @@ function step(state, event, owned) {
     let draft = state.draft;
     let busy = state.busy;
     let costUsd = state.costUsd;
+    let turnRates = state.turnRates;
 
     /** Whatever streamed and was never closed by a finished block, kept as one. */
     const flushDraft = (id) => {
@@ -288,6 +314,7 @@ function step(state, event, owned) {
             settleCalls(items, edit);
             busy = false;
             costUsd += event.costUsd || 0;
+            turnRates = addRate(turnRates, items, event);
             if (event.isError && event.subtype !== 'success') {
                 edit().push({
                     kind: 'notice',
@@ -367,7 +394,7 @@ function step(state, event, owned) {
             break;
     }
 
-    return { ...state, items, draft, busy, costUsd };
+    return { ...state, items, draft, busy, costUsd, turnRates };
 }
 
 /** One event, on a list that is not the caller's to change. */
@@ -401,4 +428,7 @@ export const INITIAL = {
     // Both arrive from the runtime rather than being configured here.
     account: null,
     rateLimit: null,
+    // Each finished turn's answer rate, by the id of the message that began
+    // it, for the footer under its reply.
+    turnRates: {},
 };

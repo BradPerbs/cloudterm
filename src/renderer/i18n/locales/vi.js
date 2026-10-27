@@ -1108,6 +1108,12 @@ export default {
     'assistant.diffShowLess': 'Thu gọn',
     'assistant.diffHidden_other': 'Còn {count} dòng không được hiển thị',
 
+    'assistant.copyReply': 'Sao chép câu trả lời',
+    'assistant.copiedReply': 'Đã sao chép',
+    'assistant.tokensPerSecond': '{rate} tok/s',
+    'assistant.turnRateHint': '{tokens} token đầu ra trong {seconds} giây tạo',
+    'assistant.turnRateHintWall': '{tokens} token đầu ra trong {seconds} giây tạo, cả lượt mất {wall} giây',
+
     'assistant.send': 'Gửi',
     'assistant.attachImage': 'Thêm ảnh',
     'assistant.removeImage': 'Bỏ ảnh',

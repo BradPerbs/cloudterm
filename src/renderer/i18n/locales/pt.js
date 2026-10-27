@@ -1172,6 +1172,12 @@ export default {
     'assistant.diffHidden_one': 'Mais {count} linha não exibida',
     'assistant.diffHidden_other': 'Mais {count} linhas não exibidas',
 
+    'assistant.copyReply': 'Copiar resposta',
+    'assistant.copiedReply': 'Copiado',
+    'assistant.tokensPerSecond': '{rate} tok/s',
+    'assistant.turnRateHint': '{tokens} tokens de saída em {seconds} s de geração',
+    'assistant.turnRateHintWall': '{tokens} tokens de saída em {seconds} s de geração, {wall} s no turno inteiro',
+
     'assistant.send': 'Enviar',
     'assistant.attachImage': 'Adicionar uma imagem',
     'assistant.removeImage': 'Remover imagem',

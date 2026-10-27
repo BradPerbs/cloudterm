@@ -1011,6 +1011,12 @@ export default {
     'assistant.diffShowLess': '收起',
     'assistant.diffHidden_other': '还有 {count} 行未显示',
 
+    'assistant.copyReply': '复制回复',
+    'assistant.copiedReply': '已复制',
+    'assistant.tokensPerSecond': '{rate} tok/s',
+    'assistant.turnRateHint': '生成用时 {seconds} 秒，输出 {tokens} 个 token',
+    'assistant.turnRateHintWall': '生成用时 {seconds} 秒，输出 {tokens} 个 token，整轮用时 {wall} 秒',
+
     'assistant.send': '发送',
     'assistant.attachImage': '添加图片',
     'assistant.removeImage': '移除图片',

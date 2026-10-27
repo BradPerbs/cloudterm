@@ -6,6 +6,7 @@ const { readImages } = require('./images');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
 const diff = require('./diff');
+const turnRate = require('./turn-rate');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -313,6 +314,10 @@ function emit(conversation, event) {
         const change = diff.forEvent(stamped.name || stamped.rawName, stamped.input);
         if (change) stamped.diff = change;
     }
+
+    // The turn's answer rate, for the number under its reply. Stamped on the
+    // stored result so every window, and a reload, agrees. See turn-rate.js.
+    if (stamped.type === 'result') turnRate.stampTurnRate(conversation.events, stamped);
 
     conversation.updatedAt = stamped.at;
     conversation.events.push(stamped);
