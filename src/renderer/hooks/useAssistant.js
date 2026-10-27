@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { questionKey } from '../lib/approvals';
+import { INITIAL, applyBatch, applyEvent, replay } from '../lib/transcript-reducer';
 
 /**
  * One assistant conversation, as the panel sees it.
@@ -9,256 +10,14 @@ import { questionKey } from '../lib/approvals';
  * something renderable. Nothing here is the source of truth, which is what
  * makes a window reload survivable: on mount it asks for the events it missed
  * and replays them through the same reducer the live stream uses, so a
- * restored panel and one that never closed cannot disagree.
+ * restored panel and one that never closed cannot disagree. The reducer is
+ * `lib/transcript-reducer`, which is where the shape of every item is decided.
  *
  * Which conversation it is on is the caller's to remember: the tab that owns
  * this hook hands in the id it was left with and is told whenever the hook
  * moves to another one. The hook used to keep that in localStorage itself,
  * which was fine for one conversation and wrong for several.
  */
-
-/** A blank turn-in-progress, for the streaming text bubble. */
-function emptyDraft() {
-    return { text: '', thinking: '' };
-}
-
-/**
- * Fold one event into the transcript.
- *
- * Pure, and the only place the shape of an item is decided, so replaying
- * history and receiving live events cannot drift.
- */
-function applyEvent(state, event) {
-    const items = state.items.slice();
-    let draft = state.draft;
-    let busy = state.busy;
-    let costUsd = state.costUsd;
-
-    /**
-     * The row a question belongs to.
-     *
-     * By session first, because the same command sent to three servers is three
-     * rows of the same tool with the same title, and the last one started is not
-     * the one being asked about. A row carrying a question already is not
-     * running, so no two questions can land on the same row. The last row of
-     * that tool is the fallback for a call that named no session, which is the
-     * ordinary single-server case.
-     */
-    const findRunningTool = (name, session) => {
-        let fallback = -1;
-        for (let index = items.length - 1; index >= 0; index -= 1) {
-            const item = items[index];
-            if (item.kind !== 'tool' || item.name !== name || item.status !== 'running') continue;
-            if (session && item.input?.session === session) return index;
-            if (fallback < 0) fallback = index;
-        }
-        return fallback;
-    };
-
-    switch (event.type) {
-        case 'user-message':
-            // Images carry their bytes while the app runs; one read back from
-            // disk has only a name and a type, and is drawn as a chip. A spec
-            // is only ever a name here: its text lives in the library.
-            items.push({
-                kind: 'user',
-                id: event.at,
-                text: event.text,
-                images: event.images || [],
-                specs: event.specs || [],
-            });
-            busy = true;
-            draft = emptyDraft();
-            break;
-
-        case 'thinking-start':
-            draft = { ...draft, thinking: draft.thinking || '' };
-            break;
-
-        case 'thinking-delta':
-            draft = { ...draft, thinking: draft.thinking + (event.text || '') };
-            break;
-
-        case 'text-delta':
-            draft = { ...draft, text: draft.text + (event.text || '') };
-            break;
-
-        case 'assistant-text':
-            // The finished block replaces whatever streamed into the draft.
-            // Deltas are a preview; this is the authoritative text.
-            items.push({
-                kind: 'assistant',
-                id: `a-${event.at}-${items.length}`,
-                text: event.text,
-                thinking: draft.thinking,
-            });
-            draft = emptyDraft();
-            break;
-
-        case 'tool-call':
-            items.push({
-                kind: 'tool',
-                id: event.id,
-                name: event.name,
-                local: event.local,
-                question: Boolean(event.question),
-                input: event.input || {},
-                status: 'running',
-                result: '',
-                isError: false,
-            });
-            // Any text that streamed before the call belongs above it.
-            if (draft.text.trim()) {
-                items.splice(items.length - 1, 0, {
-                    kind: 'assistant',
-                    id: `a-${event.at}-pre`,
-                    text: draft.text,
-                    thinking: draft.thinking,
-                });
-            }
-            draft = emptyDraft();
-            break;
-
-        case 'tool-result': {
-            const index = items.findIndex(item => item.kind === 'tool' && item.id === event.id);
-            if (index >= 0) {
-                items[index] = {
-                    ...items[index],
-                    status: event.isError ? 'error' : 'done',
-                    result: event.text || '',
-                    isError: Boolean(event.isError),
-                };
-            }
-            break;
-        }
-
-        case 'approval-request': {
-            const approval = {
-                requestId: event.requestId,
-                name: event.name,
-                title: event.title,
-                input: event.input || {},
-                local: event.local,
-                question: Boolean(event.question),
-                readOnly: event.readOnly,
-                sessionId: event.sessionId || '',
-                host: event.host,
-                status: 'pending',
-                feedback: '',
-            };
-
-            // The question belongs to the call, so it is attached to the row
-            // that call already has rather than living beside it. The panel
-            // draws its card from this and holds the row back while it stands,
-            // so the command is on screen once; answering it puts the row back
-            // with the answer recorded on it. The row is marked waiting rather
-            // than running meanwhile, so nothing claims work is happening while
-            // it is actually stopped on a question.
-            const index = findRunningTool(event.name, event.input?.session);
-            if (index >= 0) {
-                items[index] = { ...items[index], status: 'waiting', approval };
-            } else {
-                // No row to land on: a call the transcript never saw start.
-                // Rare, and a card of its own is better than a lost question.
-                items.push({ kind: 'approval', id: event.requestId, ...approval });
-            }
-            break;
-        }
-
-        case 'approval-settled': {
-            const index = items.findIndex(item => (
-                item.kind === 'approval'
-                    ? item.requestId === event.requestId
-                    : item.kind === 'tool' && item.approval?.requestId === event.requestId
-            ));
-            if (index >= 0) {
-                const item = items[index];
-                // The answer may be applied twice: once by the click, which is
-                // what makes the card settle without waiting for a round trip,
-                // and once by the main process when it resolves. Only the
-                // first carries what the user typed, so it is kept.
-                const feedback = event.feedback || item.approval?.feedback || item.feedback || '';
-                items[index] = item.kind === 'approval'
-                    ? { ...item, status: event.status, feedback }
-                    : {
-                        ...item,
-                        // Answered, so the row goes back to reporting the call.
-                        // A refused one never runs, and `tool-result` closes it
-                        // out either way.
-                        status: event.status === 'approved' ? 'running' : item.status,
-                        approval: { ...item.approval, status: event.status, feedback },
-                    };
-            }
-            break;
-        }
-
-        case 'account':
-            return { ...state, account: event };
-
-        case 'rate-limit':
-            return { ...state, rateLimit: event };
-
-        case 'result':
-            busy = false;
-            costUsd += event.costUsd || 0;
-            if (event.isError && event.subtype !== 'success') {
-                items.push({
-                    kind: 'notice',
-                    id: `n-${event.at}`,
-                    tone: 'warn',
-                    text: event.subtype === 'error_max_turns'
-                        ? 'The assistant reached its step limit for this turn. Ask it to continue if it was on the right track.'
-                        : `The run ended early (${event.subtype}).`,
-                });
-            }
-            break;
-
-        case 'error':
-            busy = false;
-            items.push({ kind: 'notice', id: `e-${event.at}`, tone: 'error', text: event.message });
-            draft = emptyDraft();
-            break;
-
-        // A line the app wrote into the transcript itself, rather than anything
-        // the model said. The main process uses it to close out a conversation
-        // read back from disk whose last turn never finished, because the
-        // process running it went away.
-        case 'notice':
-            busy = false;
-            items.push({
-                kind: 'notice',
-                id: `nx-${event.at}-${items.length}`,
-                tone: event.tone || 'info',
-                text: event.text,
-            });
-            draft = emptyDraft();
-            break;
-
-        case 'tool-failed':
-            items.push({
-                kind: 'notice',
-                id: `tf-${event.at}`,
-                tone: 'warn',
-                text: `${event.name} failed: ${event.message}`,
-            });
-            break;
-
-        case 'interrupted':
-            busy = false;
-            items.push({ kind: 'notice', id: `i-${event.at}`, tone: 'info', text: 'Stopped.' });
-            draft = emptyDraft();
-            break;
-
-        case 'closed':
-            busy = false;
-            break;
-
-        default:
-            break;
-    }
-
-    return { ...state, items, draft, busy, costUsd };
-}
 
 /**
  * What ends a turn, and with it any answer being held for calls that were
@@ -267,17 +26,6 @@ function applyEvent(state, event) {
  * question even if it is spelled the same way.
  */
 const ENDS_TURN = new Set(['result', 'error', 'interrupted', 'closed', 'user-message']);
-
-const INITIAL = {
-    items: [],
-    draft: emptyDraft(),
-    busy: false,
-    costUsd: 0,
-    // How this conversation is paid for, and where the plan's window stands.
-    // Both arrive from the runtime rather than being configured here.
-    account: null,
-    rateLimit: null,
-};
 
 /**
  * The panel's target, as the main process takes it: a mode, the session a tool
@@ -296,6 +44,52 @@ export default function useAssistant({
     onConversationChange,
 }) {
     const [state, setState] = useState(INITIAL);
+
+    /**
+     * Events in, one render per frame out.
+     *
+     * A runtime streams a reply a few words at a time, and a busy turn lands a
+     * tool call and its result in the same breath, dozens a second. Each used
+     * to be a render of its own. They are queued here and folded in together
+     * on the next frame, in the order they came, so a burst of forty is one
+     * render and a quiet trickle is no slower than before. The timeout is for
+     * a minimised window, where frames stop coming.
+     *
+     * Everything that changes the transcript goes through the same queue, the
+     * user's own clicks included, so an answer cannot overtake the question
+     * it answers.
+     */
+    const pending = useRef([]);
+    const scheduled = useRef({ frame: 0, timeout: 0 });
+    const flush = useCallback(() => {
+        cancelAnimationFrame(scheduled.current.frame);
+        clearTimeout(scheduled.current.timeout);
+        scheduled.current = { frame: 0, timeout: 0 };
+        const batch = pending.current;
+        if (batch.length === 0) return;
+        pending.current = [];
+        setState(previous => applyBatch(previous, batch));
+    }, []);
+    const dispatch = useCallback((event) => {
+        pending.current.push(event);
+        if (scheduled.current.frame || scheduled.current.timeout) return;
+        scheduled.current = {
+            frame: requestAnimationFrame(flush),
+            timeout: setTimeout(flush, 100),
+        };
+    }, [flush]);
+
+    /** A whole transcript in place of this one: whatever was queued for the old one goes. */
+    const replaceState = useCallback((next) => {
+        pending.current = [];
+        setState(next);
+    }, []);
+
+    useEffect(() => () => {
+        cancelAnimationFrame(scheduled.current.frame);
+        clearTimeout(scheduled.current.timeout);
+    }, []);
+
     const [conversationId, setConversationId] = useState('');
     const [starting, setStarting] = useState(true);
     const [failure, setFailure] = useState('');
@@ -358,7 +152,7 @@ export default function useAssistant({
                     if (cancelled) return;
                     if (past?.found) {
                         adopt(given);
-                        setState(past.events.reduce(applyEvent, INITIAL));
+                        replaceState(replay(past.events));
                         setStarting(false);
                         return;
                     }
@@ -387,30 +181,31 @@ export default function useAssistant({
      *
      * The card is marked locally straight away. It is the thing the user just
      * clicked, and waiting for the round trip to grey it out reads as a dropped
-     * click.
+     * click. Through the same queue as the stream, so it lands after the
+     * question it answers even when both arrive in one frame.
      */
     const settle = useCallback((requestId, approved, message, input = null) => {
-        setState(previous => applyEvent(previous, {
+        dispatch({
             type: 'approval-settled',
             requestId,
             status: approved ? 'approved' : 'denied',
             feedback: approved ? '' : message,
             at: Date.now(),
-        }));
+        });
         window.api.ai.approve(
             requestId,
             approved,
             approved ? '' : (message || 'The user declined that.'),
             input
         );
-    }, []);
+    }, [dispatch]);
 
     /* The live stream. */
     useEffect(() => {
         if (!enabled) return undefined;
         const off = window.api.ai.onEvent(({ conversationId: id, event }) => {
             if (id !== conversationRef.current) return;
-            setState(previous => applyEvent(previous, event));
+            dispatch(event);
 
             if (ENDS_TURN.has(event.type)) {
                 held.current.clear();
@@ -418,7 +213,7 @@ export default function useAssistant({
             }
 
             // A question already answered on a card that named this server.
-            // Applied after the event above, so the transcript has the row
+            // Queued after the event above, so the transcript has the row
             // before it is told the row has been answered.
             if (event.type === 'approval-request') {
                 const answer = held.current.get(questionKey(event));
@@ -428,7 +223,7 @@ export default function useAssistant({
             }
         });
         return off;
-    }, [enabled, settle]);
+    }, [enabled, settle, dispatch]);
 
     /**
      * Follow the pane the panel is pointed at, or the set it is pinned to.
@@ -457,11 +252,9 @@ export default function useAssistant({
         if (!conversationId) return;
         const result = await window.api.ai.send(conversationId, text, images, specs);
         if (!result?.success && result?.message) {
-            setState(previous => applyEvent(previous, {
-                type: 'error', message: result.message, at: Date.now(),
-            }));
+            dispatch({ type: 'error', message: result.message, at: Date.now() });
         }
-    }, [conversationId]);
+    }, [conversationId, dispatch]);
 
     const interrupt = useCallback(() => {
         if (conversationId) window.api.ai.interrupt(conversationId);
@@ -519,8 +312,8 @@ export default function useAssistant({
         if (conversationId) await window.api.ai.park(conversationId);
         const created = await window.api.ai.start(targetRef.current);
         adopt(created.conversationId);
-        setState(INITIAL);
-    }, [conversationId, adopt]);
+        replaceState(INITIAL);
+    }, [conversationId, adopt, replaceState]);
 
     /** Go back to an earlier conversation, replaying it through the reducer. */
     const open = useCallback(async (id) => {
@@ -533,8 +326,8 @@ export default function useAssistant({
         }
         if (conversationId) await window.api.ai.park(conversationId);
         adopt(id);
-        setState(past.events.reduce(applyEvent, INITIAL));
-    }, [conversationId, refreshConversations, adopt]);
+        replaceState(replay(past.events));
+    }, [conversationId, refreshConversations, adopt, replaceState]);
 
     /**
      * Throw one away for good. Deleting the conversation being read leaves the
@@ -547,10 +340,10 @@ export default function useAssistant({
         if (id === conversationId) {
             const created = await window.api.ai.start(targetRef.current);
             adopt(created.conversationId);
-            setState(INITIAL);
+            replaceState(INITIAL);
         }
         await refreshConversations();
-    }, [conversationId, refreshConversations, adopt]);
+    }, [conversationId, refreshConversations, adopt, replaceState]);
 
     return {
         items: state.items,
