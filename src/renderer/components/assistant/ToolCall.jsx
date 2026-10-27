@@ -112,15 +112,47 @@ const commandOf = (input) => {
     return Array.isArray(command) ? command.join(' ') : String(command);
 };
 
+/** Which lines of a file a read asked for, in words, or '' for the whole file. */
+function lineRange(input) {
+    const offset = Number(input.offset) || 0;
+    const limit = Number(input.limit) || 0;
+    if (!offset && !limit) return '';
+    const from = offset || 1;
+    return limit
+        ? translate('assistant.lineRange', { from, to: from + limit - 1 })
+        : translate('assistant.fromLine', { from });
+}
+
 /**
  * The one line that says what this call actually was.
  *
  * Matched on the tool's bare name, lower-cased, so CloudTerm's own tools and
  * each runtime's spelling of the same thing (`Bash`, `bash`, `Shell`) land in
  * one place. Shared with the approval card, which says the same thing larger.
+ *
+ * Two optional parts besides the line. `aside` is a few words the row puts
+ * after the file chip, which stands in for the line there. `detail` is what
+ * the approval card shows under the line, for a call whose line alone is not
+ * enough to say yes to: an edit is its path and, under it, the text it takes
+ * out and the text it puts in.
  */
 export function describeCall(name, input = {}) {
     switch (toolKey(name)) {
+        case 'read_file': {
+            const range = lineRange(input);
+            return { mono: true, text: pathOf(input), aside: range, detail: range };
+        }
+        case 'edit_file': {
+            const every = input.all ? translate('assistant.everyMatch') : '';
+            return {
+                mono: true,
+                text: pathOf(input),
+                aside: every,
+                detail: input.old !== undefined
+                    ? [`- ${String(input.old)}`, `+ ${String(input.new ?? '')}`, every].filter(Boolean).join('\n')
+                    : every,
+            };
+        }
         case 'run_command':
         case 'bash':
         case 'shell':
@@ -132,9 +164,7 @@ export function describeCall(name, input = {}) {
             return { mono: true, text: commandOf(input) };
         case 'send_input':
             return { mono: true, text: input.text || '' };
-        case 'read_file':
         case 'write_file':
-        case 'edit_file':
         case 'list_directory':
         case 'read':
         case 'write':
@@ -293,15 +323,22 @@ export default function ToolCall({ item, bare = false }) {
                 </span>
 
                 {chip ? (
-                    <span
-                        className="min-w-0 max-w-[60%] flex items-center gap-1.5 rounded-md px-1.5 py-0.5
-                            bg-black/[0.05] dark:bg-white/[0.07]
-                            text-[11px] text-gray-600 dark:text-gray-300"
-                        title={chip.full}
-                    >
-                        <File01Icon size={12} strokeWidth={2} className="shrink-0 text-gray-400 dark:text-gray-500" />
-                        <span className="truncate font-jetbrains">{chip.base}</span>
-                    </span>
+                    <>
+                        <span
+                            className="min-w-0 max-w-[60%] flex items-center gap-1.5 rounded-md px-1.5 py-0.5
+                                bg-black/[0.05] dark:bg-white/[0.07]
+                                text-[11px] text-gray-600 dark:text-gray-300"
+                            title={chip.full}
+                        >
+                            <File01Icon size={12} strokeWidth={2} className="shrink-0 text-gray-400 dark:text-gray-500" />
+                            <span className="truncate font-jetbrains">{chip.base}</span>
+                        </span>
+                        {summary.aside && (
+                            <span className="min-w-0 truncate text-[11px] text-gray-400 dark:text-gray-500">
+                                {summary.aside}
+                            </span>
+                        )}
+                    </>
                 ) : detail ? (
                     <span
                         className={`min-w-0 flex-1 truncate text-[11px] text-gray-500 dark:text-gray-500 ${
