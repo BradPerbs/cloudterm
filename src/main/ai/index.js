@@ -4,6 +4,7 @@ const catalog = require('./tools');
 const archive = require('./archive');
 const { readImages } = require('./images');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
+const pasted = require('./pasted-secrets');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -50,6 +51,28 @@ const MAX_CONVERSATIONS = 20;
 
 /** How long a tool call waits for a person before it gives up. */
 const APPROVAL_TIMEOUT = 10 * 60 * 1000;
+
+/** How long a question to the user holds the turn before the turn is handed back. */
+const QUESTION_WAIT = 15 * 60 * 1000;
+
+/**
+ * The same, for a runtime reached over the tool server rather than in this
+ * process.
+ *
+ * Those clients put their own limit on a tool call, and it is short: OpenCode
+ * gives one twenty seconds, then tells the agent it failed and stops
+ * listening. An answer given after that would be settled into a call nobody is
+ * waiting for. So the call does not wait that long: it takes an answer given
+ * straight away, and otherwise hands the turn back with the card still up, and
+ * the answer goes to the agent as the user's next message. Twelve seconds is
+ * under every client limit seen so far and long enough for someone already
+ * reading.
+ */
+const QUESTION_HOLD = 12 * 1000;
+
+/** What the agent is told when a question outlasts its turn. */
+const QUESTION_PARKED = 'The user has not answered yet. End your turn now: say in one line what you are '
+    + 'waiting for. The question stays on their screen, and their answer will reach you as their next message.';
 
 /** How long the renderer gets to open or close a session. */
 const ACTION_TIMEOUT = 90 * 1000;
@@ -270,7 +293,10 @@ function get(conversationId) {
  * what a panel that stayed open received.
  */
 function emit(conversation, event) {
-    const stamped = { ...event, at: Date.now() };
+    // A key the user pasted is masked here, before the event reaches the log,
+    // the history file or a window. The agent already has the value: it went
+    // out with the message, which is the one place it is needed.
+    const stamped = { ...pasted.maskDeep(event, conversation.secrets), at: Date.now() };
     conversation.updatedAt = stamped.at;
     conversation.events.push(stamped);
     if (conversation.events.length > MAX_EVENTS) {
@@ -281,6 +307,41 @@ function emit(conversation, event) {
     // A stream preview is not worth a write of its own: the finished block that
     // replaces it is an event in its own right, and that one schedules one.
     if (!archive.isTransient(stamped.type)) archive.save();
+}
+
+/**
+ * Note any key or token in something the user wrote, so it is masked from
+ * here on wherever the conversation is recorded. See `pasted-secrets.js`.
+ *
+ * Held on the conversation in memory and nowhere else: a list of the secrets
+ * to keep out of the history file cannot itself go into the history file. A
+ * conversation read back from disk starts with none, which is right, since
+ * what it recorded was masked on the way out.
+ *
+ * Anything already recorded that carries a newly found value is masked too,
+ * such as a tool result that printed the same key before the user pasted it.
+ */
+function rememberSecrets(conversation, text) {
+    const found = pasted.find(text);
+    if (found.length === 0) return;
+
+    if (!conversation.secrets) conversation.secrets = new Set();
+    const fresh = found.filter(value => !conversation.secrets.has(value));
+    if (fresh.length === 0) return;
+    for (const value of fresh) conversation.secrets.add(value);
+
+    let changed = false;
+    conversation.events = conversation.events.map((event) => {
+        const clean = pasted.maskDeep(event, conversation.secrets);
+        if (clean !== event) changed = true;
+        return clean;
+    });
+    const title = pasted.mask(conversation.title, conversation.secrets);
+    if (title !== conversation.title) {
+        conversation.title = title;
+        changed = true;
+    }
+    if (changed) archive.save();
 }
 
 /** Point an existing conversation at a different session, set, or all of them. */
@@ -400,15 +461,32 @@ async function restart(conversation) {
  * answer to "may I restart this service" when nobody is there to say yes is
  * no, not an exception somewhere up the stack.
  */
-function requestApproval(conversation, { toolName, name, input, local, question = false }) {
+function requestApproval(conversation, { toolName, name, input, local, question = false, signal = null }) {
     return new Promise((resolve) => {
+        // The runtime gave up on the call before it reached here. No card:
+        // there is nobody left to act on the answer.
+        if (signal?.aborted) {
+            resolve({ approved: false, message: 'The runtime stopped waiting for this approval.', input: null });
+            return;
+        }
+
         const definition = catalog.BY_NAME.get(name);
         const requestId = nextId('approve');
+
+        // The runtime gave up on the call while the card was up: OpenCode does
+        // after twenty seconds. The agent has already been told the call
+        // failed, so the card comes down rather than waiting for a click that
+        // would run the command behind its back.
+        const giveUp = () => settle(
+            { approved: false, message: 'The runtime stopped waiting for this approval.' },
+            'expired'
+        );
 
         const settle = (verdict, status) => {
             const entry = pendingApprovals.get(requestId);
             if (!entry) return;
             clearTimeout(entry.timer);
+            signal?.removeEventListener('abort', giveUp);
             pendingApprovals.delete(requestId);
             // Recorded, not just sent. The request itself is in the event log,
             // so without this a window that reloads after answering replays the
@@ -426,6 +504,7 @@ function requestApproval(conversation, { toolName, name, input, local, question 
         }, APPROVAL_TIMEOUT);
 
         pendingApprovals.set(requestId, { resolve: settle, timer, conversationId: conversation.id });
+        signal?.addEventListener('abort', giveUp, { once: true });
 
         // A question is put to the person, not to a server, so it is not drawn
         // against one. Looking one up here would hang the panel's scope on a
@@ -454,6 +533,170 @@ function requestApproval(conversation, { toolName, name, input, local, question 
             sessionId: info ? info.sessionId : '',
             host: info ? (info.hostName || info.address) : '',
         });
+    });
+}
+
+/**
+ * Put a question from the agent in front of the user, and wait for the answer.
+ *
+ * This is `ask_user`, for every agent: Claude Code has a question tool of its
+ * own (see the claude-code provider), and none of the others did, so a
+ * question was a line at the end of a reply and a turn that stopped.
+ *
+ * The card is the one Claude Code's question already draws: an approval
+ * request marked as a question, carrying its question in that tool's shape,
+ * and answered through `respondToApproval` with the answers keyed by the
+ * question's text. Nothing in the panel has to know which agent asked.
+ *
+ * A question can outlast the turn that asked it. When nobody answers in time,
+ * or the runtime stops waiting, the call returns telling the agent to end its
+ * turn, and the card stays up. An answer given after that is sent as the
+ * user's next message, which is what the agent was told would happen.
+ */
+function requestQuestion(conversation, { question, options = [], signal = null }) {
+    return new Promise((resolve) => {
+        const text = String(question || '').trim().slice(0, 500);
+        const choices = (Array.isArray(options) ? options : [])
+            .map(option => String(option).trim())
+            .filter(Boolean)
+            .slice(0, 6);
+
+        if (!text) {
+            resolve({ answered: false, message: 'There was no question to ask.' });
+            return;
+        }
+
+        const definition = catalog.BY_NAME.get('ask_user');
+        const requestId = nextId('ask');
+        // Whether the call that asked has already been handed back.
+        let parked = false;
+
+        const park = (message) => {
+            const entry = pendingApprovals.get(requestId);
+            if (!entry || parked) return;
+            parked = true;
+            clearTimeout(entry.timer);
+            entry.timer = null;
+            signal?.removeEventListener('abort', onAbort);
+            resolve({ answered: false, parked: true, message });
+        };
+
+        // The runtime stopped waiting for the answer. The card stays up and
+        // the answer goes as the next message rather than into a dead call.
+        const onAbort = () => park(
+            'The runtime stopped waiting for this answer before the user gave one. End your turn now, '
+            + 'saying in one line what you asked. Their answer will reach you as their next message.'
+        );
+
+        // Called by `respondToApproval`, `interrupt` and `shutdown` alike.
+        const settle = (verdict, status) => {
+            const entry = pendingApprovals.get(requestId);
+            if (!entry) return;
+            clearTimeout(entry.timer);
+            signal?.removeEventListener('abort', onAbort);
+            pendingApprovals.delete(requestId);
+            emit(conversation, { type: 'approval-settled', requestId, status });
+
+            const reply = verdict.approved ? answerOf(verdict.input, text) : '';
+            // Typed by the user, like a message, so it is searched the same
+            // way before the tool result that carries it is recorded.
+            if (reply) rememberSecrets(conversation, reply);
+
+            if (!parked) {
+                resolve(reply
+                    ? { answered: true, answer: reply, chosen: choices.includes(reply) }
+                    : {
+                        answered: false,
+                        message: verdict.message || 'The user skipped the question. Carry on without that '
+                            + 'answer, or ask in the conversation instead.',
+                    });
+                return;
+            }
+
+            // Answered after the turn moved on. A skip needs nothing more: the
+            // agent is not waiting on it.
+            if (reply) deliverLateAnswer(conversation, text, reply);
+        };
+
+        const timer = setTimeout(
+            () => park(QUESTION_PARKED),
+            signal ? QUESTION_HOLD : QUESTION_WAIT
+        );
+
+        pendingApprovals.set(requestId, { resolve: settle, timer, conversationId: conversation.id });
+
+        if (signal) {
+            if (signal.aborted) {
+                onAbort();
+            } else {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+        }
+
+        emit(conversation, {
+            type: 'approval-request',
+            requestId,
+            name: 'ask_user',
+            rawName: 'ask_user',
+            title: definition?.title || 'ask_user',
+            local: false,
+            question: true,
+            readOnly: true,
+            // The shape the question card reads: Claude Code's own question
+            // tool, with one question in it. No options is a free-text
+            // question, answered through the card's "something else" row.
+            input: {
+                questions: [{
+                    question: text,
+                    header: '',
+                    multiSelect: false,
+                    options: choices.map(label => ({ label, description: '' })),
+                }],
+            },
+            sessionId: '',
+            host: '',
+        });
+    });
+}
+
+/**
+ * The answer a question card sent, as one string.
+ *
+ * Keyed by the question's text, as the card keys it. A card that sent one
+ * answer under some other key is still read, since there was only one question
+ * on it to answer.
+ */
+function answerOf(input, question) {
+    const answers = input?.answers;
+    if (!answers || typeof answers !== 'object') return '';
+    const keyed = answers[question];
+    if (typeof keyed === 'string' && keyed.trim()) return keyed.trim();
+    const values = Object.values(answers).filter(value => typeof value === 'string' && value.trim());
+    return values.length === 1 ? values[0].trim() : '';
+}
+
+/**
+ * An answer to a question whose turn has already ended, sent on as the user's
+ * next message.
+ *
+ * The call that asked was handed back with a note, so its row in the
+ * transcript is closed out again with the answer, which is what it ended up
+ * being. Without that, the row would be put back to running by the answer and
+ * stay that way.
+ */
+function deliverLateAnswer(conversation, question, reply) {
+    if (!conversations.has(conversation.id)) return;
+
+    for (let index = conversation.events.length - 1; index >= 0; index -= 1) {
+        const event = conversation.events[index];
+        if (event.type === 'tool-call' && event.name === 'ask_user' && event.input?.question === question) {
+            emit(conversation, { type: 'tool-result', id: event.id, text: reply, isError: false });
+            break;
+        }
+    }
+
+    send(conversation.id, reply).catch((error) => {
+        console.error('Could not send a late answer to the assistant:', error.message);
     });
 }
 
@@ -564,6 +807,11 @@ function ensureProvider(conversation) {
             hostIds: conversation.hostIds,
             settings: resolved(),
             sessionAction: (payload) => requestAction(conversation, payload),
+            // A question to the person, answered on a card. See requestQuestion.
+            askUser: (payload) => requestQuestion(conversation, payload || {}),
+            // The model saved a snippet. Every window caches the library, so
+            // each is told to read it again.
+            snippetsChanged: () => notify('snippets-changed', {}),
         }),
         requestApproval: (request) => requestApproval(conversation, request),
         onEvent: (event) => handleProviderEvent(conversation, event),
@@ -654,9 +902,12 @@ function recordToolActivity(conversation, event) {
 
     const target = event.input?.session || conversation.boundSessionId || '';
     const info = target ? transcript.info(target) : null;
+    // The activity log is a file on disk too, so a pasted key is masked out
+    // of it the same way it is out of the history.
+    const input = pasted.maskDeep(event.input, conversation.secrets);
     const summary = event.name === 'run_command'
-        ? String(event.input?.command || '').slice(0, 300)
-        : summarise(event.input);
+        ? String(input?.command || '').slice(0, 300)
+        : summarise(input);
 
     activity.record({
         category: 'connection',
@@ -714,8 +965,15 @@ async function send(conversationId, text, attachments = [], specIds = []) {
         return { success: false, message: 'This agent cannot read images. Claude Code and Codex can.' };
     }
 
+    // Before anything is recorded: the message itself, and the title taken
+    // from it, are the first places a pasted key would land.
+    rememberSecrets(conversation, body);
+
     if (!conversation.title) {
-        conversation.title = (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' ').slice(0, 80);
+        conversation.title = pasted.mask(
+            (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' '),
+            conversation.secrets
+        ).slice(0, 80);
     }
 
     // The transcript keeps a spec's name and not its text: the text is in the
@@ -813,6 +1071,13 @@ async function close(conversationId) {
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
     conversations.delete(conversationId);
+    // Anything it was still waiting on a person for goes with it. A question
+    // whose turn has already ended has no timer of its own, and would
+    // otherwise wait for an answer with nowhere to go until the app quits.
+    for (const entry of [...pendingApprovals.values()]) {
+        if (entry.conversationId !== conversationId) continue;
+        entry.resolve({ approved: false, message: 'The conversation was closed.' }, 'denied');
+    }
     // Thrown away for good, so it goes from the file too. Suspended during a
     // shutdown, which closes every conversation without meaning to forget any
     // of them.

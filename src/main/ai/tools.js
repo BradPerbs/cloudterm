@@ -5,6 +5,8 @@ const sftp = require('../sftp');
 const transcript = require('../transcript');
 const exec = require('./exec');
 const terminalRun = require('./terminal-run');
+const fileText = require('./file-text');
+const snippetConfig = require('../snippet-config');
 
 // zod 4 exports both a namespace and a `z` binding depending on how it is
 // reached. Taking either keeps this working whichever the installed build is.
@@ -157,6 +159,27 @@ async function viaSftp(sessionId, fn) {
 }
 
 /**
+ * A stretch of a file read by line, with a header saying which lines these
+ * are and how long the file is, so the next read can start where this one
+ * stopped. Asking past the end says so rather than coming back empty.
+ */
+function describeSlice(file, slice) {
+    if (slice.past) {
+        return slice.lines !== undefined
+            ? `${file} has ${slice.lines} line${slice.lines === 1 ? '' : 's'}, so there is nothing from line ${slice.from}.`
+            : `Line ${slice.from} of ${file} is further in than a read by line goes `
+                + `(${Math.round(fileText.MAX_SCAN_BYTES / 1048576)} MB). Use run_command with tail or sed -n to reach it.`;
+    }
+
+    const notes = [];
+    if (slice.trimmed) notes.push(`cut to what one read returns; carry on from line ${slice.to + 1}`);
+    else if (slice.scanLimit) notes.push(`stopped ${Math.round(fileText.MAX_SCAN_BYTES / 1048576)} MB in; carry on from line ${slice.to + 1}`);
+
+    const of = slice.lines !== undefined ? ` of ${slice.lines}` : '';
+    return `${file}, lines ${slice.from}-${slice.to}${of}${notes.length ? ` (${notes.join('; ')})` : ''}:\n\n${slice.content}`;
+}
+
+/**
  * Whether a saved host has a shell behind it.
  *
  * A record stored as `desktop.only` does not: it is an RDP or VNC box, usually
@@ -190,6 +213,24 @@ function publicHost(host) {
         viaJumpHost: Boolean(host.jumpHostId),
         viaProxy: Boolean(host.proxyId),
         lastConnectedAt: host.lastConnectedAt || 0,
+    };
+}
+
+/** The kinds `snippet-config` stores, in the order its editor offers them. */
+const SNIPPET_KINDS = ['command', 'package', 'spec'];
+
+/** A snippet as a list shows it: what it is, not its text. */
+function publicSnippet(snippet) {
+    return {
+        id: snippet.id,
+        name: snippet.name,
+        kind: snippet.kind,
+        description: snippet.description || '',
+        tags: snippet.tags || [],
+        // Empty means every host.
+        hostIds: snippet.hostIds || [],
+        steps: snippet.kind === 'package' ? (snippet.steps || []).length : undefined,
+        length: snippet.kind === 'package' ? undefined : String(snippet.command || '').length,
     };
 }
 
@@ -483,14 +524,23 @@ const TOOLS = [
         description:
             'Read a text file from a session\'s server over SFTP. Use this for config files and logs '
             + 'rather than running cat, because it returns the file cleanly and tells you when it was '
-            + 'trimmed. Reads with the same access the user already has on that server.',
+            + 'trimmed. Give offset and limit to read a stretch of it by line rather than the whole '
+            + 'thing, which is what you want for a long file or a big log: offset is the first line, '
+            + 'counting from 1. Reads with the same access the user already has on that server.',
         shape: {
             session: z.string().optional().describe('Session id. Defaults to the session in front of the user.'),
             path: z.string().describe('Absolute path to the file.'),
+            offset: z.number().int().min(1).optional()
+                .describe('The first line to return, counting from 1. Omit for the start of the file.'),
+            limit: z.number().int().min(1).max(5000).optional()
+                .describe('How many lines to return. Omit for the rest of the file.'),
         },
         handler: async (input, ctx) => {
             const resolved = resolveSession(input, ctx);
             if (resolved.error) return fail(resolved.error);
+
+            const byLine = Boolean(input.offset || input.limit);
+            const stretch = { offset: input.offset, limit: input.limit };
 
             return viaSftp(resolved.sessionId, (handle, resolve) => {
                 handle.stat(input.path, (statError, attrs) => {
@@ -498,22 +548,45 @@ const TOOLS = [
                         resolve(fail(`Could not read ${input.path}: ${statError.message}`));
                         return;
                     }
+
                     if (attrs.size > MAX_FILE_BYTES * 8) {
-                        resolve(fail(
-                            `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to read whole. `
-                            + 'Use run_command with tail, head or grep to get the part you need.'
-                        ));
+                        if (!byLine) {
+                            resolve(fail(
+                                `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to read whole. `
+                                + 'Give offset and limit to read a stretch of it by line, or use run_command with '
+                                + 'tail or grep to get the part you need.'
+                            ));
+                            return;
+                        }
+                        // Too big to bring over whole, so it is read as a
+                        // stream and the read stops once the stretch is in.
+                        let stream;
+                        try {
+                            stream = handle.createReadStream(input.path);
+                        } catch (error) {
+                            resolve(fail(`Could not read ${input.path}: ${error.message}`));
+                            return;
+                        }
+                        fileText.streamLines(stream, stretch).then(
+                            slice => resolve(ok(describeSlice(input.path, slice))),
+                            error => resolve(fail(`Could not read ${input.path}: ${error.message}`))
+                        );
                         return;
                     }
+
                     handle.readFile(input.path, (readError, data) => {
                         if (readError) {
                             resolve(fail(`Could not read ${input.path}: ${readError.message}`));
                             return;
                         }
                         const text = data.toString('utf8');
+                        if (byLine) {
+                            resolve(ok(describeSlice(input.path, fileText.sliceLines(text, stretch))));
+                            return;
+                        }
                         const trimmed = text.length > MAX_FILE_BYTES;
                         resolve(ok(
-                            `${input.path}${trimmed ? ' (first part only)' : ''}:\n\n`
+                            `${input.path}${trimmed ? ' (first part only; give offset and limit to read further)' : ''}:\n\n`
                             + (trimmed ? text.slice(0, MAX_FILE_BYTES) : text)
                         ));
                     });
@@ -547,6 +620,83 @@ const TOOLS = [
                         return;
                     }
                     resolve(ok(`Wrote ${Buffer.byteLength(input.content)} bytes to ${input.path}.`));
+                });
+            });
+        },
+    },
+
+    {
+        name: 'edit_file',
+        title: 'Edit a remote file',
+        readOnly: false,
+        description:
+            'Replace one passage of a text file on a session\'s server over SFTP, leaving the rest as it '
+            + 'is. Prefer this to write_file for a change to a file that exists: it is smaller to review '
+            + 'and cannot discard lines you did not see. `old` must match the file exactly, whitespace '
+            + 'included, and exactly once unless `all` is set. Line endings need not match: the file '
+            + 'keeps its own. Read the file first.',
+        // The tool-call event carries `path`, `old` and `new` as they are, so
+        // a card or a row can draw the change as a diff.
+        shape: {
+            session: z.string().optional().describe('Session id. Defaults to the session in front of the user.'),
+            path: z.string().describe('Absolute path of the file.'),
+            old: z.string().min(1).describe('The exact text to replace.'),
+            new: z.string().describe('What it becomes. Empty to delete the passage.'),
+            all: z.boolean().optional().describe('Replace every occurrence rather than requiring exactly one.'),
+        },
+        handler: async (input, ctx) => {
+            const resolved = resolveSession(input, ctx);
+            if (resolved.error) return fail(resolved.error);
+
+            return viaSftp(resolved.sessionId, (handle, resolve) => {
+                handle.stat(input.path, (statError, attrs) => {
+                    if (statError) {
+                        resolve(fail(`Could not read ${input.path}: ${statError.message}`));
+                        return;
+                    }
+                    if (attrs.size > MAX_FILE_BYTES * 8) {
+                        resolve(fail(
+                            `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to edit in `
+                            + 'place. Use run_command with sed.'
+                        ));
+                        return;
+                    }
+
+                    handle.readFile(input.path, (readError, data) => {
+                        if (readError) {
+                            resolve(fail(`Could not read ${input.path}: ${readError.message}`));
+                            return;
+                        }
+
+                        // Written back as UTF-8, so a file that is not UTF-8
+                        // would come back with bytes changed that nobody
+                        // asked to change. Refused rather than mangled.
+                        const text = data.toString('utf8');
+                        if (fileText.looksBinary(data) || !Buffer.from(text, 'utf8').equals(data)) {
+                            resolve(fail(
+                                `${input.path} is not UTF-8 text, so editing it here would change bytes outside `
+                                + 'the passage. Use run_command with sed instead.'
+                            ));
+                            return;
+                        }
+
+                        const applied = fileText.applyEdit(text, input.old, input.new, { all: Boolean(input.all) });
+                        if (applied.error) {
+                            resolve(fail(`${input.path} was not changed. ${applied.error}`));
+                            return;
+                        }
+
+                        handle.writeFile(input.path, applied.content, { encoding: 'utf8' }, (writeError) => {
+                            if (writeError) {
+                                resolve(fail(`Could not write ${input.path}: ${writeError.message}`));
+                                return;
+                            }
+                            resolve(ok(
+                                `Replaced ${applied.replaced} occurrence${applied.replaced === 1 ? '' : 's'} `
+                                + `in ${input.path}.`
+                            ));
+                        });
+                    });
                 });
             });
         },
@@ -615,6 +765,202 @@ const TOOLS = [
             const result = await ctx.sessionAction({ action: 'disconnect', sessionId: resolved.sessionId });
             if (!result?.success) return fail(result?.message || 'That session could not be closed.');
             return ok(`Closed the session on ${resolved.info.hostName || resolved.info.address}.`);
+        },
+    },
+
+    {
+        name: 'ask_user',
+        title: 'Ask the user a question',
+        readOnly: true,
+        // The card this puts up is the question itself, so it never needs an
+        // approval card in front of it. See `isAutoApproved`.
+        asksUser: true,
+        description:
+            'Put a question to the user, with a short list of answers to pick from, and wait for the '
+            + 'answer. Use it when the next step depends on something only they can decide or know: which '
+            + 'of two hosts, whether to go ahead a particular way, a value that is not on the server. Not '
+            + 'for approval of a tool call, which the app asks for on its own. Keep the question to one or '
+            + 'two sentences and the options to two to four; the user can always type something else. '
+            + 'Never use it to ask for a password, a key or a token.',
+        shape: {
+            question: z.string().min(1).max(500).describe('The question, one or two sentences.'),
+            options: z.array(z.string().min(1).max(120)).max(6).optional()
+                .describe('Answers to offer, in the order to show them. Omit for a free-text answer.'),
+        },
+        handler: async (input, ctx) => {
+            if (typeof ctx.askUser !== 'function') return fail('There is no one to ask here.');
+            const options = (input.options || [])
+                .map(option => String(option).trim())
+                .filter(Boolean)
+                .slice(0, 6);
+            const reply = await ctx.askUser({
+                question: input.question,
+                options,
+                // Present only when the call came over the tool server, whose
+                // clients stop waiting after seconds rather than minutes. The
+                // question outlives that: see `requestQuestion`.
+                signal: ctx.signal,
+            });
+            // Not an error: the question is still on screen and the answer
+            // will come as the user's next message. The text says what to do.
+            if (reply.parked) return ok(reply.message);
+            if (!reply.answered) return fail(reply.message || 'The user did not answer.');
+            return ok({ answer: reply.answer, chosen: reply.chosen || undefined });
+        },
+    },
+
+    /* -------------------------------------------------------------- *
+     * The snippet library
+     *
+     * A spec reached the model only when the user remembered to attach it,
+     * so a runbook written for exactly this job sat unread. These let the
+     * model find it, and keep a command or a procedure that worked.
+     * -------------------------------------------------------------- */
+
+    {
+        name: 'list_snippets',
+        title: 'List snippets',
+        readOnly: true,
+        description:
+            'List the user\'s snippets: saved commands, packages of commands run as one series, and '
+            + 'specs. A spec is a document the user wrote for you, such as a runbook, a checklist or house '
+            + 'rules. Check for one before starting a task the user may have written a procedure for. '
+            + 'Returns names and ids; use read_snippet for the text.',
+        shape: {
+            query: z.string().optional().describe('Filter by name, description or tag. Omit to list everything.'),
+            kind: z.enum(SNIPPET_KINDS).optional().describe('Only this kind.'),
+            limit: z.number().int().min(1).max(500).optional().describe('Maximum snippets to return. Defaults to 200.'),
+        },
+        handler: async (input) => {
+            const needle = String(input.query || '').trim().toLowerCase();
+            const found = store.getSnippets()
+                .filter(snippet => !input.kind || snippet.kind === input.kind)
+                .filter(snippet => !needle || [snippet.name, snippet.description, ...(snippet.tags || [])]
+                    .join(' ').toLowerCase().includes(needle));
+            const limit = input.limit || 200;
+            return ok({
+                total: found.length,
+                returned: Math.min(found.length, limit),
+                snippets: found.slice(0, limit).map(publicSnippet),
+            });
+        },
+    },
+
+    {
+        name: 'read_snippet',
+        title: 'Read a snippet',
+        readOnly: true,
+        description:
+            'Read one snippet by id: the command text, the steps of a package, or the whole text of a '
+            + 'spec. A spec is the user\'s own instructions; follow it. A command is something the user '
+            + 'keeps, not something that has run. {{name}} in a command is a field the user fills in when '
+            + 'they use it from the terminal; replace it yourself before running one.',
+        shape: {
+            id: z.string().describe('The snippet id, from list_snippets.'),
+        },
+        handler: async (input) => {
+            const library = store.getSnippets();
+            const snippet = library.find(entry => entry.id === input.id);
+            if (!snippet) {
+                return fail(`There is no snippet with the id "${input.id}". Call list_snippets for the current list.`);
+            }
+
+            // A package is read as what it sends, with any step whose
+            // snippet has since gone named rather than silently dropped.
+            const composed = snippet.kind === 'package' ? snippetConfig.composeSnippet(snippet, library) : null;
+            const text = composed ? composed.text : snippet.command;
+            const fields = snippet.kind === 'spec' ? [] : snippetConfig.placeholdersIn(text);
+
+            return ok({
+                ...publicSnippet(snippet),
+                text,
+                steps: composed
+                    ? composed.steps.map(step => ({ name: step.name || undefined, command: step.command }))
+                    : undefined,
+                chain: snippet.kind === 'package' ? snippet.chain : undefined,
+                missingSteps: composed?.missing?.length ? composed.missing : undefined,
+                fields: fields.length ? fields : undefined,
+                runImmediately: snippet.runImmediately || undefined,
+            });
+        },
+    },
+
+    {
+        name: 'save_snippet',
+        title: 'Save a snippet',
+        readOnly: false,
+        description:
+            'Create or update one of the user\'s snippets: a command worth keeping, a package of commands '
+            + 'run as one series, or a spec, which is a document such as a runbook or a procedure you '
+            + 'worked out. Commands and packages are what the user sends from the Snippets button of a '
+            + 'terminal; {{name}} in the text becomes a field they fill in first. Give an id to update one; '
+            + 'omit it to create. Save a procedure as a spec once it has worked, so it can be found next '
+            + 'time. Never put a password, a key or a token in a snippet: the library is synced and backed up.',
+        shape: {
+            id: z.string().optional().describe('The id of the snippet to update. Omit to create a new one.'),
+            name: z.string().min(1).max(snippetConfig.MAX_NAME_LENGTH).optional()
+                .describe('The name. Required when creating.'),
+            kind: z.enum(SNIPPET_KINDS).optional()
+                .describe('"command" for shell text, "package" for a series of steps, "spec" for a document. '
+                    + 'Defaults to command when creating, or package when steps are given.'),
+            text: z.string().optional().describe('The command text, or the document for a spec.'),
+            steps: z.array(z.object({
+                ref: z.string().optional().describe('The id of a command snippet to run as this step.'),
+                command: z.string().optional().describe('Or the command for this step, written here.'),
+            })).min(1).max(snippetConfig.MAX_STEPS).optional()
+                .describe('For a package: its steps in order, replacing the current ones.'),
+            chain: z.boolean().optional()
+                .describe('For a package: stop at the first step that fails (joined with &&) rather than run every step.'),
+            runImmediately: z.boolean().optional()
+                .describe('Press Enter for the user as soon as they pick it, rather than leave it at the prompt.'),
+            description: z.string().max(snippetConfig.MAX_NAME_LENGTH * 4).optional()
+                .describe('One line on what it is for.'),
+            tags: z.array(z.string()).optional().describe('Tags, replacing the current set.'),
+            hostIds: z.array(z.string()).optional()
+                .describe('Ids of the saved hosts it applies to. Empty or omitted means every host.'),
+        },
+        handler: async (input, ctx) => {
+            const library = store.getSnippets();
+            const existing = input.id ? library.find(entry => entry.id === input.id) : null;
+            if (input.id && !existing) {
+                return fail(`There is no snippet with the id "${input.id}". Omit the id to create a new one.`);
+            }
+
+            const kind = input.kind || existing?.kind || (input.steps ? 'package' : 'command');
+            if (kind === 'package' && input.text !== undefined) {
+                return fail('A package is its steps: give them as steps, each a ref to a command snippet or a command.');
+            }
+            if (kind !== 'package' && (input.steps !== undefined || input.chain !== undefined)) {
+                return fail('steps and chain are for a package. Give kind "package", or the command as text.');
+            }
+            if ((input.steps || []).some(step => step.ref && step.command)) {
+                return fail('Each step is either a ref to a snippet or a command, not both.');
+            }
+            // A step that runs another snippet must run a command that exists:
+            // anything else would be a step that silently sends nothing.
+            const unknown = (input.steps || []).find(step => step.ref
+                && library.find(entry => entry.id === step.ref)?.kind !== 'command');
+            if (unknown) return fail(`There is no command snippet with the id "${unknown.ref}" to use as a step.`);
+
+            const record = snippetConfig.normalizeSnippet({
+                ...(existing || {}),
+                ...(input.name !== undefined ? { name: input.name } : {}),
+                kind,
+                ...(input.text !== undefined ? { command: input.text } : {}),
+                ...(input.steps !== undefined ? { steps: input.steps } : {}),
+                ...(input.chain !== undefined ? { chain: input.chain } : {}),
+                ...(input.runImmediately !== undefined ? { runImmediately: input.runImmediately } : {}),
+                ...(input.description !== undefined ? { description: input.description } : {}),
+                ...(input.tags !== undefined ? { tags: input.tags } : {}),
+                ...(input.hostIds !== undefined ? { hostIds: input.hostIds } : {}),
+            });
+            const problem = snippetConfig.validateSnippet(record);
+            if (problem) return fail(problem);
+
+            const saved = store.saveSnippet(record);
+            // The palettes in open windows cache the library; tell them.
+            ctx?.snippetsChanged?.();
+            return ok({ saved: existing ? 'updated' : 'created', ...publicSnippet(saved) });
         },
     },
 ];
@@ -843,10 +1189,16 @@ function isAutoApproved(toolName, input, settings) {
     // and `never ask` is exactly the setting under which that would happen.
     if (blockedReason(toolName, input, settings)) return false;
 
+    const tool = BY_NAME.get(toolName);
+
+    // A question to the user is a card already. Under "ask every time" it
+    // would otherwise be preceded by a second card asking whether it may ask,
+    // which is the same click twice and teaches nobody anything.
+    if (tool?.asksUser) return true;
+
     if (settings.approval === 'never') return true;
     if (settings.approval === 'always') return false;
 
-    const tool = BY_NAME.get(toolName);
     if (!tool) return false;
     if (tool.readOnly) return true;
 

@@ -33,9 +33,19 @@ That path returns what appeared on screen and no exit code, because a terminal d
 
 Use send_input when a prompt is already waiting for an answer, or to drive a program that is already running.
 
+To change a file, prefer edit_file over rewriting it whole: name the passage you read and what it becomes. write_file is for a new file or one you mean to replace entirely. For a long file or a big log, read the part you need with the offset and limit of read_file rather than all of it.
+
+The user may have written down how they want something done: a runbook, a checklist, house rules. They keep these as specs in their snippet library, beside the commands they reuse. Before a task they may have a procedure for, look with list_snippets and read the one that fits with read_snippet; a spec is their own instructions, so follow it.
+
+When the next step turns on a choice only the user can make, ask them with ask_user and offer the answers you see, rather than guessing or writing the question at the end of your reply and stopping. When a step needs something only the user has (a value that is on none of these servers, a decision about their own setup, a code sent to their phone), do everything up to it, ask for it with ask_user, and carry on with the answer. Doing the task with them is the job; a list of steps for them to do it themselves is the last resort, not the first.
+
 Investigate before concluding. One log line rarely identifies a fault. Check the service, its logs, its config and the resources around it before naming a cause, and say plainly when the evidence is thin.
 
 Report what happened, not what should have happened. If a command failed, give the exit code and the error. If you could not check something, say you could not. Never describe output you did not receive from a tool, and never present a command you are about to run as one you have already run.
+
+## Secrets
+
+A password, an API key or a token never goes into a command line, a file you write, a snippet or your reply. A command line stays in the shell's history, the terminal's scrollback and the session log; a file outlives the task; a reply is saved with the conversation. When a task needs one, have the user put it where it goes: name the file and the line, or the command for them to run, and carry on once they say it is done. Do not ask for one with ask_user either, since the answer becomes part of the conversation. If the user pastes one into the chat anyway, do not repeat it back.
 
 ## Where to stop
 
@@ -196,19 +206,18 @@ function situation({ scope, boundSessionId, sessionIds = [], hostIds = [], host,
     return lines.join('\n');
 }
 
+/**
+ * The whole prompt, ordered for the cache: what never changes first, then what
+ * changes with the settings, then what changes as the user works.
+ *
+ * The agents cache a prompt by its prefix, so a line that moves invalidates
+ * everything after it. Which sessions are open moves whenever a terminal is
+ * opened or closed, and the blocked list only when someone edits a setting, so
+ * the situation goes last and the long fixed text in front of it stays cached
+ * however the tabs change.
+ */
 function build(context) {
-    const blocks = [BASE, '', '## Right now', '', situation(context)];
-
-    // Keyed on the default rather than the mode: a pinned set holding one
-    // session has one, and reads exactly like a single pin. Two of anything
-    // does not, whichever mode put them there.
-    if (!context.boundSessionId) {
-        blocks.push(
-            '',
-            'Because no single session is pinned, be explicit in your reply about which host each '
-            + 'finding came from.'
-        );
-    }
+    const blocks = [BASE];
 
     // Said in advance so a refusal is not the way this is discovered. The list
     // is enforced on every call whatever this block says, so a change made
@@ -226,6 +235,19 @@ function build(context) {
             '',
             'If a task genuinely needs one, stop and say what you wanted to run and why, so the user can '
             + 'do it themselves or change the list in Settings.'
+        );
+    }
+
+    blocks.push('', '## Right now', '', situation(context));
+
+    // Keyed on the default rather than the mode: a pinned set holding one
+    // session has one, and reads exactly like a single pin. Two of anything
+    // does not, whichever mode put them there.
+    if (!context.boundSessionId) {
+        blocks.push(
+            '',
+            'Because no single session is pinned, be explicit in your reply about which host each '
+            + 'finding came from.'
         );
     }
 
