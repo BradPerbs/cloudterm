@@ -8,6 +8,7 @@ import Slider from './ui/Slider';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
 import Reveal from '../ui/Reveal';
+import useGroupToolCalls from '../../hooks/useGroupToolCalls';
 import { useT } from '../../i18n';
 
 /**
@@ -57,6 +58,7 @@ const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function AssistantSection() {
     const t = useT();
+    const [groupTools, setGroupTools] = useGroupToolCalls();
     const [settings, setSettings] = useState(null);
     // Which agents the main process actually has, so the picker offers what
     // exists rather than what is planned.
@@ -463,6 +465,24 @@ export default function AssistantSection() {
                         </div>
                     </div>
                 </SettingRow>
+            </SettingCard>
+
+            {/* How the chat is drawn, not how the agent behaves. Kept in this
+                window's storage rather than the agent's settings, which is why
+                it does not go through `update`; see useGroupToolCalls. */}
+            <SettingCard>
+                <SettingRow
+                    align="center"
+                    title={t('settings.assistant.groupToolCalls')}
+                    description={t('settings.assistant.groupToolCallsDesc')}
+                    control={
+                        <Toggle
+                            ariaLabel={t('settings.assistant.groupToolCalls')}
+                            checked={groupTools}
+                            onChange={setGroupTools}
+                        />
+                    }
+                />
             </SettingCard>
 
             <SettingCard>

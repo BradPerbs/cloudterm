@@ -519,6 +519,10 @@ export default {
     'settings.assistant.quickPromptsNote': 'Até 12. Clicar numa põe-na na caixa em vez de a enviar, '
         + 'para poder acrescentar algo primeiro.',
     'settings.assistant.savePrompts': 'Guardar perguntas',
+    'settings.assistant.groupToolCalls': 'Agrupar chamadas de ferramentas',
+    'settings.assistant.groupToolCallsDesc': 'Junta as chamadas de ferramentas feitas seguidas numa só '
+        + 'linha, como "8 leituras · 3 comandos", que se abre para mostrar as chamadas. Desligado, cada '
+        + 'chamada tem a sua linha.',
     'settings.assistant.steps': 'Passos por turno',
     'settings.assistant.stepsDesc': 'Quantas chamadas a ferramentas uma pergunta pode levar antes '
         + 'de o assistente parar e dar conta do trabalho. Uma execução que não está a convergir '
@@ -1090,6 +1094,76 @@ export default {
     'assistant.chats': 'Conversas',
     'assistant.chatHistory': 'Histórico de conversas',
     'assistant.working': 'A trabalhar',
+
+    /* The transcript: the working line, tool rows, groups and thoughts. */
+    'assistant.working.think': 'A pensar|A matutar|A ligar os pontos|A desenrolar o novelo|'
+        + 'A pesar as opções|A traçar o caminho|A consultar o patinho de borracha|A fazer as contas duas vezes|'
+        + 'A desenhar caixas e setas|A rabiscar num guardanapo|A pôr as ideias em ordem|'
+        + 'A preparar o próximo passo|À espera do momento eureka|A contar a partir do zero',
+    'assistant.working.shell': 'A correr comandos|A mexer na shell|A processar|A ver o resultado|'
+        + 'A domar processos|A falar com a máquina|A sussurrar ao kernel|A dar de comer aos daemons|'
+        + 'A carregar no Enter com confiança|A ver os registos a passar|A ler o código de saída|'
+        + 'A ver se é do DNS|A pedir com jeito ao systemd|A vigiar a carga',
+    'assistant.working.read': 'A ler|A vasculhar ficheiros|A peneirar|A analisar|A reconhecer o terreno|'
+        + 'A seguir o rasto|A ler o manual, desta vez|A seguir as migalhas|A sacudir o pó aos registos|'
+        + 'A ler nas entrelinhas|A ler as letras pequenas|A espreitar a configuração|A folhear o /etc',
+    'assistant.working.write': 'A escrever|A afinar|A coser as peças|A polir|A ligar os fios|A dar forma|'
+        + 'A apertar os parafusos|A medir duas vezes, cortar uma|A deixar um comentário útil|'
+        + 'A fechar os parênteses todos|A arrumar a configuração|A dar os últimos retoques|'
+        + 'A alinhar a indentação',
+    'assistant.working.connect': 'A ligar|A abrir a linha|A apertar a mão|A atravessar o túnel|'
+        + 'A bater à porta|A tocar à campainha|A pedir com jeito ao servidor|A trocar chaves|'
+        + 'A acenar ao servidor|A atravessar a internet|A procurar a porta certa|A verificar a impressão digital',
+    'assistant.finished': 'Terminado',
+    'assistant.loadingEarlier_one': 'A trazer {count} mensagem anterior…',
+    'assistant.loadingEarlier_other': 'A trazer {count} mensagens anteriores…',
+    'assistant.thought': 'Raciocínio',
+    'assistant.thoughtThinking': 'Pensamento',
+    'assistant.todoProgress': '{done}/{total} concluídas',
+    'assistant.verb.read': 'Ler',
+    'assistant.verb.list': 'Listar',
+    'assistant.verb.run': 'Executar',
+    'assistant.verb.type': 'Digitar',
+    'assistant.verb.edit': 'Editar',
+    'assistant.verb.write': 'Gravar',
+    'assistant.verb.search': 'Pesquisar',
+    'assistant.verb.fetch': 'Obter',
+    'assistant.verb.todo': 'Tarefas',
+    'assistant.verb.ask': 'Perguntar',
+    'assistant.verb.connect': 'Ligar',
+    'assistant.verb.disconnect': 'Desligar',
+    'assistant.verb.subagent': 'Subagente',
+    'assistant.verb.think': 'Pensar',
+    'assistant.verb.listHosts': 'Listar anfitriões',
+    'assistant.verb.listSessions': 'Listar sessões',
+    'assistant.verb.readTerminal': 'Ler o terminal',
+    'assistant.verb.readOutput': 'Ler o resultado',
+    'assistant.verb.listSnippets': 'Listar excertos',
+    'assistant.verb.readSnippet': 'Ler excerto',
+    'assistant.verb.saveSnippet': 'Guardar excerto',
+    'assistant.verb.watch': 'Acompanhar',
+    'assistant.verb.readChart': 'Ler gráfico',
+    'assistant.verb.stopChart': 'Parar gráfico',
+    'assistant.verb.stop': 'Parar',
+    'assistant.toolGroup.views_one': '{count} leitura',
+    'assistant.toolGroup.views_other': '{count} leituras',
+    'assistant.toolGroup.commands_one': '{count} comando',
+    'assistant.toolGroup.commands_other': '{count} comandos',
+    'assistant.toolGroup.edits_one': '{count} edição',
+    'assistant.toolGroup.edits_other': '{count} edições',
+    'assistant.toolGroup.searches_one': '{count} pesquisa',
+    'assistant.toolGroup.searches_other': '{count} pesquisas',
+    'assistant.toolGroup.connections_one': '{count} ligação',
+    'assistant.toolGroup.connections_other': '{count} ligações',
+    'assistant.toolGroup.other_one': '{count} outra',
+    'assistant.toolGroup.other_other': '{count} outras',
+    'assistant.toolGroup.running_one': '{count} em curso',
+    'assistant.toolGroup.running_other': '{count} em curso',
+    'assistant.toolGroup.failed_one': '{count} falhou',
+    'assistant.toolGroup.failed_other': '{count} falharam',
+    'assistant.toolGroup.showAll': 'Mostrar tudo',
+    'assistant.toolGroup.showLess': 'Mostrar menos',
+
     'assistant.send': 'Enviar',
     'assistant.attachImage': 'Adicionar uma imagem',
     'assistant.removeImage': 'Remover imagem',

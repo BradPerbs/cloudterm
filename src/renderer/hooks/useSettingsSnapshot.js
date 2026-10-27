@@ -23,6 +23,7 @@ const SYNCED_KEYS = [
     'titleBarLogoImage',     // useTheme, the user's own mark, as a data URL
     'titleBarLogoSide',      // useTheme, which end of the title bar it sits at
     'settings.category',     // which settings page was last open
+    'assistant.groupToolCalls', // useGroupToolCalls, whether the chat folds tool calls
 ];
 
 function readSettings() {

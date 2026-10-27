@@ -945,6 +945,112 @@ input[type="color"]::-webkit-color-swatch {
     }
 }
 
+/* Working ------------------------------------------------------------------
+   The line under a turn in progress: a thin turning ring, and a phrase with a
+   faint glint passing over it. A new phrase rolls up into the cell as the old
+   one rolls out of it; WorkingIndicator.jsx keeps both for the one roll. The
+   same ring turns on a chat's tab while it works. */
+.working-ring {
+    animation: working-ring 0.8s linear infinite;
+}
+
+@keyframes working-ring {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.working-cell {
+    display: inline-grid;
+    height: 16px;
+    line-height: 16px;
+    overflow: hidden;
+    transition: width 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.working-phrase {
+    --working-base: rgb(156 163 175);
+    --working-glint: rgb(75 85 99);
+    grid-area: 1 / 1;
+    justify-self: start;
+    white-space: nowrap;
+    background-image: linear-gradient(90deg,
+            var(--working-base) 0%,
+            var(--working-base) 44%,
+            var(--working-glint) 50%,
+            var(--working-base) 56%,
+            var(--working-base) 100%);
+    background-size: 300% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: working-glint 1.6s linear infinite;
+}
+
+/* Off the app's own muted text and a light grey, so a retinted dark palette
+   carries the line with it. */
+.dark .working-phrase {
+    --working-base: rgb(var(--app-muted));
+    --working-glint: rgb(209 213 219);
+}
+
+.working-phrase.working-in {
+    animation:
+        working-in 240ms cubic-bezier(0.2, 0, 0, 1) both,
+        working-glint 1.6s linear infinite;
+}
+
+.working-phrase.working-out {
+    animation:
+        working-out 240ms cubic-bezier(0.2, 0, 0, 1) both,
+        working-glint 1.6s linear infinite;
+}
+
+@keyframes working-in {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+}
+
+@keyframes working-out {
+    to {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+}
+
+@keyframes working-glint {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: 0% 0;
+    }
+}
+
+/* Still, rather than gone: the ring keeps its quarter and the phrase its
+   colour, so the line still says the turn is open. */
+@media (prefers-reduced-motion: reduce) {
+
+    .working-ring,
+    .working-phrase,
+    .working-phrase.working-in,
+    .working-phrase.working-out {
+        animation: none;
+    }
+
+    .working-phrase {
+        background-image: none;
+        color: var(--working-base);
+    }
+
+    .working-cell {
+        transition: none;
+    }
+}
+
 /* The entrances that used to live here, for dialogs, menus, tooltips and the
    rest, are `lib/enterMotion.js` now, asked for through the `useEnter` hook. */
 

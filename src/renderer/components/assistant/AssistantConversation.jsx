@@ -4,7 +4,6 @@ import {
     PlusSignIcon,
     ArrowUp01Icon,
     StopCircleIcon,
-    Image01Icon,
     ImageAdd01Icon,
     Note01Icon,
 } from 'hugeicons-react';
@@ -13,10 +12,13 @@ import AgentMark from './AgentMark';
 import Markdown from '../../lib/markdown';
 import useAssistant from '../../hooks/useAssistant';
 import useTypewriter from '../../hooks/useTypewriter';
+import useGroupToolCalls from '../../hooks/useGroupToolCalls';
 import { useSnippets } from '../../hooks/useSnippets';
 import { isSpec } from '../../lib/snippets';
 import SpecMenu from './SpecMenu';
-import ToolCall from './ToolCall';
+import Transcript, { Notice } from './Transcript';
+import { Thought } from './ToolGroup';
+import WorkingIndicator from './WorkingIndicator';
 import ApprovalRequest from './ApprovalRequest';
 import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
@@ -122,20 +124,6 @@ function Usage({ account, rateLimit, costUsd, hasStoredKey }) {
     );
 }
 
-function Notice({ item }) {
-    const tone = item.tone === 'error'
-        ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300'
-        : item.tone === 'warn'
-            ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300'
-            : 'bg-gray-50 dark:bg-white/[0.035] text-gray-500 dark:text-gray-400';
-
-    return (
-        <div className={`rounded-lg px-2.5 py-2 text-[11px] leading-relaxed ${tone}`}>
-            {item.text}
-        </div>
-    );
-}
-
 /**
  * The turn in progress.
  *
@@ -148,15 +136,37 @@ function Notice({ item }) {
  * changes when a chunk lands, while the block underneath it goes on growing
  * for a few frames afterwards. So each step says so, and the panel keeps the
  * bottom in view on its own terms.
+ *
+ * Typed out only in the tab in front. Behind another, the text is simply set.
  */
-function StreamingText({ text, onReveal }) {
-    const shown = useTypewriter(text);
+function StreamingText({ text, onReveal, active = true }) {
+    const shown = useTypewriter(text, active);
 
     useLayoutEffect(() => {
         onReveal();
     }, [shown, onReveal]);
 
     return <Markdown text={shown} />;
+}
+
+/**
+ * How long streamed text can sit still, in ms, before the working line comes
+ * back under it. The model often writes a sentence and then spends a long
+ * while composing the call that follows, a big file most of all, and in that
+ * gap the draft is on screen, not growing, and nothing says the turn is alive.
+ */
+const QUIET_AFTER = 1200;
+
+/** Whether `text` is there and has not changed for `QUIET_AFTER`. */
+function useQuiet(text) {
+    const [quiet, setQuiet] = useState(false);
+    useEffect(() => {
+        setQuiet(false);
+        if (!text) return undefined;
+        const timer = setTimeout(() => setQuiet(true), QUIET_AFTER);
+        return () => clearTimeout(timer);
+    }, [text]);
+    return quiet;
 }
 
 /**
@@ -350,21 +360,52 @@ export default function AssistantConversation({
      * Follow the bottom, unless the user has scrolled up to read something.
      * Yanking the view back down while they are reading output from three tool
      * calls ago is what makes a streaming panel unusable.
+     *
+     * Read from which way the view moved, not only from where it ended up.
+     * A wheel scroll is animated in small steps, and while a reply streams
+     * the bottom is pinned again every frame; judged on distance alone, each
+     * step is still "near the bottom", gets snapped back, and the user can
+     * never get away from it. So any move up lets go at once, and only
+     * coming back down to the bottom takes hold again.
      */
+    const lastTop = useRef(0);
     const onScroll = useCallback(() => {
         const node = scrollRef.current;
         if (!node) return;
-        stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 60;
+        const top = node.scrollTop;
+        const gap = node.scrollHeight - top - node.clientHeight;
+        // Content shrinking under a pinned view also lowers scrollTop, but
+        // leaves it on the bottom: that is not the user leaving.
+        if (top < lastTop.current - 1 && gap > 1) stickToBottom.current = false;
+        else if (gap < 60) stickToBottom.current = true;
+        lastTop.current = top;
+    }, []);
+
+    // The wheel and the keys say where the user is going before the view
+    // has moved at all, so a frame of streaming in between cannot undo it.
+    const onWheel = useCallback((event) => {
+        if (event.deltaY < 0) stickToBottom.current = false;
+    }, []);
+    const onScrollKey = useCallback((event) => {
+        if (['PageUp', 'ArrowUp', 'Home'].includes(event.key)) stickToBottom.current = false;
     }, []);
 
     const keepAtBottom = useCallback(() => {
         const node = scrollRef.current;
-        if (node && stickToBottom.current) node.scrollTop = node.scrollHeight;
+        if (!node || !stickToBottom.current) return;
+        node.scrollTop = node.scrollHeight;
+        lastTop.current = node.scrollTop;
     }, []);
 
+    const draftQuiet = useQuiet(assistant.draft.text);
+
+    // `busy` too, since the working line comes and goes with it, and the
+    // draft falling quiet, which is when that line comes back.
     useLayoutEffect(() => {
         keepAtBottom();
-    }, [assistant.items, assistant.draft.text, keepAtBottom]);
+    }, [assistant.items, assistant.draft.text, assistant.draft.thinking, assistant.busy, draftQuiet, keepAtBottom]);
+
+    const [groupTools] = useGroupToolCalls();
 
     /** Whether the agent answering can be sent a picture. */
     const canAttach = Boolean(settings && imageProviders.includes(settings.provider));
@@ -460,6 +501,13 @@ export default function AssistantConversation({
 
             {/* Transcript. One spacing step, owned here, not by the items.
 
+                A flex column's gap rather than `space-y-3`. That utility is a
+                sibling selector, `> :not([hidden]) ~ :not([hidden])`, which
+                the browser cannot narrow: every row, draft or working line
+                put into the column restyled everything already in it, which
+                in a long conversation is thousands of elements a time. A gap
+                is no selector at all.
+
                 `assistant-prose` opts the whole column back into text
                 selection, which the shell turns off everywhere else, and
                 repaints the highlight in the app's own colours. See the note
@@ -469,7 +517,9 @@ export default function AssistantConversation({
             <div
                 ref={scrollRef}
                 onScroll={onScroll}
-                className={`assistant-prose flex-1 min-h-0 overflow-y-auto px-3 space-y-3
+                onWheel={onWheel}
+                onKeyDown={onScrollKey}
+                className={`assistant-prose flex-1 min-h-0 overflow-y-auto px-3 flex flex-col gap-3
                     ${empty ? '' : 'py-3'}`}
             >
                 {assistant.failure && <Notice item={{ tone: 'error', text: assistant.failure }} />}
@@ -547,109 +597,36 @@ export default function AssistantConversation({
                     </div>
                 )}
 
-                {assistant.items.map((item) => {
-                    if (item.kind === 'user') {
-                        return (
-                            <div key={item.id} className="flex justify-end">
-                                <div className="assistant-bubble max-w-[88%] px-3 py-2 rounded-2xl rounded-br-md
-                                    bg-gray-900 dark:bg-white text-white dark:text-black
-                                    text-[13px] leading-relaxed whitespace-pre-wrap break-words">
-                                    {/* The pictures, or a chip naming each one for a
-                                        message read back from disk, which keeps the
-                                        name and not the bytes. */}
-                                    {/* The documents that went with it, by
-                                        name. The text is in the library, and
-                                        a bubble holding a runbook would be
-                                        the whole panel. */}
-                                    {item.specs?.length > 0 && (
-                                        <div className={`flex flex-wrap gap-1.5 ${item.text || item.images?.length ? 'mb-1.5' : ''}`}>
-                                            {item.specs.map((spec, index) => (
-                                                <span
-                                                    key={spec.id || index}
-                                                    title={t('assistant.spec')}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
-                                                        text-xs bg-white/15 dark:bg-black/10"
-                                                >
-                                                    <Note01Icon size={12} strokeWidth={2} />
-                                                    {spec.name || t('assistant.spec')}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {item.images?.length > 0 && (
-                                        <div className={`flex flex-wrap gap-1.5 ${item.text ? 'mb-1.5' : ''}`}>
-                                            {item.images.map((image, index) => (image.data ? (
-                                                <img
-                                                    key={index}
-                                                    src={`data:${image.mediaType};base64,${image.data}`}
-                                                    alt={image.name}
-                                                    className="max-h-40 max-w-full rounded-lg object-contain"
-                                                />
-                                            ) : (
-                                                <span
-                                                    key={index}
-                                                    title={image.name}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
-                                                        text-xs bg-white/15 dark:bg-black/10"
-                                                >
-                                                    <Image01Icon size={12} strokeWidth={2} />
-                                                    {image.name || t('assistant.image')}
-                                                </span>
-                                            )))}
-                                        </div>
-                                    )}
-                                    {item.text}
-                                </div>
-                            </div>
-                        );
-                    }
-                    if (item.kind === 'assistant') {
-                        return <Markdown key={item.id} text={item.text} />;
-                    }
-                    if (item.kind === 'tool') {
-                        // A call waiting on an answer is not here at all: it
-                        // is the card pinned above the composer, and drawing
-                        // the row as well would put the same command on
-                        // screen twice. It takes its place in the transcript
-                        // the moment it is answered.
-                        if (item.approval?.status === 'pending') return null;
-                        return <ToolCall key={item.id} item={item} />;
-                    }
-                    if (item.kind === 'approval') {
-                        if (item.status === 'pending') return null;
-                        return (
-                            <ApprovalRequest
-                                key={item.id}
-                                group={{ key: item.id, items: [item], queued: [] }}
-                                onRespond={assistant.respond}
-                            />
-                        );
-                    }
-                    return <Notice key={item.id} item={item} />;
-                })}
+                {/* Everything said so far. Its own component, so the composer
+                    below and the draft streaming in under it never draw it
+                    again; see Transcript. Keyed by the conversation, so one
+                    opened from the history starts on its newest rows. */}
+                <Transcript
+                    key={assistant.conversationId || 'new'}
+                    items={assistant.items}
+                    onRespond={assistant.respond}
+                    onLayout={keepAtBottom}
+                    groupTools={groupTools}
+                />
 
                 {/* The turn in progress. Replaced by a finished block the
-                    moment the model closes it, so both are never shown. */}
+                    moment the model closes it, so both are never shown. The
+                    thinking is shown open while it arrives, then folds into
+                    a row of its own once the turn moves on. */}
+                {assistant.busy && assistant.draft.thinking.trim() && !assistant.draft.text && (
+                    <Thought item={{ text: '', thinking: assistant.draft.thinking }} live />
+                )}
                 {assistant.draft.text && (
-                    <StreamingText text={assistant.draft.text} onReveal={keepAtBottom} />
+                    <StreamingText text={assistant.draft.text} onReveal={keepAtBottom} active={active} />
                 )}
 
                 {/* Not while a question is standing: the turn is still open, so
                     `busy` is true, but nothing is happening and the thing to
-                    look at is the card below. */}
-                {assistant.busy && !assistant.draft.text && asking.length === 0 && (
-                    <div className="flex items-center gap-2 h-8 px-2.5 text-[11px]
-                        text-gray-500 dark:text-gray-500">
-                        <span className="flex gap-1" aria-hidden="true">
-                            <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
-                                style={{ animationDelay: '0ms' }} />
-                            <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
-                                style={{ animationDelay: '150ms' }} />
-                            <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
-                                style={{ animationDelay: '300ms' }} />
-                        </span>
-                        {t('assistant.working')}
-                    </div>
+                    look at is the card below. Not while words are arriving
+                    either, since they say it well enough, but back as soon as
+                    they stop and the turn has not. */}
+                {assistant.busy && asking.length === 0 && (!assistant.draft.text || draftQuiet) && (
+                    <WorkingIndicator items={assistant.items} />
                 )}
             </div>
 
