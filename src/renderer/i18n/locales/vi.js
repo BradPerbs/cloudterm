@@ -279,6 +279,8 @@ export default {
     'settings.nav.account': 'Tài khoản',
     'settings.nav.backup': 'Sao lưu',
     'settings.nav.about': 'Giới thiệu',
+    'settings.search': 'Tìm trong cài đặt',
+    'settings.search.empty': 'Không có mục nào trên trang này khớp với “{query}”.',
 
     /* ---- Settings: General ---- */
     'settings.general.title': 'Chung',

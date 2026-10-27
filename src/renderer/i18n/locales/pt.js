@@ -291,6 +291,8 @@ export default {
     'settings.nav.account': 'Conta',
     'settings.nav.backup': 'Cópia de segurança',
     'settings.nav.about': 'Acerca',
+    'settings.search': 'Pesquisar definições',
+    'settings.search.empty': 'Nada nesta página corresponde a “{query}”.',
 
     /* ---- Settings: General ---- */
     'settings.general.title': 'Geral',

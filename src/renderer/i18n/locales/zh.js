@@ -273,6 +273,8 @@ export default {
     'settings.nav.account': '账户',
     'settings.nav.backup': '备份',
     'settings.nav.about': '关于',
+    'settings.search': '搜索设置',
+    'settings.search.empty': '此页面上没有与“{query}”匹配的设置。',
 
     /* ---- Settings: General ---- */
     'settings.general.title': '通用',

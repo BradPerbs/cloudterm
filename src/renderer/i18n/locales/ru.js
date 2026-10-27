@@ -306,6 +306,8 @@ export default {
     'settings.nav.account': 'Учётная запись',
     'settings.nav.backup': 'Резервные копии',
     'settings.nav.about': 'О программе',
+    'settings.search': 'Поиск настроек',
+    'settings.search.empty': 'На этой странице нет ничего по запросу «{query}».',
 
     /* ---- Settings: General ---- */
     'settings.general.title': 'Общие',

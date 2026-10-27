@@ -93,6 +93,30 @@ select,
     background-color: rgb(15 23 42 / 0.22);
 }
 
+/* Settings search; see lib/settings-search.js. A block that does not match is
+   hidden whatever display its own utilities give it, and the first row left in
+   a card loses the rule and spacing it only has to keep it apart from the row
+   above, which is hidden. The matches are marked in amber, drawn without
+   touching the DOM. */
+[data-search-miss] {
+    display: none !important;
+}
+
+[data-search-first] {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top-width: 0 !important;
+}
+
+::highlight(settings-search) {
+    background-color: rgb(253 230 138 / 0.7);
+    color: inherit;
+}
+
+:root.dark ::highlight(settings-search) {
+    background-color: rgb(251 191 36 / 0.25);
+}
+
 /* Icons and logos should not tear off as drag ghosts. */
 img,
 svg {

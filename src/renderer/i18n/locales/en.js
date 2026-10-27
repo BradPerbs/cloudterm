@@ -325,6 +325,8 @@ export default {
     'settings.nav.account': 'Account',
     'settings.nav.backup': 'Backup',
     'settings.nav.about': 'About',
+    'settings.search': 'Search settings',
+    'settings.search.empty': 'Nothing on this page matches “{query}”.',
 
     /* ---------------------------------------------------------------- *
      * Settings: General
