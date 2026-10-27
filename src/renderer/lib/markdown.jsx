@@ -16,6 +16,7 @@
  * second copy of it living in this file would be the worse trade.
  */
 
+import { memo } from 'react';
 import CopyButton from '../components/ui/CopyButton';
 
 const FENCE = /^```([\w+-]*)\s*$/;
@@ -34,11 +35,55 @@ const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/;
  */
 const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 
-/** Inline spans: code first, so nothing inside backticks is styled further. */
-function inline(text, keyPrefix) {
+/**
+ * What a bare URL ends on. Prose puts a full stop or a closing bracket straight
+ * after a link far more often than a URL ends in one, so those are left out.
+ */
+const URL_TAIL = /[.,;:!?'")\]]+$/;
+
+/**
+ * A link, opened in the browser rather than in the app.
+ *
+ * The click goes through main, which lets only http and https out: the text is
+ * model output, and a `file:` or `ms-msdt:` link in it is not to be followed.
+ * Only those two are ever made into links here in the first place. The href
+ * stays so the address shows on hover, as a link's does anywhere.
+ */
+function Link({ href, children }) {
+    const open = (event) => {
+        event.preventDefault();
+        window.api?.links?.open(href);
+    };
+
+    return (
+        <a
+            href={href}
+            title={href}
+            onClick={open}
+            // A middle click would otherwise ask for a new window, which the
+            // app refuses for anything but https.
+            onAuxClick={(event) => {
+                if (event.button === 1) open(event);
+            }}
+            className="underline underline-offset-2 decoration-gray-400 dark:decoration-gray-500
+                hover:decoration-current text-gray-900 dark:text-white [overflow-wrap:anywhere] cursor-pointer"
+        >
+            {children}
+        </a>
+    );
+}
+
+/**
+ * Inline spans: code first, so nothing inside backticks is styled further.
+ *
+ * `links` is off inside a link's own label, where an address is just its
+ * words: a link inside a link is not something a page can hold.
+ */
+function inline(text, keyPrefix, links = true) {
     const nodes = [];
-    // Code, bold, then italic. Ordered so `**` is never mistaken for two `*`.
-    const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)/g;
+    // Code, links, bold, then italic. Ordered so `**` is never mistaken for
+    // two `*`, and so a URL with an underscore in it stays one URL.
+    const pattern = /(`[^`]+`)|(\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))|(https?:\/\/[^\s<>`]+)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)/g;
     let last = 0;
     let match;
     let index = 0;
@@ -47,10 +92,21 @@ function inline(text, keyPrefix) {
         if (match.index > last) {
             nodes.push(text.slice(last, match.index));
         }
-        const token = match[0];
+        let token = match[0];
         const key = `${keyPrefix}-i${index++}`;
 
-        if (token.startsWith('`')) {
+        if ((match[2] || match[3]) && !links) {
+            nodes.push(token);
+        } else if (match[2]) {
+            const split = token.indexOf('](');
+            // The label is read again, so `[**docs**](...)` keeps its bold.
+            nodes.push(<Link key={key} href={token.slice(split + 2, -1)}>{inline(token.slice(1, split), key, false)}</Link>);
+        } else if (match[3]) {
+            // The tail goes back to the text, and the scan resumes after it.
+            const tail = token.match(URL_TAIL)?.[0] || '';
+            token = token.slice(0, token.length - tail.length);
+            nodes.push(<Link key={key} href={token}>{token}</Link>);
+        } else if (token.startsWith('`')) {
             nodes.push(
                 <code
                     key={key}
@@ -60,11 +116,13 @@ function inline(text, keyPrefix) {
                 </code>
             );
         } else if (token.startsWith('**') || token.startsWith('__')) {
-            nodes.push(<strong key={key} className="font-semibold">{token.slice(2, -2)}</strong>);
+            // Read again inside, so a link in bold is still a link.
+            nodes.push(<strong key={key} className="font-semibold">{inline(token.slice(2, -2), key, links)}</strong>);
         } else {
-            nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
+            nodes.push(<em key={key}>{inline(token.slice(1, -1), key, links)}</em>);
         }
         last = match.index + token.length;
+        pattern.lastIndex = last;
     }
 
     if (last < text.length) nodes.push(text.slice(last));
@@ -200,39 +258,49 @@ function Table({ header, rows, align }) {
     );
 }
 
-/** Group consecutive list lines so a list renders as one element. */
-function flushList(items, ordered, key) {
-    if (items.length === 0) return null;
+/** A list as one element, however many lines it was written on. */
+function List({ items, ordered, prefix }) {
     const className = '[&:not(:first-child)]:mt-2 pl-5 space-y-1 ' + (ordered ? 'list-decimal' : 'list-disc');
     const children = items.map((item, index) => (
-        <li key={`${key}-li${index}`} className="pl-0.5">{inline(item, `${key}-li${index}`)}</li>
+        <li key={`${prefix}-li${index}`} className="pl-0.5">{inline(item, `${prefix}-li${index}`)}</li>
     ));
     return ordered
-        ? <ol key={key} className={className}>{children}</ol>
-        : <ul key={key} className={className}>{children}</ul>;
+        ? <ol className={className}>{children}</ol>
+        : <ul className={className}>{children}</ul>;
 }
 
-export default function Markdown({ text = '' }) {
+/**
+ * The text as a list of blocks, each with a signature of what it holds.
+ *
+ * Kept apart from the drawing so a reply that is still streaming in can be
+ * drawn block by block: every frame adds a few letters to the last block and
+ * none to the others, and a block whose signature has not moved is not drawn
+ * again. Parsing is a pass over the lines, which is cheap; building the
+ * elements for every paragraph of a long reply sixty times a second was not.
+ *
+ * A code block says whether its fence was closed. One that was not is a reply
+ * still arriving, or one cut off: a code block draws the same either way, but
+ * anything drawn from a fence's contents (a chart, say) should wait for the
+ * end of it.
+ */
+export function parse(text) {
     const lines = String(text).split('\n');
     const blocks = [];
 
     let listItems = [];
     let listOrdered = false;
     let paragraph = [];
-    let key = 0;
 
     const closeList = () => {
-        const node = flushList(listItems, listOrdered, `l${key++}`);
-        if (node) blocks.push(node);
+        if (listItems.length === 0) return;
+        blocks.push({ kind: 'list', ordered: listOrdered, items: listItems, sig: `${listOrdered}\u0000${listItems.join('\u0000')}` });
         listItems = [];
     };
 
     const closeParagraph = () => {
         if (paragraph.length === 0) return;
         const body = paragraph.join(' ');
-        blocks.push(
-            <p key={`p${key++}`} className="[&:not(:first-child)]:mt-2 break-words">{inline(body, `p${key}`)}</p>
-        );
+        blocks.push({ kind: 'p', text: body, sig: body });
         paragraph = [];
     };
 
@@ -250,7 +318,9 @@ export default function Markdown({ text = '' }) {
                 collected.push(lines[index]);
                 index += 1;
             }
-            blocks.push(<CodeBlock key={`c${key++}`} code={collected.join('\n')} language={language} />);
+            const code = collected.join('\n');
+            const closed = index < lines.length;
+            blocks.push({ kind: 'code', code, language, closed, sig: `${language}\u0000${closed}\u0000${code}` });
             continue;
         }
 
@@ -272,6 +342,7 @@ export default function Markdown({ text = '' }) {
                 closeList();
 
                 const rows = [];
+                const start = index;
                 index += 2;
                 // Runs to the blank line that ends the block, or to the first
                 // line with no pipe in it: the assistant writes a sentence
@@ -281,16 +352,14 @@ export default function Markdown({ text = '' }) {
                     rows.push(fitRow(splitCells(lines[index]), header.length));
                     index += 1;
                 }
+                blocks.push({
+                    kind: 'table',
+                    header,
+                    rows,
+                    align: rule.map(alignmentOf),
+                    sig: lines.slice(start, index).join('\n'),
+                });
                 index -= 1;
-
-                blocks.push(
-                    <Table
-                        key={`t${key++}`}
-                        header={header}
-                        rows={rows}
-                        align={rule.map(alignmentOf)}
-                    />
-                );
                 continue;
             }
         }
@@ -299,14 +368,7 @@ export default function Markdown({ text = '' }) {
         if (heading) {
             closeParagraph();
             closeList();
-            blocks.push(
-                <div
-                    key={`h${key++}`}
-                    className="[&:not(:first-child)]:mt-3 mb-1 font-semibold text-gray-900 dark:text-white"
-                >
-                    {inline(heading[2], `h${key}`)}
-                </div>
-            );
+            blocks.push({ kind: 'h', text: heading[2], sig: heading[2] });
             continue;
         }
 
@@ -327,12 +389,57 @@ export default function Markdown({ text = '' }) {
 
     closeParagraph();
     closeList();
+    return blocks;
+}
 
-    // Sized for a side panel rather than a page: 13px at a generous line height
-    // reads better in a 400px column than the app's 14px body text.
+/**
+ * One block, drawn again only when what it holds has changed.
+ *
+ * Where a fenced block becomes something other than code (a chart from a
+ * ```chart fence, for one) is the `code` case here, keyed on the language.
+ */
+const Block = memo(function Block({ block, prefix }) {
+    switch (block.kind) {
+        case 'code':
+            return <CodeBlock code={block.code} language={block.language} />;
+        case 'table':
+            return <Table header={block.header} rows={block.rows} align={block.align} />;
+        case 'h':
+            return (
+                <div className="[&:not(:first-child)]:mt-3 mb-1 font-semibold text-gray-900 dark:text-white">
+                    {inline(block.text, prefix)}
+                </div>
+            );
+        case 'list':
+            return <List items={block.items} ordered={block.ordered} prefix={prefix} />;
+        default:
+            return <p className="[&:not(:first-child)]:mt-2 break-words">{inline(block.text, prefix)}</p>;
+    }
+}, (previous, next) => previous.block.sig === next.block.sig
+    && previous.block.kind === next.block.kind
+    && previous.prefix === next.prefix);
+
+/**
+ * Sized for a side panel rather than a page: 13px at a generous line height
+ * reads better in a 400px column than the app's 14px body text. A thought,
+ * which is read less closely, passes a smaller, quieter one.
+ */
+const BODY = 'text-[13px] leading-[1.65] text-gray-700 dark:text-gray-200';
+
+function Markdown({ text = '', className = BODY }) {
+    const blocks = parse(text);
+
     return (
-        <div className="text-[13px] leading-[1.65] text-gray-700 dark:text-gray-200">
-            {blocks}
+        <div className={className}>
+            {blocks.map((block, index) => (
+                <Block key={`${block.kind}${index}`} block={block} prefix={`b${index}`} />
+            ))}
         </div>
     );
 }
+
+/**
+ * Drawn again only when the text changes: a finished reply in a long
+ * transcript is never parsed twice.
+ */
+export default memo(Markdown);
