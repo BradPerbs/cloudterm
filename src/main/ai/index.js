@@ -609,7 +609,9 @@ function handleProviderEvent(conversation, event) {
     // actually worth keeping is the record that something tried, next to the
     // commands that did run.
     if (event.type === 'tool-blocked') {
-        const target = conversation.boundSessionId || '';
+        // A runtime's own shell runs on this computer, so it is not drawn
+        // against the server the panel happens to be following.
+        const target = event.local ? '' : (conversation.boundSessionId || '');
         const info = target ? transcript.info(target) : null;
         activity.record({
             category: 'security',

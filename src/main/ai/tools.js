@@ -873,10 +873,117 @@ function isAutoApproved(toolName, input, settings) {
     return false;
 }
 
+/* ------------------------------------------------------------------ *
+ * The runtimes' own tools
+ *
+ * Claude Code and OpenCode bring tools of their own, which act on this machine
+ * rather than on a server: a file read, a grep, a shell. They reach the panel
+ * through each runtime's permission hook rather than through the catalog
+ * above, and the approval mode has to mean the same thing there. Before this,
+ * every one of them put up a card whatever the mode said, so a session on
+ * "never" still stopped on each grep and each file read.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The runtimes' own tools that only look, across the naming conventions in
+ * use: Claude Code's `Read`, OpenCode's `read`, Grok's `read_file`. Compared
+ * in lower case with the underscores kept.
+ */
+const NATIVE_READS = new Set([
+    'read', 'read_file', 'glob', 'grep', 'ls', 'list', 'list_dir', 'list_directory',
+    'notebookread', 'bashoutput', 'get_command_or_subagent_output', 'search_tool',
+    'todowrite', 'todoread', 'todo_write', 'exitplanmode',
+    // Handing work to a subagent, or checking on one, touches nothing by
+    // itself: each call the subagent makes is asked about on its own.
+    'task', 'agent', 'taskoutput', 'taskstop',
+]);
+
+/**
+ * The runtimes' own tools that reach the web. Kept apart from the reads: a
+ * page fetched is something leaving this machine, so under the default it
+ * stops for a card even though nothing local changes.
+ */
+const NATIVE_WEB = new Set(['webfetch', 'web_fetch', 'websearch', 'web_search']);
+
+/** An MCP tool that reaches the web, by its bare name: `fetch`, `web_search`. */
+const WEB_TOOL_NAME = /(^|_)web(_|$)|(^|_)fetch(_|$)|webfetch|websearch/;
+
+/** The runtimes' own shells, which are judged by the allow list like any command. */
+const NATIVE_SHELLS = new Set(['bash', 'run_terminal_command', 'shell']);
+
+/** An MCP tool whose name says it only looks: `browser_snapshot`, `list_issues`, `get_page`. */
+const READ_NAME = /^(list|get|read|search|find|fetch|query|describe|show|check|health)[_a-z0-9]*$|^browser_(snapshot|take_screenshot|console_messages|network_requests?|find|tabs)$|^healthcheck$/;
+
+/** The bare tool of an MCP name, `mcp__server__tool`, or '' for anything else. */
+function bareMcpName(toolName) {
+    const doubled = toolName.lastIndexOf('__');
+    if (toolName.startsWith('mcp__') && doubled > 0) return toolName.slice(doubled + 2);
+    return '';
+}
+
+/** The command a runtime's own shell is about to run, or '' when there is none. */
+function nativeShellCommand(input) {
+    return String(input?.command ?? input?.cmd ?? '');
+}
+
+/**
+ * The blocked rule a runtime's own shell trips, or ''.
+ *
+ * The list applies to a shell on this machine exactly as it does to one on a
+ * server, and like there it applies whatever the approval mode says: "never
+ * ask" waves calls through, it does not unblock them.
+ *
+ * OpenCode's permission request carries the command in its metadata in some
+ * releases and only as its `pattern` in others, so the pattern is checked as
+ * well. Only here: a pattern is good enough to refuse on, not to wave through.
+ */
+function nativeBlockedReason(toolName, input, settings) {
+    if (!NATIVE_SHELLS.has(String(toolName || '').toLowerCase())) return '';
+    const pattern = Array.isArray(input?.pattern) ? input.pattern.join('\n') : String(input?.pattern ?? '');
+    const command = [nativeShellCommand(input), pattern].filter(text => text.trim()).join('\n');
+    return command ? blockedReason('run_command', { command }, settings) : '';
+}
+
+/**
+ * Whether one of the runtime's own tools can go ahead without asking.
+ *
+ * Nothing waits under "never", everything waits under "always", and under the
+ * default a read runs and a change stops, a web call stops, and the runtime's
+ * shell is judged by the same allow list as a command on a server. An MCP tool
+ * is a read when its name says so.
+ *
+ * A name this does not recognise is a change, and a change asks. That is the
+ * case that matters: a runtime grows a tool, nobody revisits this, and the safe
+ * answer is the one that puts a card in front of a person.
+ */
+function nativeAutoApproved(toolName, input, settings) {
+    // As in `isAutoApproved`: refused is never "run it", whatever the mode.
+    if (nativeBlockedReason(toolName, input, settings)) return false;
+
+    if (settings.approval === 'never') return true;
+    if (settings.approval === 'always') return false;
+
+    const name = String(toolName || '').toLowerCase();
+    if (NATIVE_WEB.has(name)) return false;
+    if (NATIVE_READS.has(name)) return true;
+    if (NATIVE_SHELLS.has(name)) {
+        return isAutoApproved('run_command', { command: nativeShellCommand(input) }, settings);
+    }
+
+    const bare = bareMcpName(String(toolName || '')).toLowerCase();
+    if (bare) {
+        if (WEB_TOOL_NAME.test(bare)) return false;
+        return READ_NAME.test(bare);
+    }
+    return false;
+}
+
 module.exports = {
     TOOLS,
     BY_NAME,
     isAutoApproved,
+    nativeAutoApproved,
+    nativeBlockedReason,
     blockedReason,
     blockedMessage,
     resolveSession,

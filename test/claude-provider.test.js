@@ -194,7 +194,72 @@ async function run() {
     assert.strictEqual(provider.questionAnswers(asked, null), null);
     assert.strictEqual(provider.questionAnswers(asked, { 'Which region?': 3 }), null);
 
+    await nativeVerdictTests();
+
     console.log('claude-provider tests passed');
+}
+
+/**
+ * The approval mode on the CLI's own tools.
+ *
+ * With the local tools on, Yolo used to put up a card for every Read and every
+ * Grep, and the blocked list was never read for the CLI's own shell. The mode
+ * now means the same thing there as it does for the app's tools.
+ */
+async function nativeVerdictTests() {
+    const base = {
+        allowLocalTools: true,
+        autoApproveCommands: ['ls', 'git status'],
+        blockedCommands: ['rm -rf'],
+    };
+    const never = { ...base, approval: 'never' };
+    const always = { ...base, approval: 'always' };
+    const writes = { ...base, approval: 'writes' };
+
+    const cards = [];
+    const events = [];
+    const ask = (answer) => async (request) => {
+        cards.push(request.toolName);
+        return { approved: answer, message: answer ? '' : 'No.' };
+    };
+    const verdict = (toolName, toolInput, current, answer = true) => provider.nativeVerdict({
+        toolName, toolInput, current, requestApproval: ask(answer), onEvent: event => events.push(event),
+    });
+
+    // Yolo waits for nothing.
+    assert.deepStrictEqual(await verdict('Read', { file_path: 'a.js' }, never), {
+        behavior: 'allow', updatedInput: { file_path: 'a.js' },
+    });
+    assert.strictEqual((await verdict('Edit', {}, never)).behavior, 'allow');
+    assert.strictEqual((await verdict('Bash', { command: 'npm test' }, never)).behavior, 'allow');
+    assert.deepStrictEqual(cards, [], 'no card under "never"');
+
+    // The default: a read runs, a change asks, the shell goes by the allow list.
+    assert.strictEqual((await verdict('Grep', { pattern: 'x' }, writes)).behavior, 'allow');
+    assert.strictEqual((await verdict('Bash', { command: 'git status' }, writes)).behavior, 'allow');
+    assert.deepStrictEqual(cards, []);
+    assert.strictEqual((await verdict('Edit', {}, writes)).behavior, 'allow', 'approved on the card');
+    assert.strictEqual((await verdict('Bash', { command: 'git push' }, writes, false)).behavior, 'deny');
+    assert.strictEqual((await verdict('WebFetch', { url: 'https://example.com' }, writes)).behavior, 'allow');
+    assert.deepStrictEqual(cards, ['Edit', 'Bash', 'WebFetch'], 'a change, an unlisted command and a web call ask');
+
+    // "Always" asks for a read too.
+    cards.length = 0;
+    await verdict('Read', {}, always);
+    assert.deepStrictEqual(cards, ['Read']);
+
+    // The blocked list reaches the CLI's own shell, and Yolo does not open it.
+    cards.length = 0;
+    const blocked = await verdict('Bash', { command: 'sudo rm -rf /srv' }, never);
+    assert.strictEqual(blocked.behavior, 'deny');
+    assert.match(blocked.message, /blocked command list/);
+    assert.deepStrictEqual(cards, [], 'refused without a card');
+    assert.deepStrictEqual(events, [{ type: 'tool-blocked', name: 'Bash', rule: 'rm -rf', local: true }]);
+
+    // With the local tools off, only the tools that do not touch this machine.
+    const off = { ...never, allowLocalTools: false };
+    assert.strictEqual((await verdict('Read', {}, off)).behavior, 'deny');
+    assert.strictEqual((await verdict('WebSearch', { query: 'x' }, off)).behavior, 'allow');
 }
 
 run().catch((error) => {

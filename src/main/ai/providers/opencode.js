@@ -302,6 +302,39 @@ async function loopbackFetch(request) {
     });
 }
 
+/**
+ * Whether one of OpenCode's own tools may run, asked when it raises a
+ * permission and the local-tools switch is on.
+ *
+ * The blocked list first, which applies to OpenCode's shell exactly as to
+ * ours whatever the approval mode says. Then the approval mode, which applies
+ * to OpenCode's own tools as it does to ours: under "never" nothing waits,
+ * and a read under the default is not worth a card. Without this every grep
+ * and every file read stopped the run, whatever the user had chosen.
+ */
+async function localApproved({ permission, current, requestApproval, onEvent }) {
+    const input = {
+        ...(permission.metadata || {}),
+        ...(permission.pattern ? { pattern: permission.pattern } : {}),
+    };
+
+    const blocked = catalog.nativeBlockedReason(permission.type || '', input, current);
+    if (blocked) {
+        onEvent({ type: 'tool-blocked', name: permission.type, rule: blocked, local: true });
+        return false;
+    }
+
+    if (catalog.nativeAutoApproved(permission.type || '', input, current)) return true;
+
+    const verdict = await requestApproval({
+        toolName: permission.type || permission.title || 'tool',
+        name: permission.type || 'tool',
+        input,
+        local: true,
+    });
+    return Boolean(verdict.approved);
+}
+
 function dataOf(response) {
     return response && Object.prototype.hasOwnProperty.call(response, 'data')
         ? response.data
@@ -518,16 +551,7 @@ async function start({
         const remote = String(permission.type || '').startsWith(`${SERVER_NAME}_`);
         let approved = remote;
         if (!remote && current.allowLocalTools) {
-            const verdict = await requestApproval({
-                toolName: permission.type || permission.title || 'tool',
-                name: permission.type || 'tool',
-                input: {
-                    ...(permission.metadata || {}),
-                    ...(permission.pattern ? { pattern: permission.pattern } : {}),
-                },
-                local: true,
-            });
-            approved = verdict.approved;
+            approved = await localApproved({ permission, current, requestApproval, onEvent });
         }
         try {
             await client.postSessionIdPermissionsPermissionId({
@@ -680,5 +704,5 @@ module.exports = {
     serverConfig,
     createTranslator,
     SERVER_NAME,
-    _test: { launchServer, closeProcess, loopbackFetch },
+    _test: { launchServer, closeProcess, loopbackFetch, localApproved },
 };

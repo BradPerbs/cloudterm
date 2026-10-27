@@ -459,6 +459,41 @@ function buildToolServer(sdk, toolContext, onEvent) {
     return sdk.createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools });
 }
 
+/**
+ * The answer `canUseTool` gives for one of the CLI's own tools.
+ *
+ * Refused outright with the local-tools switch off, unless it is one of the
+ * tools that do not touch this machine. Then the blocked list, which applies
+ * to the CLI's shell exactly as to ours whatever the approval mode says. Then
+ * the approval mode, which applies here as it does to ours: nothing waits
+ * under "never", and a read under the default is not worth a card. See
+ * `nativeAutoApproved` in the catalog.
+ */
+async function nativeVerdict({ toolName, toolInput, current, requestApproval, onEvent }) {
+    if (!current.allowLocalTools && !OPEN_TOOLS.has(toolName)) {
+        return {
+            behavior: 'deny',
+            message: `${toolName} acts on the user's own computer, which this assistant is not set up to do. `
+                + 'Use the remote tools to work on the servers instead.',
+        };
+    }
+
+    const blocked = catalog.nativeBlockedReason(toolName, toolInput, current);
+    if (blocked) {
+        onEvent({ type: 'tool-blocked', name: toolName, rule: blocked, local: true });
+        return { behavior: 'deny', message: catalog.blockedMessage(blocked) };
+    }
+
+    if (catalog.nativeAutoApproved(toolName, toolInput, current)) {
+        return { behavior: 'allow', updatedInput: toolInput };
+    }
+
+    const verdict = await requestApproval({ toolName, name: toolName, input: toolInput, local: true });
+    return verdict.approved
+        ? { behavior: 'allow', updatedInput: toolInput }
+        : { behavior: 'deny', message: verdict.message || 'The user declined that.' };
+}
+
 /** `mcp__remote__run_command` back to `run_command`, or null if not ours. */
 function localName(toolName) {
     const prefix = `mcp__${SERVER_NAME}__`;
@@ -624,17 +659,7 @@ async function start({
             }
 
             if (!local) {
-                if (!current.allowLocalTools && !OPEN_TOOLS.has(toolName)) {
-                    return {
-                        behavior: 'deny',
-                        message: `${toolName} acts on the user's own computer, which this assistant is not set up to do. `
-                            + 'Use the remote tools to work on the servers instead.',
-                    };
-                }
-                const verdict = await requestApproval({ toolName, name: toolName, input: toolInput, local: true });
-                return verdict.approved
-                    ? { behavior: 'allow', updatedInput: toolInput }
-                    : { behavior: 'deny', message: verdict.message || 'The user declined that.' };
+                return nativeVerdict({ toolName, toolInput, current, requestApproval, onEvent });
             }
 
             // Refused outright, before the approval path rather than inside
@@ -918,6 +943,7 @@ module.exports = {
     WEB_TOOLS,
     QUESTION_TOOL,
     questionAnswers,
+    nativeVerdict,
     SERVER_NAME,
     // The SDK takes image blocks in a user turn, which is the whole of what
     // "attach a screenshot" needs. Codex takes them as files instead (see its

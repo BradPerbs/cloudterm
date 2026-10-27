@@ -175,8 +175,54 @@ async function run() {
     assert.strictEqual(emitted[4].isError, false);
 
     await loopbackFetchTests();
+    await permissionTests();
 
     console.log('opencode-provider tests passed');
+}
+
+// OpenCode raised a card for every one of its own tools whatever the approval
+// mode said, and its shell was never checked against the blocked list.
+async function permissionTests() {
+    const { localApproved } = provider._test;
+    const base = { allowLocalTools: true, autoApproveCommands: ['ls'], blockedCommands: ['rm -rf'] };
+    const cards = [];
+    const events = [];
+    const decide = (permission, current, answer = true) => localApproved({
+        permission,
+        current,
+        requestApproval: async (request) => {
+            cards.push(request.name);
+            return { approved: answer };
+        },
+        onEvent: event => events.push(event),
+    });
+
+    const read = { id: 'p1', type: 'read', title: 'a.js', metadata: { filePath: 'a.js' } };
+    const edit = { id: 'p2', type: 'edit', title: 'a.js', metadata: { filePath: 'a.js' } };
+    const shell = command => ({ id: 'p3', type: 'bash', title: command, pattern: command, metadata: { command } });
+
+    assert.strictEqual(await decide(read, { ...base, approval: 'never' }), true);
+    assert.strictEqual(await decide(edit, { ...base, approval: 'never' }), true);
+    assert.deepStrictEqual(cards, [], 'Yolo puts up no card');
+
+    assert.strictEqual(await decide(read, { ...base, approval: 'writes' }), true);
+    assert.strictEqual(await decide(shell('ls -la'), { ...base, approval: 'writes' }), true);
+    assert.deepStrictEqual(cards, [], 'a read and a listed command run under the default');
+    assert.strictEqual(await decide(edit, { ...base, approval: 'writes' }, false), false);
+    assert.deepStrictEqual(cards, ['edit'], 'a change asks');
+
+    cards.length = 0;
+    assert.strictEqual(await decide(read, { ...base, approval: 'always' }), true);
+    assert.deepStrictEqual(cards, ['read'], '"always" asks for a read too');
+
+    cards.length = 0;
+    assert.strictEqual(await decide(shell('rm -rf /srv'), { ...base, approval: 'never' }), false);
+    assert.deepStrictEqual(cards, [], 'a blocked command is refused without a card');
+    assert.deepStrictEqual(events, [{ type: 'tool-blocked', name: 'bash', rule: 'rm -rf', local: true }]);
+
+    // A release that only puts the command in the pattern is still checked.
+    const patternOnly = { id: 'p4', type: 'bash', title: '', pattern: ['rm -rf /srv'], metadata: {} };
+    assert.strictEqual(await decide(patternOnly, { ...base, approval: 'never' }), false);
 }
 
 // The client talks to its server over plain http so a turn longer than
