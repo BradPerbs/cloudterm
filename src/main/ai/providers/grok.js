@@ -7,6 +7,7 @@ const { app } = require('electron');
 
 const mcpHost = require('../mcp-host');
 const engine = require('./openai-compatible');
+const { IDLE_TIMEOUT, idleTimer, countCards } = require('./idle');
 
 /**
  * The Grok provider.
@@ -45,9 +46,6 @@ const SERVER_NAME = 'remote';
 const API_URL = 'https://api.x.ai/v1';
 
 const LABEL = 'xAI';
-
-/** How long one headless run may take before it is given up on. */
-const RUN_TIMEOUT = 15 * 60 * 1000;
 
 /**
  * Grok Build's own tools, which act on this machine rather than on a server.
@@ -554,24 +552,33 @@ function runArguments({ current, sessionId, resume, directory, prompt }) {
  * it in `~/.grok/sessions`, so this survives the app being closed in a way the
  * in-process providers cannot.
  */
-function runTurn({ binary, args, directory, env, translator, onStart = () => {} }) {
+function runTurn({
+    binary, args, directory, env, translator, onStart = () => {},
+    waiting = () => false, idleTimeout = IDLE_TIMEOUT,
+}) {
     return new Promise((resolve) => {
         let child;
         let stderr = '';
         let buffer = '';
         let settled = false;
 
+        // Measured from the CLI's last word rather than from the start, and
+        // held while a card waits on the user. See `idle.js`.
+        const quiet = idleTimer({
+            timeout: idleTimeout,
+            waiting,
+            expire: () => {
+                stopProcess(child);
+                finish({ ok: false, message: 'Grok Build went quiet for half an hour, so the turn was ended.' });
+            },
+        });
+
         const finish = (outcome) => {
             if (settled) return;
             settled = true;
-            clearTimeout(timer);
+            quiet.stop();
             resolve(outcome);
         };
-
-        const timer = setTimeout(() => {
-            try { child?.kill(); } catch { /* already gone */ }
-            finish({ ok: false, message: 'Grok Build did not finish that turn in time.' });
-        }, RUN_TIMEOUT);
 
         try {
             child = spawn(binary, args, {
@@ -588,6 +595,7 @@ function runTurn({ binary, args, directory, env, translator, onStart = () => {} 
         onStart(child);
 
         child.stdout.on('data', (chunk) => {
+            quiet.rewind();
             buffer += chunk.toString('utf8');
             let index = buffer.indexOf('\n');
             while (index >= 0) {
@@ -609,6 +617,7 @@ function runTurn({ binary, args, directory, env, translator, onStart = () => {} 
         // not start, which is the one thing worth repeating when a run fails
         // without ever having said anything on the wire.
         child.stderr.on('data', (chunk) => {
+            quiet.rewind();
             stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000);
         });
 
@@ -690,7 +699,14 @@ async function start(options) {
     // Keep the workspace stable across restarts, and separate for each chat.
     const sessionId = resumeSessionId || crypto.randomUUID();
     const directory = workspace(sessionId);
-    const { tokenUrl, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    // Counted so the idle limit can tell a person who has not answered yet
+    // from a CLI that has stopped.
+    const cards = countCards({ requestApproval, toolContext });
+    const { tokenUrl, release } = await mcpHost.acquire({
+        toolContext: cards.toolContext,
+        requestApproval: cards.requestApproval,
+        onEvent,
+    });
 
     try {
         writeMcpConfig(directory, tokenUrl);
@@ -748,6 +764,7 @@ async function start(options) {
             env,
             translator,
             onStart: hold,
+            waiting: cards.waiting,
         });
 
         // A stored id that this machine no longer has a session for. The
@@ -764,6 +781,7 @@ async function start(options) {
                 env,
                 translator,
                 onStart: hold,
+                waiting: cards.waiting,
             });
         }
 

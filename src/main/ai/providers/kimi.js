@@ -5,6 +5,7 @@ const spawn = require('cross-spawn');
 const { app } = require('electron');
 
 const mcpHost = require('../mcp-host');
+const { IDLE_TIMEOUT, idleTimer, countCards } = require('./idle');
 
 /**
  * The Kimi Code provider.
@@ -45,9 +46,6 @@ const mcpHost = require('../mcp-host');
 
 /** The name our tools are served under. As elsewhere: what they do, not whose. */
 const SERVER_NAME = 'remote';
-
-/** How long one headless run may take before it is given up on. */
-const RUN_TIMEOUT = 15 * 60 * 1000;
 
 /**
  * Kimi Code's own tools, which act on this machine rather than on a server.
@@ -762,24 +760,33 @@ function environment({ home }) {
  * Code keeps its sessions under the data directory, so this survives the app
  * being closed in a way the in-process providers cannot.
  */
-function runTurn({ binary, args, directory, env, translator, onStart = () => {} }) {
+function runTurn({
+    binary, args, directory, env, translator, onStart = () => {},
+    waiting = () => false, idleTimeout = IDLE_TIMEOUT,
+}) {
     return new Promise((resolve) => {
         let child;
         let stderr = '';
         let buffer = '';
         let settled = false;
 
+        // Measured from the CLI's last word rather than from the start, and
+        // held while a card waits on the user. See `idle.js`.
+        const quiet = idleTimer({
+            timeout: idleTimeout,
+            waiting,
+            expire: () => {
+                stopProcess(child);
+                finish({ ok: false, message: 'Kimi Code went quiet for half an hour, so the turn was ended.' });
+            },
+        });
+
         const finish = (outcome) => {
             if (settled) return;
             settled = true;
-            clearTimeout(timer);
+            quiet.stop();
             resolve(outcome);
         };
-
-        const timer = setTimeout(() => {
-            try { child?.kill(); } catch { /* already gone */ }
-            finish({ ok: false, message: 'Kimi Code did not finish that turn in time.' });
-        }, RUN_TIMEOUT);
 
         try {
             child = spawn(binary, args, {
@@ -796,6 +803,7 @@ function runTurn({ binary, args, directory, env, translator, onStart = () => {} 
         onStart(child);
 
         child.stdout.on('data', (chunk) => {
+            quiet.rewind();
             buffer += chunk.toString('utf8');
             let index = buffer.indexOf('\n');
             while (index >= 0) {
@@ -816,8 +824,10 @@ function runTurn({ binary, args, directory, env, translator, onStart = () => {} 
         // Kept rather than shown. This CLI puts its thinking, its tool progress
         // and the reason it could not start on stderr, and the last of those is
         // the one thing worth repeating when a run fails without ever having
-        // said anything on stdout.
+        // said anything on stdout. Its thinking and progress count as the CLI
+        // being alive, so they wind the idle timer back too.
         child.stderr.on('data', (chunk) => {
+            quiet.rewind();
             stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000);
         });
 
@@ -894,7 +904,14 @@ async function start(options) {
     }
 
     const { home, workspace } = directories();
-    const { tokenUrl, release } = await mcpHost.acquire({ toolContext, requestApproval, onEvent });
+    // Counted so the idle limit can tell a person who has not answered yet
+    // from a CLI that has stopped.
+    const cards = countCards({ requestApproval, toolContext });
+    const { tokenUrl, release } = await mcpHost.acquire({
+        toolContext: cards.toolContext,
+        requestApproval: cards.requestApproval,
+        onEvent,
+    });
 
     try {
         // Once per query. What it points at is a directory, not a copy, so it
@@ -962,6 +979,7 @@ async function start(options) {
             env,
             translator,
             onStart: hold,
+            waiting: cards.waiting,
         });
 
         // A stored id that this machine no longer has a session for. The
@@ -977,6 +995,7 @@ async function start(options) {
                 env,
                 translator,
                 onStart: hold,
+                waiting: cards.waiting,
             });
         }
 
