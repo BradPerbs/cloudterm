@@ -8,6 +8,9 @@ const { app } = require('electron');
 const mcpHost = require('../mcp-host');
 const engine = require('./openai-compatible');
 const { IDLE_TIMEOUT, idleTimer, countCards } = require('./idle');
+// Pictures staged for the turn, as files the CLI is pointed at. Shared with
+// the Codex provider, whose headless run takes them the same way.
+const { stageImages } = require('./codex');
 
 /**
  * The Grok provider.
@@ -255,9 +258,35 @@ function cachedModels({ source = grokHome() } = {}) {
                     .filter(level => EFFORTS.has(level))
                 : [],
             preferred: (info.id || id) === best,
+            images: readsImages(id, info),
         }));
 
     return rows.length > 0 ? rows : null;
+}
+
+/**
+ * Whether a model in the CLI's cache can look at a picture.
+ *
+ * The cache says so for some models, as a flag or a list of what the model
+ * takes in, and where it does that is the answer. Where it is silent, the
+ * name decides: xAI's Grok 4 family reads images and its coding models do
+ * not, and a model from anywhere else (a custom endpoint, a local server) is
+ * taken to read text only. Offering the picture button for a model that then
+ * cannot see the picture is worse than not offering it.
+ */
+function readsImages(id, info = {}) {
+    for (const key of ['supports_images', 'supports_image_input', 'supports_vision', 'vision']) {
+        if (typeof info[key] === 'boolean') return info[key];
+    }
+    for (const key of ['input_modalities', 'modalities']) {
+        if (Array.isArray(info[key])) return info[key].some(kind => /image/i.test(String(kind)));
+    }
+
+    const name = String(info.model || info.id || id || '').toLowerCase();
+    if (/vision/.test(name)) return true;
+    if (/code/.test(name)) return false;
+    const family = /^grok-(\d+)/.exec(name);
+    return Boolean(family && Number(family[1]) >= 4);
 }
 
 /**
@@ -670,6 +699,40 @@ function stopProcess(child, { platform = process.platform, spawnSyncFn = null } 
     try { child.kill(); } catch { /* already gone */ }
 }
 
+/**
+ * The prompt with staged pictures named in it.
+ *
+ * A headless run takes text, not image blocks, so pictures ride as files the
+ * run is pointed at: written out for the turn by `stageImages` (see codex),
+ * named here, removed when the turn ends. The agent opens them with its own
+ * file tools, the same way it opens anything else the prompt points at.
+ */
+function promptWithImages(text, paths = []) {
+    const body = String(text || '').trim();
+    if (!paths.length) return body;
+    return [
+        body || 'See the attached images.',
+        '',
+        'Attached images (open each file to view it):',
+        ...paths.map(file => `- ${file}`),
+    ].join('\n');
+}
+
+/**
+ * The prompt when pictures came with it and cannot be shown.
+ *
+ * Said to the model rather than dropped, so it tells the user it did not see
+ * them instead of answering a question about a screenshot as though it had.
+ */
+function promptWithUnseenImages(text, count, reason) {
+    const body = String(text || '').trim();
+    const pictures = count === 1 ? 'an image' : `${count} images`;
+    return [
+        body,
+        `(The user attached ${pictures}, which could not be shown to you: ${reason}. Tell them so.)`,
+    ].filter(Boolean).join('\n\n');
+}
+
 /** The API path, for a machine with a key and no CLI. */
 async function apiSession(options) {
     options.onEvent({
@@ -679,7 +742,7 @@ async function apiSession(options) {
         apiKeySource: 'CloudBlast',
     });
 
-    return engine.start({
+    const session = await engine.start({
         ...options,
         label: LABEL,
         prefix: 'grok',
@@ -689,6 +752,18 @@ async function apiSession(options) {
         // been read for the model list.
         model: current => current.model || 'grok-build-0.1',
     });
+
+    // The API path takes text only, and pictures are offered for Grok because
+    // the CLI reads them. A machine on this fallback says so to the model
+    // rather than losing them without a word.
+    return {
+        ...session,
+        send(text, images = []) {
+            session.send(images.length
+                ? promptWithUnseenImages(text, images.length, 'this connection to Grok takes text only')
+                : text);
+        },
+    };
 }
 
 async function start(options) {
@@ -762,12 +837,39 @@ async function start(options) {
         if (stopped) stopProcess(child);
     };
 
-    async function turn(text) {
+    /**
+     * One turn: the pictures put where the CLI can open them, the run, and
+     * the pictures taken away again.
+     *
+     * Pictures ride as files the run is pointed at: staged for the turn, named
+     * in the prompt, removed once it is over, retry included. Staged inside the
+     * run's own directory rather than the system's temp folder, so a sandbox
+     * the user set up for Grok Build that keeps reads to the working directory
+     * still lets it open them. With the local tools switched off the CLI has
+     * no way to open a file, so nothing is written and the model is told
+     * instead. The composer does not offer pictures then, so this is for a
+     * message already on its way when the switch moved.
+     */
+    async function turn(text, images = []) {
         const current = getSettings();
+        const viewable = current.allowLocalTools !== false;
+        const staged = await stageImages(viewable ? images : [], directory);
+        const message = images.length && !viewable
+            ? promptWithUnseenImages(text, images.length, 'local tools are switched off in CloudTerm, so files cannot be opened')
+            : promptWithImages(text, staged.paths);
+        const prompt = preamble ? `${preamble}\n\n---\n\n${message}` : message;
+        preamble = '';
+
+        try {
+            await run(prompt, current);
+        } finally {
+            await staged.cleanup();
+        }
+    }
+
+    async function run(prompt, current) {
         const env = environment(current);
         const translator = createTranslator(onEvent);
-        const prompt = preamble ? `${preamble}\n\n---\n\n${text}` : text;
-        preamble = '';
         stopped = false;
 
         let outcome = await runTurn({
@@ -820,8 +922,8 @@ async function start(options) {
     }
 
     return {
-        send(text) {
-            running = running.then(() => turn(text)).catch((error) => {
+        send(text, images = []) {
+            running = running.then(() => turn(text, images)).catch((error) => {
                 if (!closed) onEvent({ type: 'error', message: describeFailure(error.message) });
             });
         },
@@ -874,8 +976,8 @@ async function listModels({ settings: current = {} } = {}) {
 
     // No dial on this path. The request would carry a reasoning field the model
     // may not take, and a dial that turns a working conversation into a 400 is
-    // worse than no dial.
-    return rows.map(row => ({ ...row, effort: [] }));
+    // worse than no dial. No pictures either: this loop sends text only.
+    return rows.map(row => ({ ...row, effort: [], images: false }));
 }
 
 /** A failure, in words that say what to do about it. */
@@ -931,8 +1033,16 @@ module.exports = {
     stripServer,
     effortFor,
     describeFailure,
+    promptWithImages,
+    promptWithUnseenImages,
+    readsImages,
     LOCAL_TOOLS,
     SERVER_NAME,
     API_URL,
+    // Pictures go in as files named on the turn's prompt: see `promptWithImages`.
+    supportsImages: true,
+    // Which the CLI opens with its own Read tool, so they need the local
+    // tools switched on. See `image-gate.js`.
+    imagesNeedLocalTools: true,
     _test: { runTurn, stopProcess, workspace },
 };

@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const images = require('../src/main/ai/images');
 const claude = require('../src/main/ai/providers/claude-code');
@@ -97,13 +98,109 @@ async function run() {
         fs.rmSync(root, { recursive: true, force: true });
     }
 
-    // Claude Code and Codex take pictures, and say so. The rest do not.
+    // Claude Code and Codex take pictures, and say so. Grok Build takes them
+    // as files named on the turn's prompt. The rest do not.
     assert.strictEqual(claude.supportsImages, true);
     assert.strictEqual(codex.supportsImages, true);
-    for (const name of ['opencode', 'grok', 'kimi', 'local']) {
+    const grokBuild = require('../src/main/ai/providers/grok');
+    assert.strictEqual(grokBuild.supportsImages, true);
+    for (const name of ['opencode', 'kimi', 'local']) {
         const provider = require(`../src/main/ai/providers/${name}`);
         assert.notStrictEqual(provider.supportsImages, true, `${name} does not claim to read images`);
     }
+
+    // The turn as Grok Build receives it: pictures staged to disk and named on
+    // the prompt, since a headless run takes text rather than image blocks.
+    assert.strictEqual(grokBuild.promptWithImages('hello', []), 'hello', 'text alone stays as it was');
+    assert.strictEqual(
+        grokBuild.promptWithImages('what is this?', ['/tmp/image-1.png']),
+        'what is this?\n\nAttached images (open each file to view it):\n- /tmp/image-1.png',
+        'pictures named under the words about them'
+    );
+    assert.strictEqual(
+        grokBuild.promptWithImages('', ['/tmp/image-1.png']).split('\n')[0],
+        'See the attached images.',
+        'a picture sent on its own still carries words'
+    );
+    // A picture that cannot be shown is said, not dropped.
+    const unseen = grokBuild.promptWithUnseenImages('what is this?', 2, 'local tools are off');
+    assert.ok(unseen.startsWith('what is this?\n\n'));
+    assert.ok(/2 images, which could not be shown to you: local tools are off/.test(unseen), unseen);
+
+    // Which of Grok Build's models read pictures. The cache's own word wins;
+    // without one, the Grok 4 family does and the coding models and anything
+    // from another endpoint do not.
+    assert.strictEqual(grokBuild.readsImages('grok-4.6', {}), true);
+    assert.strictEqual(grokBuild.readsImages('grok-4-fast', { model: 'grok-4-fast-reasoning' }), true);
+    assert.strictEqual(grokBuild.readsImages('grok-code-fast-1', {}), false);
+    assert.strictEqual(grokBuild.readsImages('grok-3', {}), false);
+    assert.strictEqual(grokBuild.readsImages('my-llama', { model: 'llama-3.1-70b' }), false);
+    assert.strictEqual(grokBuild.readsImages('grok-4.6', { supports_images: false }), false, 'a flag in the cache wins');
+    assert.strictEqual(grokBuild.readsImages('my-llava', { input_modalities: ['text', 'image'] }), true);
+    assert.strictEqual(grokBuild.readsImages('grok-4.6', { input_modalities: ['text'] }), false);
+
+    const grokHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cloudterm-grok-'));
+    try {
+        fs.writeFileSync(path.join(grokHome, 'models_cache.json'), JSON.stringify({ models: {
+            'grok-4.6': { info: { id: 'grok-4.6', name: 'Grok 4.6' } },
+            'grok-code-fast-1': { info: { id: 'grok-code-fast-1', name: 'Grok Code Fast' } },
+        } }));
+        const rows = grokBuild.cachedModels({ source: grokHome });
+        assert.deepStrictEqual(rows.map(row => [row.value, row.images]), [
+            ['grok-4.6', true],
+            ['grok-code-fast-1', false],
+        ], 'each row of the menu says whether its model reads pictures');
+    } finally {
+        fs.rmSync(grokHome, { recursive: true, force: true });
+    }
+
+    // The gate main asks before it takes a picture, and the composer asks
+    // before it offers one: the runtime, then the model, then the local tools
+    // for a runtime that opens pictures as files.
+    const { imageRefusal } = require('../src/main/ai/image-gate');
+    const catalog = [
+        { value: 'grok-4.6', label: 'Grok 4.6', images: true, preferred: true },
+        { value: 'grok-code-fast-1', label: 'Grok Code Fast', images: false },
+    ];
+    assert.strictEqual(imageRefusal({ provider: claude, settings: { model: 'opus' } }), '');
+    assert.match(imageRefusal({ provider: require('../src/main/ai/providers/kimi'), settings: {} }), /cannot read images/);
+    assert.strictEqual(imageRefusal({ provider: grokBuild, settings: { model: 'grok-4.6' }, catalog }), '');
+    assert.strictEqual(imageRefusal({ provider: grokBuild, settings: { model: '' }, catalog }), '', 'the default row is the one asked');
+    assert.match(
+        imageRefusal({ provider: grokBuild, settings: { model: 'grok-code-fast-1' }, catalog }),
+        /^Grok Code Fast cannot read images/
+    );
+    assert.strictEqual(
+        imageRefusal({ provider: grokBuild, settings: { model: 'grok-9' }, catalog }),
+        '',
+        'a model the list does not name is given the runtime\'s answer'
+    );
+    assert.strictEqual(imageRefusal({ provider: grokBuild, settings: { model: 'grok-4.6' } }), '', 'nor does a list not read yet refuse');
+    assert.match(
+        imageRefusal({ provider: grokBuild, settings: { model: 'grok-4.6', allowLocalTools: false }, catalog }),
+        /local tools are switched off/
+    );
+    assert.strictEqual(
+        imageRefusal({ provider: codex, settings: { allowLocalTools: false } }),
+        '',
+        'a runtime that takes pictures directly does not need the local tools'
+    );
+
+    // The composer's copy of the same gate, which is ESM for the bundler.
+    const { canReadImages } = await import(pathToFileURL(
+        path.join(__dirname, '..', 'src', 'renderer', 'lib', 'image-gate.js')
+    ).href);
+    const known = {
+        imageProviders: ['claude', 'codex', 'grok'],
+        localImageProviders: ['grok'],
+        catalogs: { grok: catalog },
+    };
+    assert.strictEqual(canReadImages({ provider: 'claude', model: '' }, known), true);
+    assert.strictEqual(canReadImages({ provider: 'kimi', model: '' }, known), false);
+    assert.strictEqual(canReadImages({ provider: 'grok', model: 'grok-4.6' }, known), true);
+    assert.strictEqual(canReadImages({ provider: 'grok', model: 'grok-code-fast-1' }, known), false);
+    assert.strictEqual(canReadImages({ provider: 'grok', model: 'grok-4.6', allowLocalTools: false }, known), false);
+    assert.strictEqual(canReadImages(null, known), false, 'nothing is offered before the settings arrive');
 
     // The web is not a local tool. This is what "the assistant has no
     // internet" turned out to be.

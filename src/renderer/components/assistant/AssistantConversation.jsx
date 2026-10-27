@@ -26,6 +26,7 @@ import ApprovalMenu from './ApprovalMenu';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
 import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
+import { canReadImages } from '../../lib/image-gate';
 import { describe, toWire } from '../../lib/assistant-scope';
 
 /** The rule inside a card, which is lighter than the one between two cards. */
@@ -226,6 +227,8 @@ export default function AssistantConversation({
     const [images, setImages] = useState([]);
     /** Which agents can be sent one, from main. The button shows only for those. */
     const [imageProviders, setImageProviders] = useState([]);
+    /** Which of those open a picture as a file, and so need the local tools on. */
+    const [localImageProviders, setLocalImageProviders] = useState([]);
     /** Why the last file did not make it in, shown under the thumbnails. */
     const [imageNotice, setImageNotice] = useState('');
 
@@ -289,6 +292,7 @@ export default function AssistantConversation({
                 setSettings(status?.settings || null);
                 setCatalogs(status?.catalogs || {});
                 setImageProviders(status?.imageProviders || []);
+                setLocalImageProviders(status?.localImageProviders || []);
             })
             .catch(() => {});
     }, []);
@@ -407,8 +411,11 @@ export default function AssistantConversation({
 
     const [groupTools] = useGroupToolCalls();
 
-    /** Whether the agent answering can be sent a picture. */
-    const canAttach = Boolean(settings && imageProviders.includes(settings.provider));
+    /**
+     * Whether the agent answering, on the model it is set to, can be sent a
+     * picture. See `lib/image-gate`.
+     */
+    const canAttach = canReadImages(settings, { imageProviders, localImageProviders, catalogs });
 
     const submit = useCallback(() => {
         const body = text.trim();

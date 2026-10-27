@@ -3,6 +3,7 @@ const prompt = require('./prompt');
 const catalog = require('./tools');
 const archive = require('./archive');
 const { readImages } = require('./images');
+const { imageRefusal } = require('./image-gate');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
 const store = require('../store');
@@ -975,9 +976,17 @@ async function send(conversationId, text, attachments = [], specIds = []) {
     }
 
     // Refused here rather than quietly dropped: a question about a screenshot
-    // the model never saw would get an answer that reads as if it had.
-    if (images.length > 0 && PROVIDERS[resolved().provider]?.supportsImages !== true) {
-        return { success: false, message: 'This agent cannot read images. Claude Code and Codex can.' };
+    // the model never saw would get an answer that reads as if it had. The
+    // model is asked as well as the agent, since one runtime can offer models
+    // that read pictures and models that do not. See `image-gate.js`.
+    if (images.length > 0) {
+        const current = resolved();
+        const refusal = imageRefusal({
+            provider: PROVIDERS[current.provider],
+            settings: current,
+            catalog: modelCatalogs.get(current.provider),
+        });
+        if (refusal) return { success: false, message: refusal };
     }
 
     // Before anything is recorded: the message itself, and the title taken
@@ -1255,6 +1264,9 @@ function status() {
         // Which of them can be sent a picture, so the composer offers the
         // attach button only where it would work.
         imageProviders: Object.keys(PROVIDERS).filter(name => PROVIDERS[name].supportsImages === true),
+        // Which of those open a picture as a file with their own tools, and
+        // so are offered one only while the local tools are switched on.
+        localImageProviders: Object.keys(PROVIDERS).filter(name => PROVIDERS[name].imagesNeedLocalTools === true),
         settings: current,
         // Null until a conversation has run once. The settings page says so
         // rather than guessing, because "no plan found" and "not asked yet"
