@@ -43,8 +43,11 @@ Module._load = function (request, parent, isMain) {
 
 // The agent: whatever it was started with, and every message it was sent.
 const agent = { options: null, sent: [] };
+// A first run ticks Claude Code only when it can be found, so the stub has to
+// say it is installed or the conversation has no agent to send to.
 require.cache[require.resolve(path.join(ROOT, 'ai', 'providers', 'claude-code'))] = { exports: {
     supportsImages: true,
+    findClaude: () => 'claude',
     start: async (options) => {
         agent.options = options;
         return {
