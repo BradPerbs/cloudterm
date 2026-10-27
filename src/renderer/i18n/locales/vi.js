@@ -502,6 +502,9 @@ export default {
     'settings.assistant.quickPromptsNote': 'Tối đa 12 câu. Bấm một câu sẽ đưa nó vào ô nhập chứ '
         + 'không gửi ngay, nên bạn có thể bổ sung trước.',
     'settings.assistant.savePrompts': 'Lưu câu hỏi',
+    'settings.assistant.groupToolCalls': 'Gộp các lần gọi công cụ',
+    'settings.assistant.groupToolCallsDesc': 'Gộp các lần gọi công cụ liên tiếp thành một dòng, chẳng hạn '
+        + '"8 lần đọc · 3 lệnh", mở ra để xem từng lần gọi. Khi tắt, mỗi lần gọi là một dòng riêng.',
     'settings.assistant.steps': 'Số bước mỗi lượt',
     'settings.assistant.stepsDesc': 'Một câu hỏi được phép gọi công cụ bao nhiêu lần trước khi trợ '
         + 'lý dừng lại và báo cáo. Một lượt chạy không đi tới đâu sẽ tự kết thúc, thay vì đợi tới '
@@ -1039,6 +1042,66 @@ export default {
     'assistant.chats': 'Cuộc trò chuyện',
     'assistant.chatHistory': 'Lịch sử trò chuyện',
     'assistant.working': 'Đang làm',
+
+    /* The transcript: the working line, tool rows, groups and thoughts. */
+    'assistant.working.think': 'Đang suy nghĩ|Đang cân nhắc|Đang nối các điểm|Đang gỡ rối|'
+        + 'Đang cân nhắc các lựa chọn|Đang vạch đường|Đang hỏi ý chú vịt cao su|Đang tính lại lần nữa|'
+        + 'Đang vẽ ô và mũi tên|Đang phác thảo kế hoạch|Đang sắp xếp ý tưởng|Đang chuẩn bị bước tiếp theo|'
+        + 'Đang chờ khoảnh khắc eureka',
+    'assistant.working.shell': 'Đang chạy lệnh|Đang gõ shell|Đang xử lý|Đang xem kết quả|'
+        + 'Đang điều khiển tiến trình|Đang nói chuyện với máy|Đang thì thầm với kernel|'
+        + 'Đang tự tin nhấn Enter|Đang xem log chạy|Đang đọc mã thoát|Đang xem có phải do DNS|'
+        + 'Đang nhờ systemd giúp|Đang theo dõi tải',
+    'assistant.working.read': 'Đang đọc|Đang lục tệp|Đang sàng lọc|Đang quét|Đang tìm hiểu tình hình|'
+        + 'Đang lần theo dấu vết|Đang đọc hướng dẫn|Đang lần theo từng manh mối|Đang phủi bụi log|'
+        + 'Đang đọc giữa các dòng|Đang đọc chữ nhỏ|Đang xem cấu hình|Đang lật qua /etc',
+    'assistant.working.write': 'Đang viết|Đang mày mò|Đang ghép nối|Đang chau chuốt|Đang đi dây|'
+        + 'Đang định hình|Đang siết ốc|Đang đo hai lần, cắt một lần|Đang để lại chú thích hữu ích|'
+        + 'Đang đóng hết dấu ngoặc|Đang dọn dẹp cấu hình|Đang hoàn thiện những nét cuối|Đang căn thụt dòng',
+    'assistant.working.connect': 'Đang kết nối|Đang mở đường truyền|Đang bắt tay|Đang xuyên đường hầm|'
+        + 'Đang gõ cửa|Đang bấm chuông|Đang hỏi khéo máy chủ|Đang trao đổi khóa|Đang vẫy tay chào máy chủ|'
+        + 'Đang băng qua internet|Đang tìm đúng cổng|Đang kiểm tra dấu vân tay',
+    'assistant.finished': 'Đã xong',
+    'assistant.loadingEarlier_other': 'Đang tải {count} tin nhắn trước đó…',
+    'assistant.thought': 'Suy nghĩ',
+    'assistant.thoughtThinking': 'Quá trình suy nghĩ',
+    'assistant.todoProgress': '{done}/{total} xong',
+    'assistant.verb.read': 'Đọc',
+    'assistant.verb.list': 'Liệt kê',
+    'assistant.verb.run': 'Chạy',
+    'assistant.verb.type': 'Gõ',
+    'assistant.verb.edit': 'Sửa',
+    'assistant.verb.write': 'Ghi',
+    'assistant.verb.search': 'Tìm',
+    'assistant.verb.fetch': 'Tải',
+    'assistant.verb.todo': 'Việc cần làm',
+    'assistant.verb.ask': 'Hỏi',
+    'assistant.verb.connect': 'Kết nối',
+    'assistant.verb.disconnect': 'Ngắt kết nối',
+    'assistant.verb.subagent': 'Tác tử phụ',
+    'assistant.verb.think': 'Suy nghĩ',
+    'assistant.verb.listHosts': 'Liệt kê máy chủ',
+    'assistant.verb.listSessions': 'Liệt kê phiên',
+    'assistant.verb.readTerminal': 'Đọc terminal',
+    'assistant.verb.readOutput': 'Đọc kết quả',
+    'assistant.verb.listSnippets': 'Liệt kê đoạn lệnh',
+    'assistant.verb.readSnippet': 'Đọc đoạn lệnh',
+    'assistant.verb.saveSnippet': 'Lưu đoạn lệnh',
+    'assistant.verb.watch': 'Theo dõi',
+    'assistant.verb.readChart': 'Đọc biểu đồ',
+    'assistant.verb.stopChart': 'Dừng biểu đồ',
+    'assistant.verb.stop': 'Dừng',
+    'assistant.toolGroup.views_other': '{count} lần đọc',
+    'assistant.toolGroup.commands_other': '{count} lệnh',
+    'assistant.toolGroup.edits_other': '{count} lần sửa',
+    'assistant.toolGroup.searches_other': '{count} lần tìm',
+    'assistant.toolGroup.connections_other': '{count} kết nối',
+    'assistant.toolGroup.other_other': '{count} khác',
+    'assistant.toolGroup.running_other': '{count} đang chạy',
+    'assistant.toolGroup.failed_other': '{count} lỗi',
+    'assistant.toolGroup.showAll': 'Xem tất cả',
+    'assistant.toolGroup.showLess': 'Thu gọn',
+
     'assistant.send': 'Gửi',
     'assistant.attachImage': 'Thêm ảnh',
     'assistant.removeImage': 'Bỏ ảnh',

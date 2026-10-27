@@ -535,6 +535,10 @@ export default {
     'settings.assistant.quickPromptsNote': 'До 12 штук. Нажатие подставляет вопрос в поле, а не '
         + 'отправляет его, так что сначала можно дописать.',
     'settings.assistant.savePrompts': 'Сохранить вопросы',
+    'settings.assistant.groupToolCalls': 'Группировать вызовы инструментов',
+    'settings.assistant.groupToolCallsDesc': 'Вызовы инструментов, сделанные подряд, сворачиваются в одну '
+        + 'строку вроде «8 чтений · 3 команды», которая раскрывается в сами вызовы. Если выключено, у '
+        + 'каждого вызова своя строка.',
     'settings.assistant.steps': 'Шагов за ход',
     'settings.assistant.stepsDesc': 'Сколько вызовов инструментов может занять один вопрос, прежде '
         + 'чем ассистент остановится и отчитается. Идущий вникуда прогон завершается сам, а не '
@@ -1133,6 +1137,93 @@ export default {
     'assistant.chats': 'Разговоры',
     'assistant.chatHistory': 'История разговоров',
     'assistant.working': 'Работает',
+
+    /* The transcript: the working line, tool rows, groups and thoughts. */
+    'assistant.working.think': 'Думаю|Размышляю|Соединяю точки|Распутываю клубок|Взвешиваю варианты|'
+        + 'Прокладываю маршрут|Советуюсь с резиновой уточкой|Пересчитываю дважды|Рисую квадратики и стрелочки|'
+        + 'Набрасываю план на салфетке|Привожу мысли в порядок|Готовлю следующий шаг|Жду озарения|'
+        + 'Считаю с нуля',
+    'assistant.working.shell': 'Выполняю команды|Колдую в шелле|Перемалываю|Слежу за выводом|'
+        + 'Укрощаю процессы|Говорю с машиной|Шепчусь с ядром|Подкармливаю службы|Уверенно жму Enter|'
+        + 'Смотрю, как бегут логи|Читаю код возврата|Проверяю, не DNS ли это|Вежливо прошу systemd|'
+        + 'Слежу за нагрузкой',
+    'assistant.working.read': 'Читаю|Роюсь в файлах|Просеиваю|Сканирую|Осматриваюсь|Иду по следу|'
+        + 'Читаю инструкцию, на этот раз|Иду по хлебным крошкам|Сдуваю пыль с логов|Читаю между строк|'
+        + 'Читаю мелкий шрифт|Заглядываю в конфиг|Листаю /etc',
+    'assistant.working.write': 'Пишу|Мастерю|Сшиваю детали|Полирую|Соединяю провода|Придаю форму|'
+        + 'Подтягиваю винтики|Семь раз отмеряю|Оставляю полезный комментарий|Закрываю все скобки|'
+        + 'Навожу порядок в конфиге|Добавляю последние штрихи|Выравниваю отступы',
+    'assistant.working.connect': 'Подключаюсь|Открываю канал|Жму руку|Прокладываю туннель|Стучусь в дверь|'
+        + 'Звоню в дверь|Вежливо прошу сервер|Обмениваюсь ключами|Машу серверу|Пересекаю интернет|'
+        + 'Ищу нужный порт|Сверяю отпечаток',
+    'assistant.finished': 'Готово',
+    'assistant.loadingEarlier_one': 'Подгружаю {count} более раннее сообщение…',
+    'assistant.loadingEarlier_few': 'Подгружаю {count} более ранних сообщения…',
+    'assistant.loadingEarlier_many': 'Подгружаю {count} более ранних сообщений…',
+    'assistant.loadingEarlier_other': 'Подгружаю {count} более ранних сообщения…',
+    'assistant.thought': 'Ход мыслей',
+    'assistant.thoughtThinking': 'Размышления',
+    'assistant.todoProgress': 'готово {done}/{total}',
+    'assistant.verb.read': 'Чтение',
+    'assistant.verb.list': 'Список',
+    'assistant.verb.run': 'Запуск',
+    'assistant.verb.type': 'Ввод',
+    'assistant.verb.edit': 'Правка',
+    'assistant.verb.write': 'Запись',
+    'assistant.verb.search': 'Поиск',
+    'assistant.verb.fetch': 'Загрузка',
+    'assistant.verb.todo': 'Задачи',
+    'assistant.verb.ask': 'Вопрос',
+    'assistant.verb.connect': 'Подключение',
+    'assistant.verb.disconnect': 'Отключение',
+    'assistant.verb.subagent': 'Субагент',
+    'assistant.verb.think': 'Размышление',
+    'assistant.verb.listHosts': 'Список хостов',
+    'assistant.verb.listSessions': 'Список сеансов',
+    'assistant.verb.readTerminal': 'Чтение терминала',
+    'assistant.verb.readOutput': 'Чтение вывода',
+    'assistant.verb.listSnippets': 'Список сниппетов',
+    'assistant.verb.readSnippet': 'Чтение сниппета',
+    'assistant.verb.saveSnippet': 'Сохранение сниппета',
+    'assistant.verb.watch': 'Наблюдение',
+    'assistant.verb.readChart': 'Чтение графика',
+    'assistant.verb.stopChart': 'Остановка графика',
+    'assistant.verb.stop': 'Остановка',
+    'assistant.toolGroup.views_one': '{count} чтение',
+    'assistant.toolGroup.views_few': '{count} чтения',
+    'assistant.toolGroup.views_many': '{count} чтений',
+    'assistant.toolGroup.views_other': '{count} чтения',
+    'assistant.toolGroup.commands_one': '{count} команда',
+    'assistant.toolGroup.commands_few': '{count} команды',
+    'assistant.toolGroup.commands_many': '{count} команд',
+    'assistant.toolGroup.commands_other': '{count} команды',
+    'assistant.toolGroup.edits_one': '{count} правка',
+    'assistant.toolGroup.edits_few': '{count} правки',
+    'assistant.toolGroup.edits_many': '{count} правок',
+    'assistant.toolGroup.edits_other': '{count} правки',
+    'assistant.toolGroup.searches_one': '{count} поиск',
+    'assistant.toolGroup.searches_few': '{count} поиска',
+    'assistant.toolGroup.searches_many': '{count} поисков',
+    'assistant.toolGroup.searches_other': '{count} поиска',
+    'assistant.toolGroup.connections_one': '{count} подключение',
+    'assistant.toolGroup.connections_few': '{count} подключения',
+    'assistant.toolGroup.connections_many': '{count} подключений',
+    'assistant.toolGroup.connections_other': '{count} подключения',
+    'assistant.toolGroup.other_one': 'ещё {count}',
+    'assistant.toolGroup.other_few': 'ещё {count}',
+    'assistant.toolGroup.other_many': 'ещё {count}',
+    'assistant.toolGroup.other_other': 'ещё {count}',
+    'assistant.toolGroup.running_one': '{count} выполняется',
+    'assistant.toolGroup.running_few': '{count} выполняются',
+    'assistant.toolGroup.running_many': '{count} выполняются',
+    'assistant.toolGroup.running_other': '{count} выполняются',
+    'assistant.toolGroup.failed_one': '{count} с ошибкой',
+    'assistant.toolGroup.failed_few': '{count} с ошибкой',
+    'assistant.toolGroup.failed_many': '{count} с ошибкой',
+    'assistant.toolGroup.failed_other': '{count} с ошибкой',
+    'assistant.toolGroup.showAll': 'Показать все',
+    'assistant.toolGroup.showLess': 'Свернуть',
+
     'assistant.send': 'Отправить',
     'assistant.attachImage': 'Добавить изображение',
     'assistant.removeImage': 'Убрать изображение',

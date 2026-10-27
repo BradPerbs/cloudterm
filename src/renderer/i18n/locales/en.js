@@ -556,6 +556,10 @@ export default {
     'settings.assistant.quickPromptsNote': 'Up to 12. Clicking one puts it in the box rather than '
         + 'sending it, so you can add to it first.',
     'settings.assistant.savePrompts': 'Save prompts',
+    'settings.assistant.groupToolCalls': 'Group tool calls',
+    'settings.assistant.groupToolCallsDesc': 'Fold tool calls made one after another into a single '
+        + 'row, such as "8 reads · 3 commands", that opens into the calls. Off, every call is a row '
+        + 'of its own.',
     'settings.assistant.steps': 'Steps per turn',
     'settings.assistant.stepsDesc': 'How many tool calls one question may take before the assistant '
         + 'stops and reports back. A run that is not converging ends on its own rather than when '
@@ -1130,6 +1134,88 @@ export default {
     'assistant.chats': 'Chats',
     'assistant.chatHistory': 'Chat history',
     'assistant.working': 'Working',
+
+    /* The transcript: the working line, tool rows, groups and thoughts. Each
+       working list is phrases separated by `|`, one picked at a time. */
+    'assistant.working.think': 'Thinking|Pondering|Mulling it over|Connecting the dots|Puzzling it out|'
+        + 'Weighing the options|Plotting the route|Consulting the rubber duck|Sketching on a napkin|'
+        + 'Doing the math twice|Drawing boxes and arrows|Untangling the spaghetti|Squinting thoughtfully|'
+        + 'Waiting for the eureka|Channeling the senior sysadmin|Naming things, the hardest part|'
+        + 'Settling tabs versus spaces|Counting from zero|Checking for an off-by-one|'
+        + 'Brewing coffee for the neurons|Overthinking it, responsibly|Holding a meeting with myself|'
+        + 'Making a plan|Lining up the next step',
+    'assistant.working.shell': 'Running commands|Poking the shell|Crunching|Watching the output|'
+        + 'Wrangling processes|Talking to the machine|Turning the cranks|Whispering to the kernel|'
+        + 'Feeding the daemons|Herding processes|Hitting Enter with confidence|'
+        + 'Staring at the blinking cursor|Sudo-ing politely|Piping things into things|'
+        + 'Watching the progress bar crawl|Waiting on the package manager|Watching the logs scroll|'
+        + 'Reading the exit code|Checking whether it is DNS|Asking systemd nicely|Tailing the logs|'
+        + 'Typing green text on black|Keeping an eye on the load',
+    'assistant.working.read': 'Reading|Digging through files|Sifting|Scanning|Rummaging around|'
+        + 'Getting the lay of the land|Following the trail|Reading the manual, for once|Grepping furiously|'
+        + 'Following the breadcrumbs|Dusting off the logs|Reading between the lines|Reading the fine print|'
+        + 'Tracing the call stack|Deciphering old comments|Finding where that was hiding|'
+        + 'Reading the docs nobody reads|Skimming like a pro|Reading it twice to be sure|Checking the config|'
+        + 'Looking under the hood|Leafing through /etc',
+    'assistant.working.write': 'Writing|Tinkering|Stitching it together|Polishing|Wiring things up|'
+        + 'Shaping it|Tightening the screws|Measuring twice, cutting once|Writing it neatly|'
+        + 'Leaving a helpful comment|Fixing the typo from before|Closing all the brackets|'
+        + 'Making the linter happy|Tidying the config|Turning coffee into code|Laying bricks|'
+        + 'Adding the finishing touches|Lining up the indentation',
+    'assistant.working.connect': 'Dialing in|Opening a line|Shaking hands|Tunneling through|'
+        + 'Knocking on the door|Ringing the doorbell|Asking the server nicely|Swapping keys|'
+        + 'Waving at the server|Crossing the internet|Following the cables|Finding the right port|'
+        + 'Pinging, is this thing on|Checking the fingerprint|Phoning home|Warming up the connection',
+    'assistant.finished': 'Finished',
+    'assistant.loadingEarlier_one': 'Bringing in {count} earlier message…',
+    'assistant.loadingEarlier_other': 'Bringing in {count} earlier messages…',
+    'assistant.thought': 'Thought process',
+    'assistant.thoughtThinking': 'Thinking',
+    'assistant.todoProgress': '{done}/{total} done',
+    'assistant.verb.read': 'Read',
+    'assistant.verb.list': 'List',
+    'assistant.verb.run': 'Run',
+    'assistant.verb.type': 'Type',
+    'assistant.verb.edit': 'Edit',
+    'assistant.verb.write': 'Write',
+    'assistant.verb.search': 'Search',
+    'assistant.verb.fetch': 'Fetch',
+    'assistant.verb.todo': 'Todo',
+    'assistant.verb.ask': 'Ask',
+    'assistant.verb.connect': 'Connect',
+    'assistant.verb.disconnect': 'Disconnect',
+    'assistant.verb.subagent': 'Subagent',
+    'assistant.verb.think': 'Think',
+    'assistant.verb.listHosts': 'List hosts',
+    'assistant.verb.listSessions': 'List sessions',
+    'assistant.verb.readTerminal': 'Read terminal',
+    'assistant.verb.readOutput': 'Read output',
+    'assistant.verb.listSnippets': 'List snippets',
+    'assistant.verb.readSnippet': 'Read snippet',
+    'assistant.verb.saveSnippet': 'Save snippet',
+    'assistant.verb.watch': 'Watch',
+    'assistant.verb.readChart': 'Read chart',
+    'assistant.verb.stopChart': 'Stop chart',
+    'assistant.verb.stop': 'Stop',
+    'assistant.toolGroup.views_one': '{count} read',
+    'assistant.toolGroup.views_other': '{count} reads',
+    'assistant.toolGroup.commands_one': '{count} command',
+    'assistant.toolGroup.commands_other': '{count} commands',
+    'assistant.toolGroup.edits_one': '{count} edit',
+    'assistant.toolGroup.edits_other': '{count} edits',
+    'assistant.toolGroup.searches_one': '{count} search',
+    'assistant.toolGroup.searches_other': '{count} searches',
+    'assistant.toolGroup.connections_one': '{count} connection',
+    'assistant.toolGroup.connections_other': '{count} connections',
+    'assistant.toolGroup.other_one': '{count} other',
+    'assistant.toolGroup.other_other': '{count} others',
+    'assistant.toolGroup.running_one': '{count} running',
+    'assistant.toolGroup.running_other': '{count} running',
+    'assistant.toolGroup.failed_one': '{count} failed',
+    'assistant.toolGroup.failed_other': '{count} failed',
+    'assistant.toolGroup.showAll': 'Show all',
+    'assistant.toolGroup.showLess': 'Show less',
+
     'assistant.send': 'Send',
     'assistant.attachImage': 'Add an image',
     'assistant.removeImage': 'Remove image',
