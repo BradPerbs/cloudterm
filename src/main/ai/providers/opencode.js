@@ -224,10 +224,17 @@ function parseModel(value) {
 /**
  * The last matching OpenCode permission wins. Deny/ask everything first,
  * then allow only our MCP namespace: its real approval happens in mcp-host.
+ *
+ * OpenCode's own `question` tool is denied whatever the switch says. Its
+ * answer is collected on an endpoint of its own that nothing here answers, so
+ * a model that reached for it held the session open and the turn never ended,
+ * and with the approval mode now applied to OpenCode's tools Yolo would wave
+ * it straight through. Denied, the model asks in its reply instead.
  */
 function permissions(allowLocalTools) {
     return {
         '*': allowLocalTools ? 'ask' : 'deny',
+        question: 'deny',
         [`${SERVER_NAME}_*`]: 'allow',
     };
 }
@@ -424,6 +431,10 @@ async function loopbackFetch(request) {
  * and every file read stopped the run, whatever the user had chosen.
  */
 async function localApproved({ permission, current, requestApproval, onEvent }) {
+    // Denied in the config already (see `permissions`); refused here as well
+    // for a release that asks anyway, since nothing would answer it after.
+    if (permission.type === 'question') return false;
+
     const input = {
         ...(permission.metadata || {}),
         ...(permission.pattern ? { pattern: permission.pattern } : {}),

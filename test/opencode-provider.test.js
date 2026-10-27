@@ -131,8 +131,10 @@ async function run() {
         modelID: 'team/model',
     });
     assert.strictEqual(provider.parseModel('not-a-model'), undefined);
-    assert.deepStrictEqual(provider.permissions(false), { '*': 'deny', 'remote_*': 'allow' });
-    assert.deepStrictEqual(provider.permissions(true), { '*': 'ask', 'remote_*': 'allow' });
+    assert.deepStrictEqual(provider.permissions(false), { '*': 'deny', question: 'deny', 'remote_*': 'allow' });
+    assert.deepStrictEqual(provider.permissions(true), { '*': 'ask', question: 'deny', 'remote_*': 'allow' });
+    // The question tool is denied after the wildcard, since the last match wins.
+    assert.deepStrictEqual(Object.keys(provider.permissions(true)), ['*', 'question', 'remote_*']);
 
     const emitted = [];
     const translator = provider.createTranslator('session-1', event => emitted.push(event));
@@ -284,6 +286,13 @@ async function permissionTests() {
     // A release that only puts the command in the pattern is still checked.
     const patternOnly = { id: 'p4', type: 'bash', title: '', pattern: ['rm -rf /srv'], metadata: {} };
     assert.strictEqual(await decide(patternOnly, { ...base, approval: 'never' }), false);
+
+    // OpenCode's own question tool is never waved through: nothing would
+    // answer it afterwards, and the turn would never end.
+    cards.length = 0;
+    assert.strictEqual(await decide({ id: 'p5', type: 'question', title: 'Which?', metadata: {} },
+        { ...base, approval: 'never' }), false);
+    assert.deepStrictEqual(cards, []);
 }
 
 // The client talks to its server over plain http so a turn longer than
