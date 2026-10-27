@@ -30,6 +30,7 @@ const activity = require('./activity');
 const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const aiWindows = require('./ai/windows');
+const attention = require('./ai/attention');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -220,6 +221,15 @@ function register(getWindow) {
     };
     assistant.setNotifier(broadcast);
     aiWindows.setMainNotifier(notify);
+    // A desktop notification when a conversation nobody is looking at needs
+    // the person. It listens to the events themselves, so it hears them
+    // whether or not a window is drawing that chat. See ai/attention.js.
+    attention.start({
+        getWindow,
+        windowOf: (conversationId) => aiWindows.windowOf(conversationId),
+        settings: () => assistant.settings.get(),
+    });
+    assistant.watch(attention.observe);
     tunnels.setNotifier(notify);
     vnc.setNotifier(notify);
     rdp.setNotifier(notify);
@@ -1701,6 +1711,11 @@ function register(getWindow) {
         window.webContents.send('ai-navigate', { nav: String(nav || '') });
         return { success: true };
     });
+
+    // What each window has in front, so a notification is not raised over a
+    // chat someone is reading; and the words for one, in the app's language.
+    handle('ai-in-view-set', (event, conversationIds) => attention.setInView(event.sender, conversationIds));
+    handle('ai-notification-text', (event, text) => attention.setText(text));
 
     /* ---------------- Startup ---------------- */
 

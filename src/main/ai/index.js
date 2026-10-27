@@ -126,6 +126,20 @@ function setNotifier(fn) {
     notify = fn;
 }
 
+/**
+ * Listeners on every event a conversation records, after masking, told the
+ * conversation too. The desktop notifications are one (see attention.js):
+ * they need to hear a turn end or a question asked whichever window, if any,
+ * is drawing the chat.
+ */
+const watchers = new Set();
+
+function watch(fn) {
+    if (typeof fn !== 'function') return () => {};
+    watchers.add(fn);
+    return () => watchers.delete(fn);
+}
+
 function nextId(prefix) {
     counter += 1;
     return `${prefix}-${Date.now().toString(36)}-${counter}`;
@@ -310,6 +324,13 @@ function emit(conversation, event) {
         conversation.events.splice(0, conversation.events.length - MAX_EVENTS);
     }
     notify('ai-event', { conversationId: conversation.id, event: stamped });
+    for (const watcher of watchers) {
+        try {
+            watcher(conversation, stamped);
+        } catch (error) {
+            console.error('An assistant event listener failed:', error.message);
+        }
+    }
 
     // A stream preview is not worth a write of its own: the finished block that
     // replaces it is an event in its own right, and that one schedules one.
@@ -1310,6 +1331,7 @@ async function shutdown() {
 
 module.exports = {
     setNotifier,
+    watch,
     reconfigure,
     create,
     get,

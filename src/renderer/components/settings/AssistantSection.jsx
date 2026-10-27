@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PROVIDER_ORDER } from '../../lib/ai-catalog';
 import ProviderPicker from './ProviderPicker';
+import NotificationsCard from './NotificationsCard';
 import SettingCard from './ui/SettingCard';
 import SettingRow, { DIVIDED } from './ui/SettingRow';
 import Toggle from './ui/Toggle';
@@ -484,6 +485,8 @@ export default function AssistantSection() {
                     }
                 />
             </SettingCard>
+
+            <NotificationsCard settings={settings} update={update} />
 
             <SettingCard>
                 <SettingRow

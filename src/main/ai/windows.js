@@ -223,6 +223,18 @@ function held() {
     return ids;
 }
 
+/**
+ * The detached window showing a conversation, or null when it is the main
+ * window's or in no tab at all. For a notification, which brings forward the
+ * window that will show what it is about.
+ */
+function windowOf(conversationId) {
+    for (const entry of windows.values()) {
+        if (!entry.window.isDestroyed() && entry.conversationIds.includes(conversationId)) return entry.window;
+    }
+    return null;
+}
+
 function setContext(next) {
     context = {
         sessions: Array.isArray(next?.sessions) ? next.sessions : [],
@@ -256,6 +268,7 @@ module.exports = {
     reattach,
     closeWindow,
     held,
+    windowOf,
     setContext,
     getContext,
     closeAll,

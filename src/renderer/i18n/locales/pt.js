@@ -525,6 +525,12 @@ export default {
     'settings.assistant.groupToolCallsDesc': 'Junta as chamadas de ferramentas feitas seguidas numa só '
         + 'linha, como "8 leituras · 3 comandos", que se abre para mostrar as chamadas. Desligado, cada '
         + 'chamada tem a sua linha.',
+    'settings.assistant.notify': 'Avisar-me quando uma conversa precisar de mim',
+    'settings.assistant.notifyDesc': 'Uma notificação no ambiente de trabalho quando uma conversa que não '
+        + 'está a ver termina, lhe faz uma pergunta ou aguarda a sua aprovação. Clicar nela leva-o a essa '
+        + 'conversa. A conversa que tem à frente nunca gera uma.',
+    'settings.assistant.notifySound': 'Tocar um som com ela',
+    'settings.assistant.notifySoundDesc': 'Um toque curto quando a notificação chega.',
     'settings.assistant.steps': 'Passos por turno',
     'settings.assistant.stepsDesc': 'Quantas chamadas a ferramentas uma pergunta pode levar antes '
         + 'de o assistente parar e dar conta do trabalho. Uma execução que não está a convergir '
@@ -1196,6 +1202,11 @@ export default {
     'assistant.stop': 'Parar',
     'assistant.askAbout': 'Pergunte sobre {about}',
     'assistant.costHint': 'Custo estimado desta conversa, cobrado por token',
+    'assistant.notify.done': '{title} terminou',
+    'assistant.notify.failed': '{title} parou com um problema',
+    'assistant.notify.question': '{title} tem uma pergunta',
+    'assistant.notify.approval': '{title} precisa da sua aprovação',
+    'assistant.notify.untitled': 'O agente de IA',
 
     'assistant.currentSession': 'Sessão atual',
     'assistant.nothingConnected': 'Nada ligado',

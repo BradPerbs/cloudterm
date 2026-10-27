@@ -470,6 +470,11 @@ export default {
     'settings.assistant.groupToolCalls': '合并工具调用',
     'settings.assistant.groupToolCallsDesc': '把连续的工具调用合并成一行，例如“8 次读取 · 3 条命令”，'
         + '点开即可查看每次调用。关闭后，每次调用单独占一行。',
+    'settings.assistant.notify': '对话需要我时通知我',
+    'settings.assistant.notifyDesc': '当你没在看的对话完成、向你提问或等待你批准时，弹出桌面通知。'
+        + '点击通知即可打开该对话。你正在看的对话不会弹出通知。',
+    'settings.assistant.notifySound': '同时播放提示音',
+    'settings.assistant.notifySoundDesc': '通知到达时播放一声简短的提示音。',
     'settings.assistant.steps': '每轮步数',
     'settings.assistant.stepsDesc': '一个问题最多可以进行多少次工具调用，之后助手就会停下来汇报。'
         + '迟迟没有结果的运行会自行结束，而不是等到你注意到。',
@@ -1015,6 +1020,11 @@ export default {
     'assistant.stop': '停止',
     'assistant.askAbout': '询问关于{about}的问题',
     'assistant.costHint': '本次对话的预估费用，按 token 计费',
+    'assistant.notify.done': '{title} 已完成',
+    'assistant.notify.failed': '{title} 因出现问题而停止',
+    'assistant.notify.question': '{title} 有一个问题',
+    'assistant.notify.approval': '{title} 需要你批准',
+    'assistant.notify.untitled': 'AI 助手',
 
     'assistant.currentSession': '当前会话',
     'assistant.nothingConnected': '没有已连接的会话',

@@ -16,6 +16,7 @@ import AssistantConversation, { HAIRLINE } from './AssistantConversation';
 import { Ring } from './WorkingIndicator';
 import { useT } from '../../i18n';
 import { PANE_HEADER_HEIGHT } from '../../lib/layout';
+import { useAttentionView } from '../../hooks/useAttention';
 import {
     FOLLOW,
     GLOBAL,
@@ -594,6 +595,9 @@ export default function AssistantWorkspace({
      * current value, so picking one runs it and nothing is left ticked.
      */
     const activeConversationId = tabs.find(tab => tab.id === activeId)?.conversationId || '';
+
+    // The chat in front is the one a notification would be raised over.
+    useAttentionView(activeConversationId);
 
     const menuSections = useMemo(() => {
         const several = tabs.length > 1;

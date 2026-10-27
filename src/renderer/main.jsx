@@ -8,6 +8,7 @@ import ScreenshotView from './components/ScreenshotView';
 import AssistantWindow from './components/assistant/AssistantWindow';
 import { applyAppColors } from './lib/app-colors';
 import { dismissBootSplash } from './lib/boot-splash';
+import { useAttentionBridge } from './hooks/useAttention';
 import { DEFAULT_TOAST_MS, MAX_TOAST_MS, TOAST_EXIT_MS } from './lib/toast';
 
 // Self-hosted fonts, no CDN, so the app works offline and the CSP can stay closed.
@@ -93,6 +94,9 @@ function Root() {
     useEffect(() => {
         if (locked !== null) dismissBootSplash();
     }, [locked]);
+
+    // The assistant's desktop notifications: their words, and their chime.
+    useAttentionBridge(locked === false);
 
     // Nothing until the answer is in, so the lock screen never flashes for
     // someone who has not set a password.

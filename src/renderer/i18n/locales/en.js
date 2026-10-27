@@ -562,6 +562,12 @@ export default {
     'settings.assistant.groupToolCallsDesc': 'Fold tool calls made one after another into a single '
         + 'row, such as "8 reads · 3 commands", that opens into the calls. Off, every call is a row '
         + 'of its own.',
+    'settings.assistant.notify': 'Notify me when a chat needs me',
+    'settings.assistant.notifyDesc': 'A desktop notification when a chat you are not looking at finishes, '
+        + 'asks you something or waits for your approval. Clicking it takes you to that chat. The chat in '
+        + 'front of you never raises one.',
+    'settings.assistant.notifySound': 'Play a sound with it',
+    'settings.assistant.notifySoundDesc': 'A short chime as the notification arrives.',
     'settings.assistant.steps': 'Steps per turn',
     'settings.assistant.stepsDesc': 'How many tool calls one question may take before the assistant '
         + 'stops and reports back. A run that is not converging ends on its own rather than when '
@@ -1248,6 +1254,11 @@ export default {
     'assistant.stop': 'Stop',
     'assistant.askAbout': 'Ask about {about}',
     'assistant.costHint': 'Estimated cost of this conversation, charged per token',
+    'assistant.notify.done': '{title} is done',
+    'assistant.notify.failed': '{title} stopped with a problem',
+    'assistant.notify.question': '{title} has a question',
+    'assistant.notify.approval': '{title} needs your approval',
+    'assistant.notify.untitled': 'The AI agent',
 
     'assistant.currentSession': 'Current session',
     'assistant.nothingConnected': 'Nothing connected',

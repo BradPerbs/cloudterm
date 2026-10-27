@@ -507,6 +507,12 @@ export default {
     'settings.assistant.groupToolCalls': 'Gộp các lần gọi công cụ',
     'settings.assistant.groupToolCallsDesc': 'Gộp các lần gọi công cụ liên tiếp thành một dòng, chẳng hạn '
         + '"8 lần đọc · 3 lệnh", mở ra để xem từng lần gọi. Khi tắt, mỗi lần gọi là một dòng riêng.',
+    'settings.assistant.notify': 'Báo cho tôi khi một cuộc trò chuyện cần tôi',
+    'settings.assistant.notifyDesc': 'Một thông báo trên màn hình khi cuộc trò chuyện bạn không xem đã '
+        + 'xong, hỏi bạn điều gì đó hoặc chờ bạn phê duyệt. Bấm vào để mở cuộc trò chuyện đó. Cuộc trò '
+        + 'chuyện đang mở trước mặt bạn thì không bao giờ báo.',
+    'settings.assistant.notifySound': 'Phát âm thanh kèm theo',
+    'settings.assistant.notifySoundDesc': 'Một tiếng chuông ngắn khi thông báo đến.',
     'settings.assistant.steps': 'Số bước mỗi lượt',
     'settings.assistant.stepsDesc': 'Một câu hỏi được phép gọi công cụ bao nhiêu lần trước khi trợ '
         + 'lý dừng lại và báo cáo. Một lượt chạy không đi tới đâu sẽ tự kết thúc, thay vì đợi tới '
@@ -1112,6 +1118,11 @@ export default {
     'assistant.stop': 'Dừng',
     'assistant.askAbout': 'Hỏi về {about}',
     'assistant.costHint': 'Chi phí ước tính của cuộc trò chuyện này, tính theo token',
+    'assistant.notify.done': '{title} đã xong',
+    'assistant.notify.failed': '{title} đã dừng vì gặp sự cố',
+    'assistant.notify.question': '{title} có một câu hỏi',
+    'assistant.notify.approval': '{title} cần bạn phê duyệt',
+    'assistant.notify.untitled': 'Trợ lý AI',
 
     'assistant.currentSession': 'Phiên hiện tại',
     'assistant.nothingConnected': 'Chưa kết nối gì',

@@ -160,4 +160,20 @@ function maskDeep(value, values, depth = 0) {
     return out;
 }
 
-module.exports = { MASK, find, mask, maskDeep };
+/**
+ * Text on its way out of the app, where it is kept by something else: a
+ * desktop notification, an exported conversation. Masked for the values a
+ * conversation already holds and, on top of those, for anything in the text
+ * itself that has the shape of a key, whoever wrote it. Inside the app only
+ * what the user typed is searched; out here a command the agent wrote or a
+ * line a server printed is searched too, since that is where it would leak.
+ */
+function scrub(text, values) {
+    const source = typeof text === 'string' ? text : String(text ?? '');
+    if (!source) return source;
+    const held = new Set(values || []);
+    for (const value of find(source)) held.add(value);
+    return mask(source, held);
+}
+
+module.exports = { MASK, find, mask, maskDeep, scrub };

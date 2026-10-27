@@ -51,6 +51,15 @@ export default function AssistantWindow() {
         return window.api.ai.onContext(next => { if (next) setContext(next); });
     }, []);
 
+    // A notification clicked for a chat this window holds: main brings the
+    // window forward and asks for that tab to be put in front, the same way
+    // the main window is handed tabs.
+    const [adopt, setAdopt] = useState(null);
+    useEffect(() => window.api.ai.onAdoptTabs?.(({ conversationIds }) => {
+        if (!Array.isArray(conversationIds) || conversationIds.length === 0) return;
+        setAdopt(current => ({ conversationIds, seq: (current?.seq || 0) + 1 }));
+    }), []);
+
     // The pages the panel can send you to live in the main window, so it is
     // asked to go there and brought forward.
     const openSettings = useCallback(() => window.api.ai.navigateMain('settings'), []);
@@ -87,6 +96,7 @@ export default function AssistantWindow() {
                     sessions={context.sessions}
                     hosts={context.hosts}
                     activeSessionId={context.activeSessionId}
+                    adopt={adopt}
                     onOpenSettings={openSettings}
                     onOpenSnippets={openSnippets}
                 />
