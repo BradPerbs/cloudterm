@@ -86,6 +86,112 @@ function openCodeCandidates({
     return [...new Set(roots.filter(Boolean).flatMap(root => names.map(name => paths.join(root, name))))];
 }
 
+/**
+ * Where OpenCode Desktop puts itself, per platform.
+ *
+ * The desktop app ships no CLI. Its server is a bundle inside its app.asar,
+ * run by the app as a sidecar under its own Electron; the same can be done
+ * from here, with the app's executable as plain Node and a launcher of ours
+ * (opencode-desktop-serve.mjs) that imports the bundle and listens. Each
+ * candidate is the executable and the archive beside it.
+ */
+function desktopCandidates({
+    platform = process.platform,
+    env = process.env,
+    home = os.homedir(),
+} = {}) {
+    const windows = platform === 'win32';
+    // The platform is an argument, so the separators follow it rather than
+    // the machine running the check.
+    const paths = windows ? path.win32 : path.posix;
+    const found = [];
+    if (windows) {
+        const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData');
+        for (const folder of ['@opencode-aidesktop', 'OpenCode', 'opencode-desktop']) {
+            if (!localAppData) break;
+            const root = paths.join(localAppData, 'Programs', folder);
+            found.push({ exe: paths.join(root, 'OpenCode.exe'), asar: paths.join(root, 'resources', 'app.asar') });
+        }
+    } else if (platform === 'darwin') {
+        for (const root of ['/Applications/OpenCode.app', paths.join(home, 'Applications', 'OpenCode.app')]) {
+            found.push({
+                exe: paths.join(root, 'Contents', 'MacOS', 'OpenCode'),
+                asar: paths.join(root, 'Contents', 'Resources', 'app.asar'),
+            });
+        }
+    } else {
+        for (const root of ['/opt/OpenCode', '/opt/opencode-desktop', '/usr/lib/opencode-desktop']) {
+            found.push({ exe: paths.join(root, 'opencode-desktop'), asar: paths.join(root, 'resources', 'app.asar') });
+        }
+    }
+    return found;
+}
+
+/**
+ * Whether the archive is there.
+ *
+ * Under Electron, `fs` treats an app.asar as a directory it can read into,
+ * and `accessSync` on the archive itself answers ENOENT for the root of it.
+ * `statSync` answers, as a directory. Under plain Node it is a file. Either
+ * answer means the archive exists; only a throw means it does not.
+ */
+function archivePresent(target, { accessSync = fs.accessSync, statSync = fs.statSync } = {}) {
+    try {
+        accessSync(target, fs.constants.F_OK);
+        return true;
+    } catch {
+        // The shim's ENOENT, or a real one: stat tells them apart.
+    }
+    try {
+        statSync(target);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** The desktop app's executable and archive, when both are there. */
+function findOpenCodeDesktop(options = {}) {
+    const accessSync = options.accessSync || fs.accessSync;
+    const statSync = options.statSync || (options.accessSync ? () => { throw new Error('missing'); } : fs.statSync);
+    for (const candidate of desktopCandidates(options)) {
+        try {
+            accessSync(candidate.exe, fs.constants.F_OK);
+        } catch {
+            continue;
+        }
+        if (archivePresent(candidate.asar, { accessSync, statSync })) return candidate;
+    }
+    return null;
+}
+
+/**
+ * How to start a server on this machine: the CLI when there is one, the
+ * desktop app's bundle otherwise. `args` takes the port, since it is
+ * reserved at launch. Nothing found is null.
+ */
+function findOpenCodeLaunch(options = {}) {
+    const binary = findOpenCode(options);
+    if (binary) {
+        return {
+            kind: 'cli',
+            command: binary,
+            args: port => ['serve', '--hostname=127.0.0.1', `--port=${port}`],
+            env: {},
+        };
+    }
+    const desktop = findOpenCodeDesktop(options);
+    if (desktop) {
+        return {
+            kind: 'desktop',
+            command: desktop.exe,
+            args: port => [path.join(__dirname, 'opencode-desktop-serve.mjs'), desktop.asar, '127.0.0.1', String(port)],
+            env: { ELECTRON_RUN_AS_NODE: '1' },
+        };
+    }
+    return null;
+}
+
 /** Find the CLI even when a packaged Electron app has a minimal PATH. */
 function findOpenCode(options = {}) {
     const platform = options.platform || process.platform;
@@ -174,7 +280,11 @@ function reservePort() {
 }
 
 /** Spawn one private OpenCode server and wait until it publishes its URL. */
-async function launchServer(binary, config, directory) {
+async function launchServer(launch, config, directory) {
+    // A bare path is the CLI, for the callers and tests that pass one.
+    const spec = typeof launch === 'string'
+        ? { command: launch, args: port => ['serve', '--hostname=127.0.0.1', `--port=${port}`], env: {} }
+        : launch;
     const port = await reservePort();
     return new Promise((resolve, reject) => {
         let child;
@@ -199,12 +309,13 @@ async function launchServer(binary, config, directory) {
         }, START_TIMEOUT);
 
         try {
-            child = spawn(binary, ['serve', '--hostname=127.0.0.1', `--port=${port}`], {
+            child = spawn(spec.command, spec.args(port), {
                 cwd: directory,
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe'],
                 env: {
                     ...process.env,
+                    ...(spec.env || {}),
                     OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
                 },
             });
@@ -485,9 +596,9 @@ async function start({
     onEvent,
     resumeSessionId = '',
 }) {
-    const binary = findOpenCode();
-    if (!binary) {
-        throw new Error('OpenCode is not installed on this machine, or its CLI could not be found');
+    const launch = findOpenCodeLaunch();
+    if (!launch) {
+        throw new Error('OpenCode is not installed on this machine: neither its CLI nor OpenCode Desktop could be found');
     }
 
     const directory = app.getPath('userData');
@@ -495,7 +606,7 @@ async function start({
     let server;
 
     try {
-        server = await launchServer(binary, serverConfig({
+        server = await launchServer(launch, serverConfig({
             url: mcpUrl,
             token,
             allowLocalTools: settings.allowLocalTools,
@@ -633,11 +744,11 @@ async function start({
 
 /** Ask a short-lived local server for the providers/models OpenCode can use. */
 async function listModels() {
-    const binary = findOpenCode();
-    if (!binary) return null;
+    const launch = findOpenCodeLaunch();
+    if (!launch) return null;
 
     const directory = app.getPath('userData');
-    const server = await launchServer(binary, serverConfig(), directory);
+    const server = await launchServer(launch, serverConfig(), directory);
     try {
         const sdk = await loadSdk();
         const client = sdk.createOpencodeClient({
@@ -688,9 +799,9 @@ function describeFailure(error) {
     return message;
 }
 
-/** Whether the CLI is on this machine. See the note on claude-code's. */
+/** Whether the CLI or the desktop app is on this machine. See the note on claude-code's. */
 function detect() {
-    return { ok: Boolean(findOpenCode()), reason: 'notFound' };
+    return { ok: Boolean(findOpenCodeLaunch()), reason: 'notFound' };
 }
 
 module.exports = {
@@ -698,7 +809,10 @@ module.exports = {
     listModels,
     detect,
     findOpenCode,
+    findOpenCodeDesktop,
+    findOpenCodeLaunch,
     openCodeCandidates,
+    desktopCandidates,
     parseModel,
     permissions,
     serverConfig,

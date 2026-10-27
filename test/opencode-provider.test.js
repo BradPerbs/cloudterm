@@ -29,6 +29,67 @@ async function run() {
         },
     }), npmShim);
 
+    // OpenCode Desktop, which ships no CLI.
+    const desktopExe = 'C:\\Users\\Mario\\AppData\\Local\\Programs\\@opencode-aidesktop\\OpenCode.exe';
+    const desktopAsar = 'C:\\Users\\Mario\\AppData\\Local\\Programs\\@opencode-aidesktop\\resources\\app.asar';
+    const desktops = provider.desktopCandidates({
+        platform: 'win32',
+        home: 'C:\\Users\\Mario',
+        env: { LOCALAPPDATA: 'C:\\Users\\Mario\\AppData\\Local' },
+    });
+    assert(desktops.some(entry => entry.exe === desktopExe && entry.asar === desktopAsar), 'the Windows install is a candidate');
+    assert(provider.desktopCandidates({ platform: 'darwin', home: '/Users/mario', env: {} })
+        .some(entry => entry.exe === '/Applications/OpenCode.app/Contents/MacOS/OpenCode'));
+
+    // Only the desktop app is there: the launch runs its bundle under its own
+    // Electron as Node, through our serve script, on the reserved port.
+    const onlyDesktop = {
+        platform: 'win32',
+        home: 'C:\\Users\\Mario',
+        env: { LOCALAPPDATA: 'C:\\Users\\Mario\\AppData\\Local' },
+        accessSync(candidate) {
+            if (candidate !== desktopExe && candidate !== desktopAsar) throw new Error('missing');
+        },
+    };
+    assert.strictEqual(provider.findOpenCode(onlyDesktop), '', 'no CLI');
+    const launch = provider.findOpenCodeLaunch(onlyDesktop);
+    assert.strictEqual(launch.kind, 'desktop');
+    assert.strictEqual(launch.command, desktopExe);
+    assert.strictEqual(launch.env.ELECTRON_RUN_AS_NODE, '1');
+    const launchArgs = launch.args(51234);
+    assert(launchArgs[0].endsWith('opencode-desktop-serve.mjs'));
+    assert(require('fs').existsSync(launchArgs[0]), 'the serve script ships beside the provider');
+    assert.strictEqual(launchArgs[1], desktopAsar);
+    assert.deepStrictEqual(launchArgs.slice(2), ['127.0.0.1', '51234']);
+
+    // Under Electron an app.asar answers ENOENT to accessSync and is a
+    // directory to statSync; that still counts as there.
+    assert(provider.findOpenCodeDesktop({
+        ...onlyDesktop,
+        accessSync(candidate) {
+            if (candidate !== desktopExe) throw new Error('ENOENT');
+        },
+        statSync(candidate) {
+            if (candidate !== desktopAsar) throw new Error('ENOENT');
+            return { isDirectory: () => true };
+        },
+    }), 'an archive Electron reads as a folder is found');
+
+    // The CLI wins when both are there.
+    const cli = provider.findOpenCodeLaunch({
+        ...onlyDesktop,
+        accessSync(candidate) {
+            if (candidate !== npmShim && candidate !== desktopExe && candidate !== desktopAsar) throw new Error('missing');
+        },
+        env: { APPDATA: 'C:\\Users\\Mario\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\Mario\\AppData\\Local' },
+    });
+    assert.strictEqual(cli.kind, 'cli');
+    assert.strictEqual(cli.command, npmShim);
+    assert.deepStrictEqual(cli.args(7), ['serve', '--hostname=127.0.0.1', '--port=7']);
+
+    // Nothing at all is null, not a guess.
+    assert.strictEqual(provider.findOpenCodeLaunch({ ...onlyDesktop, accessSync() { throw new Error('missing'); } }), null);
+
     let killed = false;
     let taskkill = null;
     provider._test.closeProcess({
