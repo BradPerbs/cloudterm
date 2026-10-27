@@ -316,6 +316,16 @@ async function start({
     let announced = Boolean(resumeSessionId);
     let running = null;
     let abort = null;
+    // Every turn is a fresh `codex exec`, which reads its config again and
+    // warns again. Once a conversation is enough.
+    const warned = new Set();
+    const report = (event) => {
+        if (event.type === 'warning') {
+            if (warned.has(event.message)) return;
+            warned.add(event.message);
+        }
+        onEvent(event);
+    };
 
     /** One turn, from the text going in to the transcript coming out. */
     async function turn(text, images = []) {
@@ -332,7 +342,7 @@ async function start({
             const { events } = await thread.runStreamed(turnInput(body, staged.paths), { signal: abort.signal });
 
             for await (const event of events) {
-                translate(event, onEvent);
+                translate(event, report);
 
                 if (event.type === 'thread.started' && !announced) {
                     announced = true;
@@ -480,8 +490,13 @@ function translate(event, onEvent) {
                 return;
             }
 
+            // Non-fatal, by the SDK's own account: a warning about the
+            // person's Codex setup, such as a hook whose timeout it clamped.
+            // The turn carries on and answers. Reported as an error, it
+            // marked the conversation idle in the middle of the turn, and the
+            // warning stood where the answer should have been.
             if (item.type === 'error' && item.message) {
-                onEvent({ type: 'error', message: item.message });
+                onEvent({ type: 'warning', message: item.message });
             }
             return;
         }
@@ -639,4 +654,5 @@ module.exports = {
     SERVER_NAME,
     // Pictures go in as files on the turn's command line: see `stageImages`.
     supportsImages: true,
+    _test: { translate },
 };
