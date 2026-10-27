@@ -2,6 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
+const http = require('http');
+const { Readable } = require('stream');
 const { spawnSync } = require('child_process');
 const spawn = require('cross-spawn');
 const { app } = require('electron');
@@ -84,6 +86,112 @@ function openCodeCandidates({
     return [...new Set(roots.filter(Boolean).flatMap(root => names.map(name => paths.join(root, name))))];
 }
 
+/**
+ * Where OpenCode Desktop puts itself, per platform.
+ *
+ * The desktop app ships no CLI. Its server is a bundle inside its app.asar,
+ * run by the app as a sidecar under its own Electron; the same can be done
+ * from here, with the app's executable as plain Node and a launcher of ours
+ * (opencode-desktop-serve.mjs) that imports the bundle and listens. Each
+ * candidate is the executable and the archive beside it.
+ */
+function desktopCandidates({
+    platform = process.platform,
+    env = process.env,
+    home = os.homedir(),
+} = {}) {
+    const windows = platform === 'win32';
+    // The platform is an argument, so the separators follow it rather than
+    // the machine running the check.
+    const paths = windows ? path.win32 : path.posix;
+    const found = [];
+    if (windows) {
+        const localAppData = envValue(env, 'LOCALAPPDATA', 'LocalAppData');
+        for (const folder of ['@opencode-aidesktop', 'OpenCode', 'opencode-desktop']) {
+            if (!localAppData) break;
+            const root = paths.join(localAppData, 'Programs', folder);
+            found.push({ exe: paths.join(root, 'OpenCode.exe'), asar: paths.join(root, 'resources', 'app.asar') });
+        }
+    } else if (platform === 'darwin') {
+        for (const root of ['/Applications/OpenCode.app', paths.join(home, 'Applications', 'OpenCode.app')]) {
+            found.push({
+                exe: paths.join(root, 'Contents', 'MacOS', 'OpenCode'),
+                asar: paths.join(root, 'Contents', 'Resources', 'app.asar'),
+            });
+        }
+    } else {
+        for (const root of ['/opt/OpenCode', '/opt/opencode-desktop', '/usr/lib/opencode-desktop']) {
+            found.push({ exe: paths.join(root, 'opencode-desktop'), asar: paths.join(root, 'resources', 'app.asar') });
+        }
+    }
+    return found;
+}
+
+/**
+ * Whether the archive is there.
+ *
+ * Under Electron, `fs` treats an app.asar as a directory it can read into,
+ * and `accessSync` on the archive itself answers ENOENT for the root of it.
+ * `statSync` answers, as a directory. Under plain Node it is a file. Either
+ * answer means the archive exists; only a throw means it does not.
+ */
+function archivePresent(target, { accessSync = fs.accessSync, statSync = fs.statSync } = {}) {
+    try {
+        accessSync(target, fs.constants.F_OK);
+        return true;
+    } catch {
+        // The shim's ENOENT, or a real one: stat tells them apart.
+    }
+    try {
+        statSync(target);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** The desktop app's executable and archive, when both are there. */
+function findOpenCodeDesktop(options = {}) {
+    const accessSync = options.accessSync || fs.accessSync;
+    const statSync = options.statSync || (options.accessSync ? () => { throw new Error('missing'); } : fs.statSync);
+    for (const candidate of desktopCandidates(options)) {
+        try {
+            accessSync(candidate.exe, fs.constants.F_OK);
+        } catch {
+            continue;
+        }
+        if (archivePresent(candidate.asar, { accessSync, statSync })) return candidate;
+    }
+    return null;
+}
+
+/**
+ * How to start a server on this machine: the CLI when there is one, the
+ * desktop app's bundle otherwise. `args` takes the port, since it is
+ * reserved at launch. Nothing found is null.
+ */
+function findOpenCodeLaunch(options = {}) {
+    const binary = findOpenCode(options);
+    if (binary) {
+        return {
+            kind: 'cli',
+            command: binary,
+            args: port => ['serve', '--hostname=127.0.0.1', `--port=${port}`],
+            env: {},
+        };
+    }
+    const desktop = findOpenCodeDesktop(options);
+    if (desktop) {
+        return {
+            kind: 'desktop',
+            command: desktop.exe,
+            args: port => [path.join(__dirname, 'opencode-desktop-serve.mjs'), desktop.asar, '127.0.0.1', String(port)],
+            env: { ELECTRON_RUN_AS_NODE: '1' },
+        };
+    }
+    return null;
+}
+
 /** Find the CLI even when a packaged Electron app has a minimal PATH. */
 function findOpenCode(options = {}) {
     const platform = options.platform || process.platform;
@@ -116,10 +224,17 @@ function parseModel(value) {
 /**
  * The last matching OpenCode permission wins. Deny/ask everything first,
  * then allow only our MCP namespace: its real approval happens in mcp-host.
+ *
+ * OpenCode's own `question` tool is denied whatever the switch says. Its
+ * answer is collected on an endpoint of its own that nothing here answers, so
+ * a model that reached for it held the session open and the turn never ended,
+ * and with the approval mode now applied to OpenCode's tools Yolo would wave
+ * it straight through. Denied, the model asks in its reply instead.
  */
 function permissions(allowLocalTools) {
     return {
         '*': allowLocalTools ? 'ask' : 'deny',
+        question: 'deny',
         [`${SERVER_NAME}_*`]: 'allow',
     };
 }
@@ -172,7 +287,11 @@ function reservePort() {
 }
 
 /** Spawn one private OpenCode server and wait until it publishes its URL. */
-async function launchServer(binary, config, directory) {
+async function launchServer(launch, config, directory) {
+    // A bare path is the CLI, for the callers and tests that pass one.
+    const spec = typeof launch === 'string'
+        ? { command: launch, args: port => ['serve', '--hostname=127.0.0.1', `--port=${port}`], env: {} }
+        : launch;
     const port = await reservePort();
     return new Promise((resolve, reject) => {
         let child;
@@ -197,12 +316,13 @@ async function launchServer(binary, config, directory) {
         }, START_TIMEOUT);
 
         try {
-            child = spawn(binary, ['serve', '--hostname=127.0.0.1', `--port=${port}`], {
+            child = spawn(spec.command, spec.args(port), {
                 cwd: directory,
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe'],
                 env: {
                     ...process.env,
+                    ...(spec.env || {}),
                     OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
                 },
             });
@@ -227,6 +347,114 @@ async function launchServer(binary, config, directory) {
             }
         });
     });
+}
+
+/**
+ * The client's `fetch`, over plain http, because a turn can take longer than
+ * five minutes.
+ *
+ * `client.session.prompt` holds one request open for the whole of a turn:
+ * the answer arrives on the event stream, and that call resolves when the
+ * agent has finished. Node's own fetch gives a response 300 seconds to
+ * begin, and past that it drops the socket, which surfaced as "fetch failed"
+ * and ended the turn.
+ *
+ * The timeout cannot be moved without reaching for undici, which is not a
+ * dependency of the packaged app. Node's own http client has no such limit,
+ * so this is that: one request, streamed both ways, aborting when the
+ * caller's signal says to. The server is on the loopback interface, so there
+ * is no TLS and no redirect to handle.
+ */
+async function loopbackFetch(request) {
+    const url = new URL(request.url);
+    const body = ['GET', 'HEAD'].includes(request.method)
+        ? null
+        : Buffer.from(await request.arrayBuffer());
+
+    return new Promise((resolve, reject) => {
+        const headers = {};
+        request.headers.forEach((value, name) => { headers[name] = value; });
+        if (body) headers['content-length'] = String(body.length);
+
+        const outgoing = http.request({
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port,
+            path: `${url.pathname}${url.search}`,
+            method: request.method,
+            headers,
+        }, (incoming) => {
+            resolve(new Response(
+                // A stream rather than a buffer: the event subscription is an
+                // open-ended one, and buffering it would never resolve.
+                incoming.statusCode === 204 || incoming.statusCode === 304
+                    ? null
+                    : Readable.toWeb(incoming),
+                {
+                    status: incoming.statusCode,
+                    statusText: incoming.statusMessage,
+                    headers: Object.entries(incoming.headers)
+                        .filter(([, value]) => value !== undefined)
+                        .map(([name, value]) => [name, Array.isArray(value) ? value.join(', ') : String(value)]),
+                },
+            ));
+        });
+
+        outgoing.on('error', reject);
+
+        const signal = request.signal;
+        if (signal) {
+            if (signal.aborted) {
+                outgoing.destroy(new Error('aborted'));
+                reject(new DOMException('The request was aborted', 'AbortError'));
+                return;
+            }
+            signal.addEventListener('abort', () => {
+                outgoing.destroy(new Error('aborted'));
+                reject(new DOMException('The request was aborted', 'AbortError'));
+            }, { once: true });
+        }
+
+        if (body) outgoing.write(body);
+        outgoing.end();
+    });
+}
+
+/**
+ * Whether one of OpenCode's own tools may run, asked when it raises a
+ * permission and the local-tools switch is on.
+ *
+ * The blocked list first, which applies to OpenCode's shell exactly as to
+ * ours whatever the approval mode says. Then the approval mode, which applies
+ * to OpenCode's own tools as it does to ours: under "never" nothing waits,
+ * and a read under the default is not worth a card. Without this every grep
+ * and every file read stopped the run, whatever the user had chosen.
+ */
+async function localApproved({ permission, current, requestApproval, onEvent }) {
+    // Denied in the config already (see `permissions`); refused here as well
+    // for a release that asks anyway, since nothing would answer it after.
+    if (permission.type === 'question') return false;
+
+    const input = {
+        ...(permission.metadata || {}),
+        ...(permission.pattern ? { pattern: permission.pattern } : {}),
+    };
+
+    const blocked = catalog.nativeBlockedReason(permission.type || '', input, current);
+    if (blocked) {
+        onEvent({ type: 'tool-blocked', name: permission.type, rule: blocked, local: true });
+        return false;
+    }
+
+    if (catalog.nativeAutoApproved(permission.type || '', input, current)) return true;
+
+    const verdict = await requestApproval({
+        toolName: permission.type || permission.title || 'tool',
+        name: permission.type || 'tool',
+        input,
+        local: true,
+    });
+    return Boolean(verdict.approved);
 }
 
 function dataOf(response) {
@@ -379,9 +607,9 @@ async function start({
     onEvent,
     resumeSessionId = '',
 }) {
-    const binary = findOpenCode();
-    if (!binary) {
-        throw new Error('OpenCode is not installed on this machine, or its CLI could not be found');
+    const launch = findOpenCodeLaunch();
+    if (!launch) {
+        throw new Error('OpenCode is not installed on this machine: neither its CLI nor OpenCode Desktop could be found');
     }
 
     const directory = app.getPath('userData');
@@ -389,7 +617,7 @@ async function start({
     let server;
 
     try {
-        server = await launchServer(binary, serverConfig({
+        server = await launchServer(launch, serverConfig({
             url: mcpUrl,
             token,
             allowLocalTools: settings.allowLocalTools,
@@ -409,6 +637,8 @@ async function start({
             baseUrl: server.url,
             directory,
             throwOnError: true,
+            // See loopbackFetch: a turn outlives Node's own fetch timeout.
+            fetch: loopbackFetch,
         });
 
         if (resumeSessionId) {
@@ -443,16 +673,7 @@ async function start({
         const remote = String(permission.type || '').startsWith(`${SERVER_NAME}_`);
         let approved = remote;
         if (!remote && current.allowLocalTools) {
-            const verdict = await requestApproval({
-                toolName: permission.type || permission.title || 'tool',
-                name: permission.type || 'tool',
-                input: {
-                    ...(permission.metadata || {}),
-                    ...(permission.pattern ? { pattern: permission.pattern } : {}),
-                },
-                local: true,
-            });
-            approved = verdict.approved;
+            approved = await localApproved({ permission, current, requestApproval, onEvent });
         }
         try {
             await client.postSessionIdPermissionsPermissionId({
@@ -534,17 +755,19 @@ async function start({
 
 /** Ask a short-lived local server for the providers/models OpenCode can use. */
 async function listModels() {
-    const binary = findOpenCode();
-    if (!binary) return null;
+    const launch = findOpenCodeLaunch();
+    if (!launch) return null;
 
     const directory = app.getPath('userData');
-    const server = await launchServer(binary, serverConfig(), directory);
+    const server = await launchServer(launch, serverConfig(), directory);
     try {
         const sdk = await loadSdk();
         const client = sdk.createOpencodeClient({
             baseUrl: server.url,
             directory,
             throwOnError: true,
+            // See loopbackFetch: a turn outlives Node's own fetch timeout.
+            fetch: loopbackFetch,
         });
         const response = dataOf(await client.config.providers());
         const rows = [];
@@ -587,9 +810,9 @@ function describeFailure(error) {
     return message;
 }
 
-/** Whether the CLI is on this machine. See the note on claude-code's. */
+/** Whether the CLI or the desktop app is on this machine. See the note on claude-code's. */
 function detect() {
-    return { ok: Boolean(findOpenCode()), reason: 'notFound' };
+    return { ok: Boolean(findOpenCodeLaunch()), reason: 'notFound' };
 }
 
 module.exports = {
@@ -597,11 +820,14 @@ module.exports = {
     listModels,
     detect,
     findOpenCode,
+    findOpenCodeDesktop,
+    findOpenCodeLaunch,
     openCodeCandidates,
+    desktopCandidates,
     parseModel,
     permissions,
     serverConfig,
     createTranslator,
     SERVER_NAME,
-    _test: { launchServer, closeProcess },
+    _test: { launchServer, closeProcess, loopbackFetch, localApproved },
 };

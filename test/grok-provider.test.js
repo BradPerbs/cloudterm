@@ -295,6 +295,26 @@ async function run() {
     assert.match(notice.message, /sign in|signed in/i, 'the fix is in the message, not just the failure');
     assert.strictEqual(bad.events.at(-1).isError, true, 'the turn ends as a failure');
 
+    // The turn ceiling is this app's setting, not a fault: no error line, and
+    // the result says which limit it was, so the panel can say "continue".
+    for (const line of [{ type: 'max_turns_reached' }, { type: 'error', message: 'max turns reached (40)' }]) {
+        const capped = collect();
+        const ceiling = provider.createTranslator(capped.onEvent);
+        ceiling.event({ type: 'text', data: 'Halfway there.' });
+        ceiling.event(line);
+        assert.strictEqual(ceiling.failed, true, 'no second error is added for the exit');
+        ceiling.finish();
+        assert(!capped.events.some(event => event.type === 'error'), `${line.type}: not an error line`);
+        assert.strictEqual(capped.events.at(-1).subtype, 'error_max_turns');
+        assert.strictEqual(capped.events.at(-1).isError, true);
+        assert(capped.events.some(event => event.type === 'assistant-text' && event.text === 'Halfway there.'),
+            'what it said before the limit is kept');
+
+        // The next turn starts clean.
+        ceiling.finish();
+        assert.strictEqual(capped.events.at(-1).subtype, 'success');
+    }
+
     // A call announced twice is still one row, or the transcript grows a
     // duplicate for every progress update the agent sends.
     const repeated = collect();

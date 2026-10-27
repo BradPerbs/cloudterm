@@ -285,6 +285,65 @@ check('a question to the user never needs a card in front of its own card', () =
     assert.strictEqual(tools.isAutoApproved('list_sessions', {}, asking), false);
 });
 
+check('the approval mode reaches the runtimes\' own tools, whatever they call them', () => {
+    // The spellings in play: Claude Code's, OpenCode's, Grok's.
+    for (const read of ['Read', 'read', 'read_file', 'Grep', 'grep', 'Glob', 'list_dir', 'LS', 'TodoWrite']) {
+        assert.strictEqual(tools.nativeAutoApproved(read, {}, balanced), true, `${read} only looks`);
+        assert.strictEqual(tools.nativeAutoApproved(read, {}, asking), false, `${read} still waits under "always"`);
+        assert.strictEqual(tools.nativeAutoApproved(read, {}, open), true, `${read} does not wait under "never"`);
+    }
+    for (const write of ['Edit', 'edit', 'Write', 'write', 'patch', 'MultiEdit', 'NotebookEdit']) {
+        assert.strictEqual(tools.nativeAutoApproved(write, {}, balanced), false, `${write} changes something`);
+        assert.strictEqual(tools.nativeAutoApproved(write, {}, open), true, `${write} does not wait under "never"`);
+    }
+});
+
+check('a web call by a runtime asks under the default, and only there', () => {
+    for (const web of ['WebFetch', 'WebSearch', 'webfetch', 'web_search']) {
+        assert.strictEqual(tools.nativeAutoApproved(web, { url: 'https://example.com' }, balanced), false, `${web} asks`);
+        assert.strictEqual(tools.nativeAutoApproved(web, {}, open), true, `${web} runs under "never"`);
+        assert.strictEqual(tools.nativeAutoApproved(web, {}, asking), false);
+    }
+    assert.strictEqual(tools.nativeAutoApproved('mcp__fetch__fetch', {}, balanced), false, 'an MCP fetch is a web call too');
+    assert.strictEqual(tools.nativeAutoApproved('mcp__search__web_search', {}, balanced), false);
+});
+
+check('a runtime\'s own shell is judged by the allow list', () => {
+    for (const shell of ['Bash', 'bash', 'run_terminal_command']) {
+        assert.strictEqual(tools.nativeAutoApproved(shell, { command: 'ls -la' }, balanced), true);
+        assert.strictEqual(tools.nativeAutoApproved(shell, { command: 'systemctl restart nginx' }, balanced), false);
+        assert.strictEqual(tools.nativeAutoApproved(shell, { command: 'ls; rm x' }, balanced), false, 'chained is judged whole');
+        assert.strictEqual(tools.nativeAutoApproved(shell, {}, balanced), false, 'no command to judge is a change');
+    }
+    // A pattern alone is not a command to wave through.
+    assert.strictEqual(tools.nativeAutoApproved('bash', { pattern: 'ls *' }, balanced), false);
+});
+
+check('the blocked list reaches a runtime\'s own shell, even under "never"', () => {
+    const rule = tools.nativeBlockedReason('Bash', { command: 'sudo rm -rf /srv' }, open);
+    assert.strictEqual(rule, 'rm -rf');
+    assert.strictEqual(tools.nativeAutoApproved('Bash', { command: 'rm -rf /srv' }, open), false);
+    assert.strictEqual(tools.nativeBlockedReason('bash', { pattern: ['git status', 'rm -fr /tmp/x'] }, open), 'rm -rf',
+        'OpenCode\'s pattern is checked when it carries no command');
+    assert.strictEqual(tools.nativeBlockedReason('Bash', { command: 'ls -la' }, open), '');
+    // Only shells: a file that mentions the words is not a command.
+    assert.strictEqual(tools.nativeBlockedReason('Write', { content: 'rm -rf /' }, open), '');
+});
+
+check('an MCP tool is a read when its name says so', () => {
+    assert.strictEqual(tools.nativeAutoApproved('mcp__Playwright__browser_snapshot', {}, balanced), true);
+    assert.strictEqual(tools.nativeAutoApproved('mcp__Playwright__browser_take_screenshot', {}, balanced), true);
+    assert.strictEqual(tools.nativeAutoApproved('mcp__Playwright__browser_click', {}, balanced), false);
+    assert.strictEqual(tools.nativeAutoApproved('mcp__github__list_issues', {}, balanced), true);
+    assert.strictEqual(tools.nativeAutoApproved('mcp__github__create_issue', {}, balanced), false);
+    assert.strictEqual(tools.nativeAutoApproved('mcp__github__list_issues', {}, asking), false);
+});
+
+check('a runtime tool nobody has taught it is a change, and a change asks', () => {
+    assert.strictEqual(tools.nativeAutoApproved('DeployToProduction', {}, balanced), false);
+    assert.strictEqual(tools.nativeAutoApproved('', {}, balanced), false);
+});
+
 check('a saved host never carries a secret into the model', () => {
     const shaped = tools.publicHost({
         id: 'host-1',

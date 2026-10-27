@@ -227,6 +227,10 @@ function create(target = {}) {
 
     const id = nextId('conv');
     const scope = normalizeScope(target);
+    // Room is made before the new one goes in, never after: with the list at
+    // its cap, trimming afterwards took the youngest untitled conversation,
+    // which was this one, and the first message into it found it gone.
+    trim(1);
     conversations.set(id, {
         id,
         ...scope,
@@ -250,22 +254,25 @@ function create(target = {}) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
     });
-    trim();
     return { conversationId: id, ...scope };
 }
 
 /**
- * Forget the oldest parked conversations, once there are more than the cap.
+ * Forget the oldest parked conversations, so that `room` more fit under the cap.
  *
  * Only ones that are properly asleep are candidates: a conversation with a
  * running query, or one waiting on an approval, is in use whatever its age.
+ * Nor is one opened in the last minute with nothing in it yet: that is a panel
+ * somebody is about to type into, whatever the list looks like.
  */
-function trim() {
-    let excess = conversations.size - MAX_CONVERSATIONS;
+function trim(room = 0) {
+    let excess = conversations.size + room - MAX_CONVERSATIONS;
     if (excess <= 0) return;
 
+    const fresh = Date.now() - 60 * 1000;
     const parked = [...conversations.values()]
         .filter(conversation => !conversation.session && !conversation.starting && !conversation.busy)
+        .filter(conversation => !(conversation.createdAt > fresh && conversation.events.length === 0))
         // Untitled first, then oldest. Nothing was ever said in an untitled
         // one: the panel opens a conversation the moment it is mounted, and a
         // scratch conversation nobody typed into should not be able to push a
@@ -761,6 +768,12 @@ function ensureProvider(conversation) {
     if (conversation.starting) return conversation.starting;
 
     const current = resolved();
+    // Nothing ticked: a fresh machine with no agent installed. Said as that,
+    // rather than as whichever runtime `provider` still names failing to find
+    // itself.
+    if (Array.isArray(current.providers) && current.providers.length === 0) {
+        return Promise.reject(new Error('No AI agent is switched on. Tick one under Settings > AI Agent.'));
+    }
     const provider = PROVIDERS[current.provider];
     if (!provider) {
         return Promise.reject(new Error(`No provider named "${current.provider}" is available`));
@@ -850,7 +863,9 @@ function handleProviderEvent(conversation, event) {
     // actually worth keeping is the record that something tried, next to the
     // commands that did run.
     if (event.type === 'tool-blocked') {
-        const target = conversation.boundSessionId || '';
+        // A runtime's own shell runs on this computer, so it is not drawn
+        // against the server the panel happens to be following.
+        const target = event.local ? '' : (conversation.boundSessionId || '');
         const info = target ? transcript.info(target) : null;
         activity.record({
             category: 'security',
@@ -1153,8 +1168,14 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
 
     // A forced ask drops what is held for this agent and starts again. The
     // menu offers it when a read came back with nothing, which is usually a
-    // runtime that was not up yet rather than an agent with no models.
-    if (refresh) modelCatalogs.delete(asked);
+    // runtime that was not up yet rather than an agent with no models. It
+    // re-reads every agent that is on, so the list one had is kept aside: a
+    // re-read that fails puts it back rather than leaving a working menu empty.
+    let previous = null;
+    if (refresh) {
+        previous = modelCatalogs.get(asked) || null;
+        modelCatalogs.delete(asked);
+    }
 
     if (modelCatalogs.has(asked)) return Promise.resolve(modelCatalogs.get(asked));
     if (!refresh && modelsPending.has(asked)) return modelsPending.get(asked);
@@ -1164,7 +1185,7 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
 
     const promise = provider.listModels({ settings: resolvedFor(asked) })
         .then((rows) => {
-            const list = rows?.length ? rows : null;
+            const list = rows?.length ? rows : previous;
             // Stored against the agent that answered, whether or not that is
             // still the one selected. A later ask for a different agent reads
             // its own entry, and a switch back does not have to ask again.
@@ -1178,7 +1199,11 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
             // menu. Not cached either, so the next ask tries again rather than
             // inheriting one bad start for the life of the app.
             console.error(`Could not read the model list from ${asked}:`, error.message);
-            return null;
+            if (previous) {
+                modelCatalogs.set(asked, previous);
+                notify('ai-models', { provider: asked, models: previous });
+            }
+            return previous;
         })
         .finally(() => {
             if (modelsPending.get(asked) === promise) modelsPending.delete(asked);

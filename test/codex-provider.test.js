@@ -136,6 +136,19 @@ async function run() {
 
     assert.strictEqual(onUnix({}), '');
 
+    // An error item inside a turn is a warning about the user's Codex setup,
+    // not the end of the turn: the turn carries on and answers. A failed turn
+    // or a stream error is still an error.
+    const translated = [];
+    const { translate } = provider._test;
+    translate({ type: 'item.completed', item: { id: 'w1', type: 'error', message: 'hook timeout clamped' } },
+        event => translated.push(event));
+    translate({ type: 'turn.failed', error: { message: 'boom' } }, event => translated.push(event));
+    assert.deepStrictEqual(translated, [
+        { type: 'warning', message: 'hook timeout clamped' },
+        { type: 'error', message: 'boom' },
+    ]);
+
     console.log('codex-provider tests passed');
 }
 
