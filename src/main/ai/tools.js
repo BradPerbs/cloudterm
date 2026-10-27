@@ -617,6 +617,47 @@ const TOOLS = [
             return ok(`Closed the session on ${resolved.info.hostName || resolved.info.address}.`);
         },
     },
+
+    {
+        name: 'ask_user',
+        title: 'Ask the user a question',
+        readOnly: true,
+        // The card this puts up is the question itself, so it never needs an
+        // approval card in front of it. See `isAutoApproved`.
+        asksUser: true,
+        description:
+            'Put a question to the user, with a short list of answers to pick from, and wait for the '
+            + 'answer. Use it when the next step depends on something only they can decide or know: which '
+            + 'of two hosts, whether to go ahead a particular way, a value that is not on the server. Not '
+            + 'for approval of a tool call, which the app asks for on its own. Keep the question to one or '
+            + 'two sentences and the options to two to four; the user can always type something else. '
+            + 'Never use it to ask for a password, a key or a token.',
+        shape: {
+            question: z.string().min(1).max(500).describe('The question, one or two sentences.'),
+            options: z.array(z.string().min(1).max(120)).max(6).optional()
+                .describe('Answers to offer, in the order to show them. Omit for a free-text answer.'),
+        },
+        handler: async (input, ctx) => {
+            if (typeof ctx.askUser !== 'function') return fail('There is no one to ask here.');
+            const options = (input.options || [])
+                .map(option => String(option).trim())
+                .filter(Boolean)
+                .slice(0, 6);
+            const reply = await ctx.askUser({
+                question: input.question,
+                options,
+                // Present only when the call came over the tool server, whose
+                // clients stop waiting after seconds rather than minutes. The
+                // question outlives that: see `requestQuestion`.
+                signal: ctx.signal,
+            });
+            // Not an error: the question is still on screen and the answer
+            // will come as the user's next message. The text says what to do.
+            if (reply.parked) return ok(reply.message);
+            if (!reply.answered) return fail(reply.message || 'The user did not answer.');
+            return ok({ answer: reply.answer, chosen: reply.chosen || undefined });
+        },
+    },
 ];
 
 const BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
@@ -843,10 +884,16 @@ function isAutoApproved(toolName, input, settings) {
     // and `never ask` is exactly the setting under which that would happen.
     if (blockedReason(toolName, input, settings)) return false;
 
+    const tool = BY_NAME.get(toolName);
+
+    // A question to the user is a card already. Under "ask every time" it
+    // would otherwise be preceded by a second card asking whether it may ask,
+    // which is the same click twice and teaches nobody anything.
+    if (tool?.asksUser) return true;
+
     if (settings.approval === 'never') return true;
     if (settings.approval === 'always') return false;
 
-    const tool = BY_NAME.get(toolName);
     if (!tool) return false;
     if (tool.readOnly) return true;
 

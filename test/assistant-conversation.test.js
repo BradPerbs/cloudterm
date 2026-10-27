@@ -56,6 +56,7 @@ require.cache[require.resolve(path.join(ROOT, 'ai', 'providers', 'claude-code'))
 } };
 
 const assistant = require(path.join(ROOT, 'ai'));
+const catalog = require(path.join(ROOT, 'ai', 'tools'));
 
 const notified = [];
 assistant.setNotifier((channel, payload) => notified.push({ channel, ...payload }));
@@ -133,6 +134,110 @@ async function main() {
         });
         assert.strictEqual(answer.approved, false);
         assert.ok(!eventsOf(conversationId).some(event => event.type === 'approval-request'));
+    });
+
+    await check('ask_user puts up the card Claude Code\'s question draws, and hands back the pick', async () => {
+        const { conversationId, toolContext } = await started();
+        const ask = catalog.BY_NAME.get('ask_user');
+        const reply = ask.handler(
+            { question: 'Which port should nginx listen on?', options: ['80', '8080'] },
+            toolContext()
+        );
+        await tick();
+
+        const card = eventsOf(conversationId).find(event => event.type === 'approval-request');
+        assert.strictEqual(card.question, true, 'drawn as a question, not an approval');
+        assert.strictEqual(card.name, 'ask_user');
+        assert.strictEqual(card.sessionId, '', 'a question is not drawn against a server');
+        assert.deepStrictEqual(card.input, {
+            questions: [{
+                question: 'Which port should nginx listen on?',
+                header: '',
+                multiSelect: false,
+                options: [{ label: '80', description: '' }, { label: '8080', description: '' }],
+            }],
+        });
+
+        // Exactly what the card sends back for a pick.
+        assert.strictEqual(assistant.respondToApproval({
+            requestId: card.requestId,
+            approved: true,
+            input: { answers: { 'Which port should nginx listen on?': '8080' } },
+        }), true);
+
+        const result = await reply;
+        assert.ok(!result.isError);
+        assert.deepStrictEqual(JSON.parse(result.text), { answer: '8080', chosen: true });
+        assert.ok(eventsOf(conversationId).some(event => event.type === 'approval-settled'
+            && event.requestId === card.requestId && event.status === 'approved'));
+    });
+
+    await check('a question with no options takes a typed answer, and a skip is an answer too', async () => {
+        const { conversationId, toolContext } = await started();
+        const ask = catalog.BY_NAME.get('ask_user');
+
+        const typed = ask.handler({ question: 'What is the database called?' }, toolContext());
+        await tick();
+        let card = eventsOf(conversationId).filter(event => event.type === 'approval-request').pop();
+        assert.deepStrictEqual(card.input.questions[0].options, [], 'free text has nothing to pick');
+        assistant.respondToApproval({
+            requestId: card.requestId, approved: true,
+            input: { answers: { 'What is the database called?': 'billing_prod' } },
+        });
+        assert.deepStrictEqual(JSON.parse((await typed).text), { answer: 'billing_prod' });
+
+        const skipped = ask.handler({ question: 'Restart now?', options: ['Yes', 'No'] }, toolContext());
+        await tick();
+        card = eventsOf(conversationId).filter(event => event.type === 'approval-request').pop();
+        assistant.respondToApproval({ requestId: card.requestId, approved: false, message: 'The user skipped the question.' });
+        const result = await skipped;
+        assert.strictEqual(result.isError, true);
+        assert.ok(/skipped/.test(result.text));
+    });
+
+    await check('a question outlasts a runtime that stops waiting, and the answer goes as the next message', async () => {
+        const { conversationId, toolContext, onEvent } = await started();
+        const ask = catalog.BY_NAME.get('ask_user');
+        const question = 'Which of the two replicas should go first?';
+
+        // The row the agent's own stream draws for the call.
+        onEvent({ type: 'tool-call', id: 'call-7', name: 'ask_user', input: { question, options: ['db-1', 'db-2'] } });
+        const controller = new AbortController();
+        const reply = ask.handler({ question, options: ['db-1', 'db-2'] }, { ...toolContext(), signal: controller.signal });
+        await tick();
+        const card = eventsOf(conversationId).filter(event => event.type === 'approval-request').pop();
+
+        controller.abort();
+        const result = await reply;
+        assert.ok(!result.isError, 'handing the turn back is not a failure');
+        assert.ok(/End your turn now/.test(result.text), 'the agent is told what to do next');
+        assert.ok(!eventsOf(conversationId).some(event => event.type === 'approval-settled'
+            && event.requestId === card.requestId), 'the card stays up');
+
+        const before = agent.sent.length;
+        assert.strictEqual(assistant.respondToApproval({
+            requestId: card.requestId, approved: true, input: { answers: { [question]: 'db-2' } },
+        }), true, 'the card can still be answered');
+        await tick();
+        await tick();
+
+        const events = eventsOf(conversationId);
+        assert.ok(events.some(event => event.type === 'approval-settled' && event.requestId === card.requestId));
+        const closed = events.filter(event => event.type === 'tool-result' && event.id === 'call-7').pop();
+        assert.strictEqual(closed?.text, 'db-2', 'the row is closed out with the answer');
+        const message = events.filter(event => event.type === 'user-message').pop();
+        assert.strictEqual(message.text, 'db-2', 'the answer is the user\'s next message');
+        assert.ok(agent.sent.slice(before).some(text => text.endsWith('db-2')), 'and it reaches the agent');
+    });
+
+    await check('stopping the run takes down a question still waiting', async () => {
+        const { conversationId, toolContext } = await started();
+        const reply = catalog.BY_NAME.get('ask_user').handler({ question: 'Go on?' }, toolContext());
+        await tick();
+        await assistant.interrupt(conversationId);
+        const result = await reply;
+        assert.strictEqual(result.isError, true);
+        assert.ok(/stopped the run/.test(result.text));
     });
 
     await assistant.shutdown();

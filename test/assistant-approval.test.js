@@ -273,6 +273,18 @@ check('"never ask" really does mean never', () => {
     assert.strictEqual(tools.isAutoApproved('some_new_tool', {}, open), true);
 });
 
+check('a question to the user never needs a card in front of its own card', () => {
+    const ask = tools.BY_NAME.get('ask_user');
+    assert.ok(ask, 'ask_user is in the catalog');
+    assert.strictEqual(ask.readOnly, true, 'it changes nothing anywhere');
+    for (const settings of [asking, balanced, open]) {
+        assert.strictEqual(tools.isAutoApproved('ask_user', { question: 'Which host?' }, settings), true);
+    }
+    // And the exemption is the question tool's alone: everything else still
+    // asks under "ask every time".
+    assert.strictEqual(tools.isAutoApproved('list_sessions', {}, asking), false);
+});
+
 check('a saved host never carries a secret into the model', () => {
     const shaped = tools.publicHost({
         id: 'host-1',
