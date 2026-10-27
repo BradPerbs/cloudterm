@@ -1216,6 +1216,14 @@ export default {
     'assistant.toolGroup.showAll': 'Show all',
     'assistant.toolGroup.showLess': 'Show less',
 
+    'assistant.diffWholeFile': 'whole file',
+    'assistant.diffTooLarge': 'This change is too large to show here.',
+    'assistant.diffShowAll_one': 'Show all {count} line',
+    'assistant.diffShowAll_other': 'Show all {count} lines',
+    'assistant.diffShowLess': 'Show less',
+    'assistant.diffHidden_one': '{count} more line not shown',
+    'assistant.diffHidden_other': '{count} more lines not shown',
+
     'assistant.send': 'Send',
     'assistant.attachImage': 'Add an image',
     'assistant.removeImage': 'Remove image',

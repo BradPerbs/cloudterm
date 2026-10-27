@@ -23,6 +23,7 @@ import {
     UserMultipleIcon,
 } from 'hugeicons-react';
 import CopyButton from '../ui/CopyButton';
+import DiffView, { DiffCounts } from './DiffView';
 import { chipFor, todoProgress, toolKey, verbFor } from '../../lib/tool-bucket';
 import { translate, useT } from '../../i18n';
 
@@ -274,7 +275,8 @@ export default function ToolCall({ item, bare = false }) {
     const summary = describeCall(item.name, item.input);
     const refused = REFUSED[item.approval?.status];
     const status = item.status || 'done';
-    const expandable = Boolean(item.result);
+    // An edit opens to its change even before it has reported back.
+    const expandable = Boolean(item.result) || Boolean(item.diff);
 
     // A verb when the tool names its kind; otherwise the tool's own name,
     // written the way it would be said.
@@ -350,19 +352,30 @@ export default function ToolCall({ item, bare = false }) {
                     </span>
                 ) : null}
 
+                {/* What an edit did, counted, so a run of edits can be read
+                    without opening each one. Not for one that never ran. */}
+                {item.diff && !refused && (
+                    <DiffCounts added={item.diff.added} removed={item.diff.removed} className="ml-auto pl-1" />
+                )}
+
                 {expandable && (
                     <ArrowDown01Icon
                         size={13}
                         strokeWidth={2}
-                        className={`shrink-0 ml-auto text-gray-400 dark:text-gray-600 transition-transform
+                        className={`shrink-0 ${item.diff && !refused ? 'ml-1' : 'ml-auto'} text-gray-400 dark:text-gray-600 transition-transform
                             ${open ? 'rotate-180' : ''}`}
                     />
                 )}
             </button>
 
-            {/* Where the change an edit made will be drawn, above its output,
-                once the main process sends one with the call. */}
-            {open && expandable && (
+            {/* The change an edit makes, above its output. The main process
+                sends it with the call; see DiffView. */}
+            {open && item.diff && (
+                <div className="border-t border-black/[0.06] dark:border-white/[0.06]">
+                    <DiffView diff={item.diff} header={false} />
+                </div>
+            )}
+            {open && Boolean(item.result) && (
                 // The button is a sibling of the scroller rather than a child
                 // of it: inside, it would scroll away with the first screen of
                 // output, which is the one place it must not be.

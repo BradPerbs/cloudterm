@@ -12,7 +12,7 @@
  *   assistant  `{ id, text, thinking }`: a finished block of the reply, with
  *              the thinking that came before it. Either half can be empty.
  *   tool       `{ id, name, local, question, input, status, result, isError,
- *              approval? }`: one call. `status` is running, waiting (on a
+ *              diff, approval? }`: one call. `status` is running, waiting (on a
  *              question to the user), done, error, or stopped (its turn ended
  *              before it reported back).
  *   approval   a question that arrived for a call the transcript never saw
@@ -180,6 +180,9 @@ function step(state, event, owned) {
                 status: 'running',
                 result: '',
                 isError: false,
+                // The change an edit makes, worked out by the main process
+                // from the call's arguments. See ai/diff.js.
+                diff: event.diff || null,
             });
             // Anything that streamed before the call belongs above it: the
             // narration and, where the model thought without speaking, its
@@ -222,6 +225,7 @@ function step(state, event, owned) {
                 host: event.host,
                 status: 'pending',
                 feedback: '',
+                diff: event.diff || null,
             };
 
             // The question belongs to the call, so it is attached to the row

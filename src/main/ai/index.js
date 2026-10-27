@@ -5,6 +5,7 @@ const archive = require('./archive');
 const { readImages } = require('./images');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
+const diff = require('./diff');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -304,6 +305,15 @@ function emit(conversation, event) {
     // the history file or a window. The agent already has the value: it went
     // out with the message, which is the one place it is needed.
     const stamped = { ...pasted.maskDeep(event, conversation.secrets), at: Date.now() };
+
+    // An edit carries the change it makes, so its row and its approval card
+    // can draw it as a diff. Worked out from the arguments after the masking
+    // above, so a pasted key stays masked in the diff too. See diff.js.
+    if ((stamped.type === 'tool-call' || stamped.type === 'approval-request') && !stamped.diff) {
+        const change = diff.forEvent(stamped.name || stamped.rawName, stamped.input);
+        if (change) stamped.diff = change;
+    }
+
     conversation.updatedAt = stamped.at;
     conversation.events.push(stamped);
     if (conversation.events.length > MAX_EVENTS) {

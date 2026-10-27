@@ -1005,6 +1005,12 @@ export default {
     'assistant.toolGroup.showAll': '全部显示',
     'assistant.toolGroup.showLess': '收起',
 
+    'assistant.diffWholeFile': '整个文件',
+    'assistant.diffTooLarge': '这处改动太大，无法在此显示。',
+    'assistant.diffShowAll_other': '显示全部 {count} 行',
+    'assistant.diffShowLess': '收起',
+    'assistant.diffHidden_other': '还有 {count} 行未显示',
+
     'assistant.send': '发送',
     'assistant.attachImage': '添加图片',
     'assistant.removeImage': '移除图片',

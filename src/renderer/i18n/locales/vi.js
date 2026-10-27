@@ -1102,6 +1102,12 @@ export default {
     'assistant.toolGroup.showAll': 'Xem tất cả',
     'assistant.toolGroup.showLess': 'Thu gọn',
 
+    'assistant.diffWholeFile': 'toàn bộ tệp',
+    'assistant.diffTooLarge': 'Thay đổi này quá lớn để hiển thị ở đây.',
+    'assistant.diffShowAll_other': 'Hiện tất cả {count} dòng',
+    'assistant.diffShowLess': 'Thu gọn',
+    'assistant.diffHidden_other': 'Còn {count} dòng không được hiển thị',
+
     'assistant.send': 'Gửi',
     'assistant.attachImage': 'Thêm ảnh',
     'assistant.removeImage': 'Bỏ ảnh',

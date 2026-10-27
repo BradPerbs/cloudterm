@@ -1224,6 +1224,18 @@ export default {
     'assistant.toolGroup.showAll': 'Показать все',
     'assistant.toolGroup.showLess': 'Свернуть',
 
+    'assistant.diffWholeFile': 'весь файл',
+    'assistant.diffTooLarge': 'Это изменение слишком большое, чтобы показать его здесь.',
+    'assistant.diffShowAll_one': 'Показать {count} строку',
+    'assistant.diffShowAll_few': 'Показать все {count} строки',
+    'assistant.diffShowAll_many': 'Показать все {count} строк',
+    'assistant.diffShowAll_other': 'Показать все {count} строки',
+    'assistant.diffShowLess': 'Свернуть',
+    'assistant.diffHidden_one': 'Ещё {count} строка не показана',
+    'assistant.diffHidden_few': 'Ещё {count} строки не показаны',
+    'assistant.diffHidden_many': 'Ещё {count} строк не показано',
+    'assistant.diffHidden_other': 'Ещё {count} строки не показаны',
+
     'assistant.send': 'Отправить',
     'assistant.attachImage': 'Добавить изображение',
     'assistant.removeImage': 'Убрать изображение',

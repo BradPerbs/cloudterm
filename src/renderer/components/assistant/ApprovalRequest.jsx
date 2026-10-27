@@ -3,6 +3,7 @@ import { Alert02Icon, Cancel01Icon, Edit02Icon, Tick02Icon } from 'hugeicons-rea
 import Button from '../ui/Button';
 import CopyButton from '../ui/CopyButton';
 import TargetStack from './TargetStack';
+import DiffView from './DiffView';
 import { describeCall } from './ToolCall';
 import { approvalMarks, groupTargets } from '../../lib/approvals';
 import { useT } from '../../i18n';
@@ -253,8 +254,14 @@ export default function ApprovalRequest({ group, sessions = [], onRespond }) {
 
                 {/* What the line alone does not say: for an edit, the text it
                     takes out and the text it puts in, verbatim. Saying yes to
-                    a path without them is not saying yes to the change. */}
-                {summary.detail && (
+                    a path without them is not saying yes to the change. Drawn
+                    as a diff when the main process sent one, which it does for
+                    every runtime's edit and write tools. */}
+                {item.diff ? (
+                    <div className="rounded-lg overflow-hidden bg-gray-50 dark:bg-black/30">
+                        <DiffView diff={item.diff} note={summary.aside} />
+                    </div>
+                ) : summary.detail && (
                     <div className="rounded-lg px-2.5 py-2 max-h-48 overflow-auto
                         bg-gray-50 dark:bg-black/30 text-gray-700 dark:text-gray-300
                         font-jetbrains text-[11px] leading-[1.6] whitespace-pre-wrap break-words">
