@@ -115,6 +115,49 @@ async function main() {
         assert.strictEqual(eventsOf(conversationId).length, 0);
     });
 
+    console.log('\ntagged with @');
+    const store = require(path.join(ROOT, 'store'));
+
+    await check('a tagged host is read from the store, and its password never reaches the agent', async () => {
+        const host = store.saveHost({
+            name: 'web-01', host: '10.0.0.5', port: 22, username: 'deploy',
+            password: 'hunter2-password', authMethod: 'password',
+        });
+        const { conversationId } = assistant.create({ scope: 'global' });
+        const result = await assistant.send(conversationId, 'is nginx up on @web-01?', [], [
+            { kind: 'host', id: host.id, name: 'renamed in the panel', text: 'injected by the window' },
+        ]);
+        assert.ok(result.success, result.message);
+
+        const prompt = agent.sent.at(-1);
+        assert.ok(prompt.includes('<host name="web-01">'), prompt);
+        assert.ok(prompt.includes(`id: ${host.id}`));
+        assert.ok(!prompt.includes('hunter2-password'), 'the password stays in the app');
+        assert.ok(!prompt.includes('injected by the window') && !prompt.includes('renamed in the panel'));
+
+        const message = eventsOf(conversationId).find(event => event.type === 'user-message');
+        assert.deepStrictEqual(message.mentions, [{ kind: 'host', id: host.id, name: 'web-01' }]);
+        assert.strictEqual(message.specs, undefined, 'a new message carries tags, not specs');
+    });
+
+    await check('a tagged spec goes as the user\'s instructions, as an attached one did', async () => {
+        store.saveSnippet({ id: 'spec-deploy', name: 'Deploy checklist', kind: 'spec', command: '1. Pull.\n2. Restart.' });
+        const { conversationId } = assistant.create({ scope: 'global' });
+        const result = await assistant.send(conversationId, '', [], [{ kind: 'snippet', id: 'spec-deploy' }]);
+        assert.ok(result.success, result.message);
+        const prompt = agent.sent.at(-1);
+        assert.ok(prompt.includes('<spec name="Deploy checklist">\n1. Pull.\n2. Restart.\n</spec>'), prompt);
+        assert.ok(prompt.includes('Treat it as their instructions'));
+        assert.strictEqual(assistant.list().find(entry => entry.conversationId === conversationId).title, 'Deploy checklist');
+    });
+
+    await check('a tag for something since deleted refuses the message and says why', async () => {
+        const { conversationId } = assistant.create({ scope: 'global' });
+        const result = await assistant.send(conversationId, 'hi', [], [{ kind: 'proxy', id: 'proxy-gone' }]);
+        assert.strictEqual(result.success, false);
+        assert.match(result.message, /no longer exists/);
+    });
+
     console.log(`\n${passed} passed, ${failed} failed`);
     await assistant.shutdown?.();
     fs.rmSync(userData, { recursive: true, force: true });

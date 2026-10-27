@@ -6,6 +6,7 @@ import ToolCall from './ToolCall';
 import ToolGroup, { Thought } from './ToolGroup';
 import ApprovalRequest from './ApprovalRequest';
 import { SentFiles } from './AttachmentChips';
+import { SentMentions } from './MentionChips';
 import { useT } from '../../i18n';
 
 /**
@@ -99,6 +100,11 @@ function UserMessage({ item }) {
                     agent and are not kept. See AttachmentChips. */}
                 <SentFiles
                     files={item.files}
+                    spaced={Boolean(item.text || item.images?.length || item.specs?.length || item.mentions?.length)}
+                />
+                {/* What it tagged with `@` or invoked with `/`, by name. */}
+                <SentMentions
+                    mentions={item.mentions}
                     spaced={Boolean(item.text || item.images?.length || item.specs?.length)}
                 />
                 {/* The documents that went with it, by name. The text is in

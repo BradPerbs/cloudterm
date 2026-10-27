@@ -5,7 +5,6 @@ import {
     ArrowUp01Icon,
     StopCircleIcon,
     ImageAdd01Icon,
-    Note01Icon,
     Attachment01Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
@@ -14,9 +13,11 @@ import Markdown from '../../lib/markdown';
 import useAssistant from '../../hooks/useAssistant';
 import useTypewriter from '../../hooks/useTypewriter';
 import useGroupToolCalls from '../../hooks/useGroupToolCalls';
-import { useSnippets } from '../../hooks/useSnippets';
-import { isSpec } from '../../lib/snippets';
-import SpecMenu from './SpecMenu';
+import useMentionables from '../../hooks/useMentionables';
+import useMentions from '../../hooks/useMentions';
+import MentionPicker from './MentionPicker';
+import MentionChips from './MentionChips';
+import ComposerButton from './ComposerButton';
 import Transcript, { Notice } from './Transcript';
 import { Thought } from './ToolGroup';
 import WorkingIndicator from './WorkingIndicator';
@@ -201,7 +202,6 @@ export default function AssistantConversation({
     onConversationChange,
     onStatus,
     onOpenSettings,
-    onOpenSnippets,
 }) {
     const t = useT();
     const [settings, setSettings] = useState(null);
@@ -237,29 +237,17 @@ export default function AssistantConversation({
     const [imageNotice, setImageNotice] = useState('');
 
     /**
-     * The specs going with the message, by id. Ids rather than records, so a
-     * spec edited in the library while it sits in the composer is sent as it
-     * now reads; main looks each one up when the message goes.
+     * Everything a message can tag with `@`: saved hosts, specs and the other
+     * snippets, proxies and keys. Specs used to have a menu of their own; a
+     * spec is now one more thing to tag, and reads to the model exactly as an
+     * attached one did.
      */
-    const [specIds, setSpecIds] = useState([]);
-    const { snippets } = useSnippets();
-    const specs = useMemo(() => snippets.filter(isSpec), [snippets]);
-
-    // Resolved against the live library, so a spec deleted while attached
-    // falls off the message rather than being sent as an id nothing answers.
-    const attached = useMemo(
-        () => specIds.map(id => specs.find(spec => spec.id === id)).filter(Boolean),
-        [specIds, specs],
-    );
-
-    const toggleSpec = useCallback((id) => {
-        setSpecIds(current => (
-            current.includes(id) ? current.filter(entry => entry !== id) : [...current, id]
-        ));
-    }, []);
+    const mentionables = useMentionables({ hosts });
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    /** What the message tags, and the `@` picker. See `useMentions`. */
+    const tags = useMentions({ text, setText, inputRef, mentionables });
     const fileRef = useRef(null);
     const docRef = useRef(null);
     const stickToBottom = useRef(true);
@@ -280,6 +268,7 @@ export default function AssistantConversation({
     const first = assistant.items.find(item => item.kind === 'user');
     const title = String(
         first?.text
+        || first?.mentions?.[0]?.name
         || first?.specs?.[0]?.name
         || (first?.images?.length ? t('assistant.image') : ''),
     ).replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -457,21 +446,22 @@ export default function AssistantConversation({
     const submit = useCallback(() => {
         const body = text.trim();
         const files = attachments.files;
-        if ((!body && images.length === 0 && attached.length === 0 && files.length === 0) || assistant.busy) return;
+        const tagged = tags.mentions;
+        if ((!body && images.length === 0 && tagged.length === 0 && files.length === 0) || assistant.busy) return;
         setText('');
         setImages([]);
         setImageNotice('');
-        setSpecIds([]);
+        tags.clear();
         attachments.clear();
         stickToBottom.current = true;
         if (inputRef.current) inputRef.current.style.height = 'auto';
         assistant.send(
             body,
             images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
-            attached.map(spec => spec.id),
+            tagged.map(({ kind, id }) => ({ kind, id })),
             files.map(({ name, mediaType, text: words }) => ({ name, mediaType, text: words })),
         );
-    }, [text, images, attached, attachments, assistant]);
+    }, [text, images, tags, attachments, assistant]);
 
     // Ctrl+V with a file on the clipboard: a screenshot nine times out of ten,
     // or a file copied in the file manager. A text paste is left to the
@@ -487,6 +477,9 @@ export default function AssistantConversation({
     };
 
     const onKeyDown = (event) => {
+        // An open picker takes the arrows, Enter, Tab and Escape first, so the
+        // caret never has to leave the field to choose from it.
+        if (tags.onKeyDown(event)) return;
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             submit();
@@ -501,7 +494,7 @@ export default function AssistantConversation({
 
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;
     /** Whether there is anything to send: words, or something going with them. */
-    const hasDraft = Boolean(text.trim() || images.length > 0 || attached.length > 0 || attachments.files.length > 0);
+    const hasDraft = Boolean(text.trim() || images.length > 0 || tags.mentions.length > 0 || attachments.files.length > 0);
     const quickPrompts = settings?.quickPrompts || [];
 
     /**
@@ -719,40 +712,25 @@ export default function AssistantConversation({
                 into it. */}
             <div className="shrink-0 p-3">
                 <div
-                    className="rounded-2xl transition-colors
+                    className="relative rounded-2xl transition-colors
                         border border-gray-300 dark:border-surface-control
                         focus-within:border-gray-400 dark:focus-within:border-neutral-600"
                 >
-                    {/* The specs going with the message, as chips. Each can be
-                        taken back until it is sent; the menu below toggles the
-                        same set. */}
-                    {attached.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                            {attached.map(spec => (
-                                <span
-                                    key={spec.id}
-                                    className="inline-flex items-center gap-1 pl-2 pr-1 h-6 rounded-md
-                                        text-xs font-medium select-none
-                                        bg-gray-100 dark:bg-surface-control
-                                        text-gray-700 dark:text-gray-200"
-                                >
-                                    <Note01Icon size={12} strokeWidth={2} className="shrink-0 opacity-70" />
-                                    <span className="max-w-[12rem] truncate">{spec.name}</span>
-                                    <button
-                                        type="button"
-                                        aria-label={t('assistant.removeSpec')}
-                                        onClick={() => toggleSpec(spec.id)}
-                                        className="w-4 h-4 flex items-center justify-center rounded
-                                            text-gray-500 dark:text-gray-400
-                                            hover:text-gray-900 dark:hover:text-white
-                                            hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors"
-                                    >
-                                        <Cancel01Icon size={10} strokeWidth={2.5} />
-                                    </button>
-                                </span>
-                            ))}
-                        </div>
+                    {/* What `@` opened, over the composer rather than in it. */}
+                    {tags.picker && (
+                        <MentionPicker
+                            items={tags.matches}
+                            query={tags.picker.query}
+                            active={tags.row}
+                            onPick={tags.pick}
+                            onHover={tags.setRow}
+                        />
                     )}
+
+                    {/* What the message tags, as chips. Each can be taken back
+                        until it is sent; the words in the field are the
+                        user's own and are left alone. */}
+                    <MentionChips mentions={tags.mentions} onRemove={tags.remove} />
 
                     {/* What is going with the message, above the words about
                         it. Each thumbnail can be taken back until it is sent. */}
@@ -797,7 +775,12 @@ export default function AssistantConversation({
                         ref={inputRef}
                         rows={1}
                         value={text}
-                        onChange={(event) => setText(event.target.value)}
+                        onChange={(event) => {
+                            setText(event.target.value);
+                            tags.follow(event.target.value, event.target.selectionStart);
+                        }}
+                        onClick={event => tags.follow(event.target.value, event.target.selectionStart)}
+                        onBlur={tags.close}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
                         placeholder={t('assistant.askAbout', { about: described.sentence })}
@@ -818,15 +801,17 @@ export default function AssistantConversation({
                             <ApprovalMenu settings={settings} onChange={changeSettings} />
                         )}
 
-                        {/* The documents from the library that go with the
-                            message. Every agent can read text, so this is
-                            there whichever one is answering. */}
-                        <SpecMenu
-                            specs={specs}
-                            selected={specIds}
-                            onToggle={toggleSpec}
-                            onCreate={onOpenSnippets}
-                        />
+                        {/* Anything saved can be named in a message: a host,
+                            a spec or another snippet, a proxy, a key. The
+                            same thing typing `@` does, for a pointer. */}
+                        <ComposerButton
+                            label={t('assistant.tag')}
+                            hint="@"
+                            active={Boolean(tags.picker) || tags.mentions.length > 0}
+                            onClick={tags.open}
+                        >
+                            @
+                        </ComposerButton>
 
                         {/* Any file off the disk: pictures go as pictures where
                             the agent reads them, everything else as words,

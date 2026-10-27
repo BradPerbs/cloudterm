@@ -4,7 +4,7 @@ const catalog = require('./tools');
 const archive = require('./archive');
 const { readImages } = require('./images');
 const { imageRefusal } = require('./image-gate');
-const { readSpecs, specBlock, stripSpecs } = require('./specs');
+const { readMentions, mentionBlock, stripMentions } = require('./mentions');
 const { readFiles, fileBlock, stripFiles } = require('./attachments');
 const pasted = require('./pasted-secrets');
 const store = require('../store');
@@ -956,7 +956,7 @@ function summarise(input) {
  * user is exactly the thing that moves while they work. Sending it only on
  * change keeps the cached prefix intact for the turns where nothing moved.
  */
-async function send(conversationId, text, attachments = [], specIds = [], attachedFiles = []) {
+async function send(conversationId, text, attachments = [], tagged = [], attachedFiles = []) {
     hydrate();
 
     const conversation = conversations.get(conversationId);
@@ -970,13 +970,14 @@ async function send(conversationId, text, attachments = [], specIds = [], attach
     const { files, error: filesError } = readFiles(attachedFiles);
     if (filesError) return { success: false, message: filesError };
 
-    // Specs are looked up here, against the library as it stands, rather than
-    // trusted as text from the renderer. See `specs.js`.
-    const attached = readSpecs(specIds, store.getSnippets());
+    // What the message tagged with `@` is looked up here, against the records
+    // as they stand, rather than trusted as text from the renderer: a kind and
+    // an id is all that crosses. A spec is one of these now. See `mentions.js`.
+    const attached = readMentions(tagged, mentionSources(tagged));
     if (attached.error) return { success: false, message: attached.error };
-    const { specs } = attached;
+    const { mentions } = attached;
 
-    if (!body && images.length === 0 && specs.length === 0 && files.length === 0) {
+    if (!body && images.length === 0 && mentions.length === 0 && files.length === 0) {
         return { success: false, message: 'Nothing to send' };
     }
 
@@ -1000,18 +1001,19 @@ async function send(conversationId, text, attachments = [], specIds = [], attach
 
     if (!conversation.title) {
         conversation.title = pasted.mask(
-            (body || specs[0]?.name || files[0]?.name || images[0]?.name || '').replace(/\s+/g, ' '),
+            (body || mentions[0]?.name || files[0]?.name || images[0]?.name || '').replace(/\s+/g, ' '),
             conversation.secrets
         ).slice(0, 80);
     }
 
-    // The transcript keeps a spec's name and not its text: the text is in the
-    // library, and a chip is what the bubble draws for it.
+    // The transcript keeps what was tagged by name and not what it said: the
+    // records are in the store, and a chip is what the bubble draws for each.
+    // Messages from before tagging carry `specs` instead, which still draw.
     emit(conversation, {
         type: 'user-message',
         text: body,
         ...(images.length ? { images } : {}),
-        ...(specs.length ? { specs: stripSpecs(specs) } : {}),
+        ...(mentions.length ? { mentions: stripMentions(mentions) } : {}),
         // A file by its name only: its words went to the agent with the
         // message, and a long log kept in the history as well would be the
         // same log twice.
@@ -1043,7 +1045,7 @@ async function send(conversationId, text, attachments = [], specIds = [], attach
             conversation.lastContext = context;
             parts.push(`<app-context>\n${context}\n</app-context>`);
         }
-        if (specs.length > 0) parts.push(specBlock(specs));
+        if (mentions.length > 0) parts.push(mentionBlock(mentions));
         if (files.length > 0) parts.push(fileBlock(files));
         if (body) parts.push(body);
 
@@ -1054,6 +1056,22 @@ async function send(conversationId, text, attachments = [], specIds = [], attach
         emit(conversation, { type: 'error', message: error.message });
         return { success: false, message: error.message };
     }
+}
+
+/**
+ * The records a message's tags are read against, from the store: only the
+ * collections something was tagged from, and redacted as the store always
+ * hands them out, so a password or a private key is not even in reach of
+ * `mentions.js`, which reads only named fields anyway.
+ */
+function mentionSources(tagged) {
+    const kinds = new Set((Array.isArray(tagged) ? tagged : []).map(entry => entry?.kind));
+    return {
+        hosts: kinds.has('host') ? store.getHosts() : [],
+        snippets: kinds.has('snippet') ? store.getSnippets() : [],
+        proxies: kinds.has('proxy') ? store.getProxies() : [],
+        keys: kinds.has('key') ? store.getKeys() : [],
+    };
 }
 
 async function interrupt(conversationId) {

@@ -248,12 +248,13 @@ export default function useAssistant({
     }, [conversationId, targetKey]);
 
     /**
-     * `specs` is a list of spec snippet ids; main reads their text itself.
-     * `files` are documents already read into words, `{ name, mediaType, text }`.
+     * `mentions` are `{ kind, id }` for what the message tagged; main reads
+     * each record itself. `files` are documents already read into words,
+     * `{ name, mediaType, text }`.
      */
-    const send = useCallback(async (text, images = [], specs = [], files = []) => {
+    const send = useCallback(async (text, images = [], mentions = [], files = []) => {
         if (!conversationId) return;
-        const result = await window.api.ai.send(conversationId, text, images, specs, files);
+        const result = await window.api.ai.send(conversationId, text, images, mentions, files);
         if (!result?.success && result?.message) {
             dispatch({ type: 'error', message: result.message, at: Date.now() });
         }
