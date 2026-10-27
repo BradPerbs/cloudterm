@@ -475,7 +475,7 @@ export default {
         + 'việc nó hỏng.',
     'settings.assistant.localTools': 'Cho phép dùng công cụ trên máy này',
     'settings.assistant.localToolsDesc': 'Cho phép trợ lý đọc ghi tệp cục bộ và chạy lệnh cục bộ, '
-        + 'mỗi lệnh đều dừng lại chờ phê duyệt trước. Tắt đi để bảng này chỉ làm việc với máy chủ. '
+        + 'hỏi phê duyệt trước bất cứ khi nào chế độ phê duyệt yêu cầu. Tắt đi để bảng này chỉ làm việc với máy chủ. '
         + 'Tra cứu trên web vẫn dùng được trong cả hai trường hợp.',
     'settings.assistant.allowList': 'Các lệnh không bao giờ cần phê duyệt',
     'settings.assistant.allowListDesc': 'Mỗi dòng một lệnh, khớp theo trọn các từ đầu tiên. Một '

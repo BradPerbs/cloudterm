@@ -492,7 +492,7 @@ export default {
         + 'ao luxo de estragar.',
     'settings.assistant.localTools': 'Permitir ferramentas neste computador',
     'settings.assistant.localToolsDesc': 'Deixa o assistente ler e escrever ficheiros locais e '
-        + 'correr comandos locais, cada um parando primeiro para aprovação. Desligue para limitar o '
+        + 'correr comandos locais, pedindo aprovação sempre que o modo de aprovação o exigir. Desligue para limitar o '
         + 'painel apenas aos servidores. Pesquisar na web continua disponível em qualquer caso.',
     'settings.assistant.allowList': 'Comandos que nunca precisam de aprovação',
     'settings.assistant.allowListDesc': 'Um por linha, comparados pelas primeiras palavras '

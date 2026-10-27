@@ -443,7 +443,7 @@ export default {
     'settings.assistant.approval.never.note': '任何操作都不会停下来等待批准，包括删除数据或重启服务的命令。'
         + '只有在你能承受把主机弄坏时才适合使用。',
     'settings.assistant.localTools': '允许在这台电脑上使用工具',
-    'settings.assistant.localToolsDesc': '允许助手读写本地文件并运行本地命令，每一步都会先停下来等待批准。'
+    'settings.assistant.localToolsDesc': '允许助手读写本地文件并运行本地命令，审批模式要求时会先停下来等待批准。'
         + '关闭后，面板只操作服务器。无论开关如何，联网查找资料始终可用。',
     'settings.assistant.allowList': '无需批准即可运行的命令',
     'settings.assistant.allowListDesc': '每行一条，按开头的完整单词匹配。只要命令中含有管道、重定向、分号、'

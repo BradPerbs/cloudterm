@@ -529,7 +529,7 @@ export default {
         + 'delete data or restart services. Only sensible for hosts you can afford to break.',
     'settings.assistant.localTools': 'Allow tools on this computer',
     'settings.assistant.localToolsDesc': 'Lets the assistant read and write local files and run '
-        + 'local commands, each one stopping for approval first. Switch it off to keep the panel '
+        + 'local commands, asking first whenever the approval mode says to. Switch it off to keep the panel '
         + 'to the servers only. Looking things up on the web stays available either way.',
     'settings.assistant.allowList': 'Commands that never need approval',
     'settings.assistant.allowListDesc': 'One per line, matched on the whole first words. A command '
