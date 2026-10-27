@@ -83,6 +83,14 @@ async function start(options) {
 }
 
 /**
+ * A name for a conversation, from the same model on the same server, so the
+ * question stays on this machine like the chat does. See titles.js.
+ */
+async function title({ settings: current = {}, instruction, prompt, signal } = {}) {
+    return engine.ask({ endpoint: endpoint(current), model: await resolveModel(current), instruction, prompt, signal });
+}
+
+/**
  * What this machine has loaded.
  *
  * The first row is marked preferred rather than leaving the menu to offer a
@@ -127,6 +135,7 @@ async function detect({ settings: current = {} } = {}) {
 
 module.exports = {
     start,
+    title,
     listModels,
     detect,
     endpoint,

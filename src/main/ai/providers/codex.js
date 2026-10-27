@@ -643,6 +643,72 @@ function describeModels(rows) {
     return models.length ? models : null;
 }
 
+/**
+ * A name for a conversation, from `codex exec` with nothing to do.
+ *
+ * Its own process rather than a thread on the SDK, for two flags the SDK has
+ * no way to pass: `--ephemeral`, so the question is not a session in the
+ * user's Codex history, and `--ignore-user-config`, so their MCP servers are
+ * not started to answer it. Read-only, in the temp directory, at low effort,
+ * on the conversation's own model. See titles.js.
+ */
+function title({ settings = {}, instruction, prompt, signal } = {}) {
+    const binary = findCodex();
+    if (!binary) return Promise.resolve('');
+
+    const args = [
+        'exec', '--ephemeral', '--ignore-user-config', '--skip-git-repo-check', '--json',
+        '--sandbox', 'read-only', '--cd', os.tmpdir(),
+        '--config', 'model_reasoning_effort="low"',
+        '--config', 'web_search="disabled"',
+        '--config', 'approval_policy="never"',
+    ];
+    if (settings.model) args.push('--model', settings.model);
+    args.push('-');
+
+    const env = { ...process.env };
+    if (settings.apiKey) env.OPENAI_API_KEY = settings.apiKey;
+
+    return new Promise((resolve) => {
+        let child;
+        try {
+            child = spawn(binary, args, { stdio: ['pipe', 'pipe', 'ignore'], env, windowsHide: true });
+        } catch {
+            resolve('');
+            return;
+        }
+
+        const stop = () => {
+            try { child.kill(); } catch { /* already gone */ }
+        };
+        signal?.addEventListener('abort', stop, { once: true });
+
+        let text = '';
+        let buffer = '';
+        child.stdout.on('data', (chunk) => {
+            buffer += chunk.toString('utf8');
+            let index = buffer.indexOf('\n');
+            while (index >= 0) {
+                const line = buffer.slice(0, index).trim();
+                buffer = buffer.slice(index + 1);
+                index = buffer.indexOf('\n');
+                let event;
+                try { event = JSON.parse(line); } catch { continue; }
+                if (event?.type === 'item.completed' && event.item?.type === 'agent_message') {
+                    text = event.item.text || '';
+                }
+            }
+        });
+        child.on('error', () => resolve(''));
+        child.on('close', () => {
+            signal?.removeEventListener('abort', stop);
+            resolve(text);
+        });
+        child.stdin.on('error', () => {});
+        child.stdin.end(`${instruction}\n\n${prompt}`);
+    });
+}
+
 /** Whether the CLI is on this machine. See the note on claude-code's. */
 function detect() {
     return { ok: Boolean(findCodex()), reason: 'notFound' };
@@ -650,6 +716,7 @@ function detect() {
 
 module.exports = {
     start,
+    title,
     listModels,
     detect,
     findCodex,

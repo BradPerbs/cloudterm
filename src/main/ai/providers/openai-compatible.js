@@ -275,6 +275,23 @@ async function complete({ endpoint, messages, model, tools, extra, signal, onEve
     return collector.result();
 }
 
+/** One question and its answer, with no tools and no history: how a conversation's name is asked for. */
+async function ask({ endpoint, model, instruction, prompt, signal }) {
+    const reply = await complete({
+        endpoint,
+        model,
+        messages: [
+            { role: 'system', content: instruction },
+            { role: 'user', content: prompt },
+        ],
+        tools: [],
+        extra: {},
+        signal,
+        onEvent: () => {},
+    });
+    return String(reply.content || '');
+}
+
 /* ------------------------------------------------------------------ *
  * The conversation
  * ------------------------------------------------------------------ */
@@ -616,6 +633,7 @@ function describeFailure(error, label = 'The model server') {
 
 module.exports = {
     start,
+    ask,
     listModels,
     functionTools,
     describeFailure,
