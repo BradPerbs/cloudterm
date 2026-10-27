@@ -481,16 +481,58 @@ function closeProcess(child, {
     try { child.kill(); } catch { /* already gone */ }
 }
 
-/** Turn one OpenCode SSE event into panel events, with transition deduping. */
-function createTranslator(sessionId, onEvent) {
+/**
+ * Every token a reply's request carried, the way OpenCode's own context ring
+ * counts them: what went in, cached or not, and what came back.
+ */
+function contextTokens(info) {
+    const tokens = info?.tokens || {};
+    const number = value => Number(value) || 0;
+    return number(tokens.input) + number(tokens.output) + number(tokens.reasoning)
+        + number(tokens.cache?.read) + number(tokens.cache?.write);
+}
+
+/**
+ * Turn one OpenCode SSE event into panel events, with transition deduping.
+ *
+ * `contextLimit(providerID, modelID)` is the model's context window, from the
+ * server's catalogue, or nothing when it does not say.
+ */
+function createTranslator(sessionId, onEvent, { contextLimit = () => 0 } = {}) {
     const textFinished = new Set();
     const toolStates = new Map();
     const completedMessages = new Set();
     let turnOpen = false;
     let turnCost = 0;
+    let lastContext = '';
 
     const belongs = (value) => value === sessionId;
     const toolName = raw => String(raw || '').replace(new RegExp(`^${SERVER_NAME}_`), '');
+
+    /**
+     * How full the context is after the latest reply, as OpenCode Desktop
+     * draws it beside its composer: that reply's tokens over the model's
+     * window. Said each time it moves, which is once per step.
+     */
+    const reportContext = (info) => {
+        const used = contextTokens(info);
+        if (used <= 0) return;
+        const limit = Number(contextLimit(info.providerID, info.modelID)) || 0;
+        const cached = Number(info?.tokens?.cache?.read) || 0;
+        const key = `${used}/${limit}/${cached}`;
+        if (key === lastContext) return;
+        lastContext = key;
+        onEvent({
+            type: 'context',
+            used,
+            limit,
+            percent: limit ? Math.round((used / limit) * 100) : null,
+            model: info.providerID && info.modelID ? `${info.providerID}/${info.modelID}` : '',
+            // Cache-read tokens behind this reading, for the hit rate in the
+            // ring's tooltip.
+            ...(cached > 0 ? { cached } : {}),
+        });
+    };
 
     const finishTurn = (subtype = 'success', isError = false) => {
         if (!turnOpen) return;
@@ -567,7 +609,9 @@ function createTranslator(sessionId, onEvent) {
 
             if (event?.type === 'message.updated') {
                 const info = properties.info;
-                if (!info || !belongs(info.sessionID) || info.role !== 'assistant' || !info.time?.completed) return;
+                if (!info || !belongs(info.sessionID) || info.role !== 'assistant') return;
+                reportContext(info);
+                if (!info.time?.completed) return;
                 if (!completedMessages.has(info.id)) {
                     completedMessages.add(info.id);
                     turnCost += Number(info.cost) || 0;
@@ -665,7 +709,26 @@ async function start({
     }
 
     onEvent({ type: 'session', sessionId: session.id, model: settings.model || '' });
-    const translator = createTranslator(session.id, onEvent);
+    // Each model's context window, for the composer's context ring. Read from
+    // the server's catalogue in the background, so the first prompt does not
+    // wait on it; a reading taken before it lands just has no window yet.
+    const contextLimits = new Map();
+    const translator = createTranslator(session.id, onEvent, {
+        contextLimit: (providerID, modelID) => contextLimits.get(`${providerID}/${modelID}`) || 0,
+    });
+    Promise.resolve()
+        .then(() => client.config.providers())
+        .then((response) => {
+            for (const entry of dataOf(response)?.providers || []) {
+                for (const model of Object.values(entry.models || {})) {
+                    const window = Number(model?.limit?.context) || 0;
+                    if (model?.id && window > 0) contextLimits.set(`${entry.id}/${model.id}`, window);
+                }
+            }
+        })
+        .catch(() => {
+            // No catalogue, no window: the ring shows tokens without a share.
+        });
     const abortEvents = new AbortController();
 
     const answerPermission = async (permission) => {

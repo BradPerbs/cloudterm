@@ -143,6 +143,14 @@ const DEFAULTS = {
     // attention.js.
     notify: true,
     notifySound: true,
+    /**
+     * The models each agent keeps out of the composer's menu, by agent:
+     * `{ codex: ['gpt-5.1-codex-mini'] }`. Display only: hiding a model
+     * declutters the menu, it never stops a conversation already on it, and
+     * the menu keeps offering the model a conversation is on whatever is
+     * unticked on the settings page.
+     */
+    hiddenModels: {},
 };
 
 const stateFile = () => path.join(app.getPath('userData'), 'assistant.json');
@@ -236,6 +244,7 @@ function sanitize(raw) {
         autoApproveCommands: [...DEFAULTS.autoApproveCommands],
         blockedCommands: [...DEFAULTS.blockedCommands],
         quickPrompts: [...DEFAULTS.quickPrompts],
+        hiddenModels: {},
     };
     if (raw && typeof raw === 'object') {
         if ('enabled' in raw) next.enabled = Boolean(raw.enabled);
@@ -284,6 +293,15 @@ function sanitize(raw) {
                 .map(entry => String(entry || '').replace(/\s+/g, ' ').trim().slice(0, 300))
                 .filter(Boolean)
                 .slice(0, 12);
+        }
+        if (raw.hiddenModels && typeof raw.hiddenModels === 'object' && !Array.isArray(raw.hiddenModels)) {
+            next.hiddenModels = Object.fromEntries(Object.entries(raw.hiddenModels)
+                .filter(([provider]) => PROVIDERS.has(provider))
+                .map(([provider, ids]) => [provider, [...new Set(
+                    (Array.isArray(ids) ? ids : [])
+                        .filter(id => typeof id === 'string' && id.trim())
+                        .map(id => id.trim().slice(0, 160)))].slice(0, 200)])
+                .filter(([, ids]) => ids.length > 0));
         }
     }
     return next;

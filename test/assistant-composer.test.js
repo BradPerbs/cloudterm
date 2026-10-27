@@ -107,12 +107,15 @@ async function main() {
 
     await check('a file over the limit refuses the message before anything is recorded', async () => {
         const { conversationId } = assistant.create({ scope: 'global' });
+        // A new conversation may already hold its pin (the model and mode it
+        // starts on), so nothing *more* may be recorded by the refused send.
+        const before = eventsOf(conversationId).length;
         const result = await assistant.send(conversationId, 'read this', [], [], [
             { name: 'huge.log', text: 'x'.repeat(200 * 1024) },
         ]);
         assert.strictEqual(result.success, false);
         assert.match(result.message, /huge\.log is larger/);
-        assert.strictEqual(eventsOf(conversationId).length, 0);
+        assert.strictEqual(eventsOf(conversationId).length, before);
     });
 
     console.log('\ntagged with @');

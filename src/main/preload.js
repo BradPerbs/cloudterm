@@ -632,6 +632,18 @@ contextBridge.exposeInMainWorld('api', {
         // host, or a pinned set of sessions and saved hosts.
         setScope: (conversationId, target) =>
             ipcRenderer.invoke('ai-scope', { conversationId, ...(target || {}) }),
+        // Pin one conversation to an agent, model, effort and mode
+        // (`{ provider?, model?, effort?, approval? }`, an empty one handing
+        // that field back to the settings). Resolves `{ pinned }`, the pin as
+        // it now stands, or `{ error }` for a conversation that is gone.
+        setModel: (conversationId, patch) =>
+            ipcRenderer.invoke('ai-conversation-model', { conversationId, patch }),
+        // What new chats start on: `{ starred, last, effort, mode, pick }`.
+        // `starModel` pins one model for them (`{ provider, model }`), or
+        // lets go with null; `onStartModel` hears whenever any of it moves.
+        startModel: () => ipcRenderer.invoke('ai-start-model'),
+        starModel: (pin) => ipcRenderer.invoke('ai-start-model-star', pin),
+        onStartModel: (callback) => subscribe('ai-start-model', callback),
 
         // `images` is optional: `[{ name, mediaType, data }]` with the bytes
         // as base64. Main checks them and refuses the message if the agent in

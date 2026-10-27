@@ -404,7 +404,87 @@ function readOutput(payload) {
         || unwrapOutput(payload?.rawOutput ?? payload?.raw_output);
 }
 
-function createTranslator(onEvent) {
+/**
+ * Each model's context window, out of the CLI's own model cache.
+ *
+ * The cache is what the CLI itself reads before it draws its own picker, so
+ * it names the same models the menu offers, with the window each one runs
+ * in. Every known spelling of a model shares one entry, since the setting a
+ * turn runs under and the cache's own id are not always the same string.
+ */
+function contextWindows({ source = grokHome() } = {}) {
+    const cache = readJson(path.join(source, 'models_cache.json'));
+    const models = cache?.models;
+    const windows = new Map();
+    if (!models || typeof models !== 'object') return windows;
+    for (const [id, entry] of Object.entries(models)) {
+        const info = entry?.info || {};
+        const limit = Number(info.context_window)
+            || Number(info.contextWindows?.[0])
+            || Number(info.context_windows?.[0])
+            || 0;
+        if (!(limit > 0)) continue;
+        for (const alias of [id, info.id, info.model]) {
+            if (alias) windows.set(String(alias), limit);
+        }
+    }
+    return windows;
+}
+
+/**
+ * One model call as tokens for the composer's ring: what that call sent,
+ * cached or not, and what it got back.
+ *
+ * Headless `input_tokens` is the uncached portion, with the cache buckets
+ * beside it, and `total_tokens` is the same call with those included. A
+ * reading that already folds the cache into `input_tokens` adds up to
+ * `total_tokens` on its own, and adding the cache again would count it twice.
+ * Read leniently, as the rest of this stream is: a shape not listed here
+ * reads as nothing rather than as a crash.
+ */
+function usageTokens(usage) {
+    if (!usage || typeof usage !== 'object') return { used: 0, cached: 0 };
+    const input = Number(usage.input_tokens ?? usage.inputTokens ?? usage.prompt_tokens) || 0;
+    const output = Number(usage.output_tokens ?? usage.outputTokens ?? usage.completion_tokens) || 0;
+    const cached = Number(
+        usage.cache_read_input_tokens ?? usage.cachedReadTokens ?? usage.cacheReadInputTokens
+        ?? usage.cached_tokens ?? usage.cache_read
+    ) || 0;
+    const written = Number(
+        usage.cache_creation_input_tokens ?? usage.cacheCreationTokens
+        ?? usage.cache_creation_tokens ?? usage.cache_creation
+    ) || 0;
+    const total = Number(usage.total_tokens ?? usage.totalTokens) || 0;
+    const fields = input + output;
+    const withCache = fields + cached + written;
+    const inputHoldsCache = total > 0 && cached + written > 0 && fields >= total;
+    return { used: inputHoldsCache ? Math.max(fields, total) : Math.max(withCache, total), cached };
+}
+
+/**
+ * How many model calls the closing line says it added up: the main agent's
+ * rounds, or every call including subagents'. More than one means its
+ * `usage` is the bill for the turn rather than the size of the window. Zero
+ * means the line did not say.
+ */
+function roundsOf(payload) {
+    const named = Number(payload?.num_turns ?? payload?.numTurns) || 0;
+    const models = payload?.modelUsage || payload?.model_usage;
+    let calls = 0;
+    if (models && typeof models === 'object') {
+        for (const row of Object.values(models)) {
+            calls += Number(row?.modelCalls ?? row?.model_calls) || 0;
+        }
+    }
+    return Math.max(named, calls);
+}
+
+/**
+ * `model` is the model the turn runs on and `contextLimit(model)` its context
+ * window, for the composer's context ring. Without a window nothing is
+ * reported: a share of a guessed window would be worse than none.
+ */
+function createTranslator(onEvent, { model = '', contextLimit = () => 0 } = {}) {
     let text = '';
     let cost = 0;
     let usage = null;
@@ -414,6 +494,31 @@ function createTranslator(onEvent) {
     // it, so the panel says what happened and that "continue" carries on.
     let ceiling = false;
     const announced = new Set();
+    let lastContext = '';
+    let reportedContext = false;
+
+    /**
+     * How full the context is after the latest model call: that call's
+     * tokens over the model's window. Said each time it moves, once per call.
+     */
+    const reportContext = (reading) => {
+        const { used, cached } = usageTokens(reading);
+        if (used <= 0) return;
+        const limit = Number(contextLimit(model)) || 0;
+        if (limit <= 0) return;
+        const key = `${used}/${limit}/${cached}`;
+        if (key === lastContext) return;
+        lastContext = key;
+        reportedContext = true;
+        onEvent({
+            type: 'context',
+            used,
+            limit,
+            percent: Math.round((used / limit) * 100),
+            model,
+            ...(cached > 0 ? { cached } : {}),
+        });
+    };
 
     /**
      * Any text so far, as a finished block.
@@ -493,6 +598,8 @@ function createTranslator(onEvent) {
                 case 'usage':
                     usage = payload.usage || payload;
                     cost += Number(payload.costUsd ?? payload.cost_usd ?? payload.cost ?? 0) || 0;
+                    // Per model call, so each one is how full the window is now.
+                    if (payload.usage) reportContext(payload.usage);
                     return;
 
                 // The last line of a run, and the only one that totals it. The
@@ -501,7 +608,13 @@ function createTranslator(onEvent) {
                 // turn's, and the cost is only ever stated here: none of the
                 // usage lines carries one, which is why the chip read zero.
                 case 'end':
-                    if (payload.usage) usage = payload.usage;
+                    if (payload.usage) {
+                        usage = payload.usage;
+                        // A sum of several calls is the bill, not the window;
+                        // one call's total is the window, cache and all.
+                        const rounds = roundsOf(payload);
+                        if (rounds <= 1 && (rounds === 1 || !reportedContext)) reportContext(payload.usage);
+                    }
                     cost += Number(payload.total_cost_usd ?? payload.totalCostUsd ?? 0) || 0;
                     return;
 
@@ -869,7 +982,14 @@ async function start(options) {
 
     async function run(prompt, current) {
         const env = environment(current);
-        const translator = createTranslator(onEvent);
+        // For the composer's context ring: the model's window, out of the
+        // CLI's own cache, read per turn so one the CLI rewrote since (a new
+        // sign-in, a new model) counts from the next message.
+        const windows = contextWindows();
+        const translator = createTranslator(onEvent, {
+            model: current.model || configuredModel(grokHome()),
+            contextLimit: name => windows.get(String(name)) || 0,
+        });
         stopped = false;
 
         let outcome = await runTurn({
@@ -1026,6 +1146,7 @@ module.exports = {
     signedIn,
     cachedModels,
     configuredModel,
+    contextWindows,
     grokRoots,
     createTranslator,
     runArguments,

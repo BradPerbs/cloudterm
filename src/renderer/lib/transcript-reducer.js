@@ -25,6 +25,8 @@
  *   metric     `{ id, watchId, spec, status, reason, code, vars, points,
  *              stats }`: a live chart (watch_metric), under the call that
  *              started it. `status` is running until its end arrives.
+ *   divider    `{ id, text, change? }`: the chat moved to another model or
+ *              effort. `change` is what moved, when main said.
  */
 
 /** A blank turn-in-progress, for the streaming text bubble. */
@@ -349,6 +351,15 @@ function step(state, event, owned) {
         case 'rate-limit':
             return { ...state, rateLimit: event };
 
+        // How full the model's context is after the latest reply, for the
+        // ring beside the model chip.
+        case 'context':
+            return { ...state, context: event };
+
+        // The agent's own short name for the chat, once it has given one.
+        case 'title':
+            return { ...state, title: event.title || '' };
+
         case 'result':
             // Words or thinking left over when the turn ends with no finished
             // block to carry them are kept as a reply of their own, rather
@@ -409,7 +420,13 @@ function step(state, event, owned) {
         // middle of one. `text` is written by the main process, which knows
         // what the change was from and to.
         case 'model-changed':
-            edit().push({ kind: 'divider', id: `mc-${event.at}-${items.length}`, text: event.text || '' });
+            edit().push({
+                kind: 'divider',
+                id: `mc-${event.at}-${items.length}`,
+                text: event.text || '',
+                // What moved, for the divider to say in the reader's language.
+                ...(event.change ? { change: event.change } : {}),
+            });
             break;
 
         case 'tool-failed':
@@ -512,4 +529,11 @@ export const INITIAL = {
     // Each finished turn's answer rate, by the id of the message that began
     // it, for the footer under its reply.
     turnRates: {},
+    // `{ used, limit, percent, cached, model, provider }`: the latest reply's
+    // tokens against the model's context window. Null where the runtime has
+    // reported nothing, and the ring is not drawn.
+    context: null,
+    // What the agent named the conversation. Empty until it has, and for one
+    // it never named, where the first message stands in.
+    title: '',
 };

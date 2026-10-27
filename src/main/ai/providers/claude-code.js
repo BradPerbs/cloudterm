@@ -815,6 +815,7 @@ async function start({
     if (resumeSessionId) options.resume = resumeSessionId;
 
     const stream = sdk.query({ prompt: input, options });
+    const contextMeter = createContextMeter(onEvent);
 
     // The two things only the running CLI can answer, asked once each.
     let askedForInit = false;
@@ -824,6 +825,7 @@ async function start({
     const pump = (async () => {
         try {
             for await (const message of stream) {
+                contextMeter.see(message);
                 translate(message, onEvent);
 
                 // Asked once the session is up rather than at start, because
@@ -908,6 +910,147 @@ async function start({
                 // Already finished.
             }
             await pump.catch(() => {});
+        },
+    };
+}
+
+/**
+ * A name for a conversation, from a small model with nothing to call.
+ *
+ * Haiku whatever the conversation runs on, the way Claude Code names its own
+ * sessions: it is the cheap one, and a title is a few words. No tools, one
+ * turn, and no session written to disk for a history to list. Its own query,
+ * so the conversation's turn is neither waited on nor held up by it, and no
+ * tool call means nothing for anyone to approve. See titles.js.
+ */
+async function title({ settings = {}, instruction, prompt, signal } = {}) {
+    const executable = findClaude();
+    if (!executable) return '';
+
+    const sdk = await loadSdk();
+    const abortController = new AbortController();
+    const stop = () => abortController.abort();
+    signal?.addEventListener('abort', stop, { once: true });
+
+    const env = { ...process.env };
+    if (settings.apiKey) env.ANTHROPIC_API_KEY = settings.apiKey;
+
+    const stream = sdk.query({
+        prompt,
+        options: {
+            pathToClaudeCodeExecutable: executable,
+            model: 'haiku',
+            systemPrompt: instruction,
+            tools: [],
+            allowedTools: [],
+            permissionMode: 'default',
+            maxTurns: 1,
+            persistSession: false,
+            abortController,
+            env,
+            cwd: app.getPath('userData'),
+            settingSources: [],
+        },
+    });
+
+    let text = '';
+    try {
+        for await (const message of stream) {
+            if (message?.type === 'assistant') {
+                for (const block of message.message?.content || []) {
+                    if (block?.type === 'text') text += block.text || '';
+                }
+            }
+            if (message?.type === 'result') {
+                if (typeof message.result === 'string' && message.result) text = message.result;
+                break;
+            }
+        }
+    } finally {
+        signal?.removeEventListener('abort', stop);
+        abortController.abort();
+        try {
+            await stream.return?.();
+        } catch {
+            // Already gone.
+        }
+    }
+    return text;
+}
+
+/** Every token one request carried: what went in, cached or not, and what came back. */
+function usageTokens(usage) {
+    if (!usage) return 0;
+    const number = value => Number(value) || 0;
+    return number(usage.input_tokens) + number(usage.cache_read_input_tokens)
+        + number(usage.cache_creation_input_tokens) + number(usage.output_tokens);
+}
+
+/**
+ * The context window a turn's result gives for one model: its `modelUsage`
+ * entry, matched with the `[1m]` style suffix ignored, or the entry that did
+ * the most work when none matches.
+ */
+function contextWindowOf(modelUsage, model = '') {
+    const entries = Object.entries(modelUsage || {});
+    if (entries.length === 0) return 0;
+    const bare = id => String(id || '').replace(/\[[^\]]*\]/g, '');
+    const match = model && entries.find(([key, value]) => key === model
+        || bare(key) === bare(model) || bare(value?.canonicalModel) === bare(model));
+    const busiest = entries.reduce((best, entry) => (
+        (Number(entry[1]?.inputTokens) || 0) > (Number(best[1]?.inputTokens) || 0) ? entry : best));
+    return Number((match || busiest)[1]?.contextWindow) || 0;
+}
+
+/**
+ * How full the context is, for the composer's ring: the latest main-thread
+ * reply's tokens over the model's window. One reply, not the turn: a turn's
+ * total counts the same prefix again on every tool round, which is the bill
+ * rather than how full the window is.
+ *
+ * Claude Code says the window only in a turn's result, so the first reading
+ * of a conversation comes then; after that each reply moves it, against the
+ * window last reported for the model. A subagent's replies are its own
+ * context, not this one's.
+ */
+function createContextMeter(onEvent) {
+    let used = 0;
+    let cached = 0;
+    let model = '';
+    const windows = new Map();
+    let last = '';
+
+    const report = () => {
+        const limit = windows.get(model) || 0;
+        if (!used || !limit) return;
+        const key = `${used}/${limit}/${cached}`;
+        if (key === last) return;
+        last = key;
+        onEvent({
+            type: 'context', used, limit, percent: Math.round((used / limit) * 100), model,
+            // Cache-read tokens behind this reading, when reported: the
+            // composer's tooltip shows the hit rate from it.
+            ...(cached > 0 ? { cached } : {}),
+        });
+    };
+
+    return {
+        see(message) {
+            if (message?.type === 'assistant' && !message.parent_tool_use_id && message.message?.usage) {
+                const tokens = usageTokens(message.message.usage);
+                if (tokens > 0) {
+                    used = tokens;
+                    cached = Number(message.message.usage.cache_read_input_tokens) || 0;
+                    model = message.message.model || model;
+                    report();
+                }
+                return;
+            }
+            if (message?.type === 'result' && message.modelUsage) {
+                const window = contextWindowOf(message.modelUsage, model);
+                if (window > 0) windows.set(model, window);
+                report();
+            }
         },
     };
 }
@@ -1061,8 +1204,11 @@ function detect() {
 
 module.exports = {
     start,
+    title,
     listModels,
     detect,
+    createContextMeter,
+    contextWindowOf,
     findClaude,
     claudeCandidates,
     userContent,

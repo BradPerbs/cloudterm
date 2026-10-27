@@ -30,6 +30,8 @@ import ApprovalMenu from './ApprovalMenu';
 import AttachmentChips from './AttachmentChips';
 import DropOverlay, { useFileDrop } from './DropZone';
 import useComposerFiles from '../../hooks/useComposerFiles';
+import ContextRing from './ContextRing';
+import { shownSettings as withPin } from '../../lib/conversation-settings';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
 import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
@@ -267,12 +269,13 @@ export default function AssistantConversation({
 
     /**
      * What the tab strip says about this tab: what it is about, and whether it
-     * is working. The first thing the user said is the title, as it is in the
-     * history menu; a message that was only a picture or a spec is named by
-     * that.
+     * is working. The agent's short name for the chat once it has given one,
+     * as in the history menu; until then, or if it never does, the first
+     * thing the user said. A message that was only a picture or a spec is
+     * named by that.
      */
     const first = assistant.items.find(item => item.kind === 'user');
-    const title = String(
+    const title = assistant.title || String(
         first?.text
         || first?.mentions?.[0]?.name
         || first?.specs?.[0]?.name
@@ -347,6 +350,49 @@ export default function AssistantConversation({
         const next = await window.api.ai.setSettings(patch);
         setSettings(next);
     }, []);
+
+    // The agent, model, effort and mode belong to the conversation: a pick on
+    // a chip moves this tab only, and is what the next new chat starts on.
+    // The chips show the settings with this conversation's pin on top, so
+    // whatever the pin leaves out still follows the settings page.
+    const conversationSettings = useMemo(
+        () => withPin(settings, assistant.pinned),
+        [settings, assistant.pinned],
+    );
+    const pinModel = assistant.pinModel;
+    const changeModel = useCallback((patch) => pinModel(patch), [pinModel]);
+    const changeMode = useCallback(({ approval }) => {
+        if (approval) pinModel({ approval });
+    }, [pinModel]);
+
+    /**
+     * What new chats start on, for the star in the model menu: `starred` is
+     * the model pinned for them, if any. Every window hears when it moves.
+     */
+    const [startModel, setStartModel] = useState(null);
+    useEffect(() => {
+        let live = true;
+        window.api.ai.startModel()
+            .then((answer) => { if (live) setStartModel(answer || null); })
+            .catch(() => {});
+        const off = window.api.ai.onStartModel((answer) => setStartModel(answer || null));
+        return () => {
+            live = false;
+            off?.();
+        };
+    }, []);
+    const starModel = useCallback(async (pin) => {
+        setStartModel(await window.api.ai.starModel(pin));
+    }, []);
+
+    // Which models each agent keeps out of the menu. A display setting for
+    // the whole app rather than for one chat, so it is the settings' own.
+    const hideModels = useCallback((provider, ids) => {
+        const hidden = { ...(settings?.hiddenModels || {}) };
+        if (ids.length > 0) hidden[provider] = ids;
+        else delete hidden[provider];
+        changeSettings({ hiddenModels: hidden });
+    }, [settings, changeSettings]);
 
     // `preventScroll` because the card is mounted at its full width inside a
     // column that is still only a rail wide, and clipped to it. Focusing the
@@ -839,8 +885,8 @@ export default function AssistantConversation({
                     <div className="flex items-center gap-1 pl-2 pr-2 pb-2">
                         {/* The standing state of the panel: what it will do
                             before asking, and where it is changed. */}
-                        {settings && (
-                            <ApprovalMenu settings={settings} onChange={changeSettings} />
+                        {conversationSettings && (
+                            <ApprovalMenu settings={conversationSettings} onChange={changeMode} />
                         )}
 
                         {/* A skill from ~/.claude/skills or ~/.agents/skills,
@@ -938,14 +984,26 @@ export default function AssistantConversation({
                                 hasStoredKey={Boolean(settings?.hasApiKey)}
                             />
 
-                            {settings && (
+                            {/* How full the model's context is, beside the
+                                model it belongs to. Drawn only once the
+                                runtime has reported a reading. */}
+                            <ContextRing
+                                context={assistant.context}
+                                provider={conversationSettings?.provider}
+                            />
+
+                            {conversationSettings && (
                                 <ModelMenu
-                                    settings={settings}
+                                    settings={conversationSettings}
                                     catalogs={catalogs}
                                     providers={providers}
                                     loading={readingModels}
                                     onRefresh={() => readModels(providers, { refresh: true })}
-                                    onChange={changeSettings}
+                                    onChange={changeModel}
+                                    starred={startModel?.starred || null}
+                                    onStar={starModel}
+                                    hidden={settings?.hiddenModels || {}}
+                                    onHide={hideModels}
                                 />
                             )}
 

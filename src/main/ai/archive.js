@@ -117,6 +117,12 @@ function pack(conversation) {
         providerSessionId: conversation.providerSessionId || '',
         provider: conversation.provider || '',
         title: conversation.title || '',
+        // Whether the title is still the first message, so a chat the app
+        // closed on before its agent named it is asked again.
+        titleSource: conversation.titleSource === 'draft' || conversation.titleSource === 'naming' ? 'draft' : '',
+        // The agent, model, effort and mode the conversation was pinned to,
+        // so it comes back on what it was left on.
+        settingsPatch: conversation.settingsPatch || null,
         costUsd: conversation.costUsd || 0,
         // What a branch's first message is still to carry. See branch.js.
         carryOver: conversation.carryOver || '',
@@ -127,6 +133,18 @@ function pack(conversation) {
         updatedAt: conversation.updatedAt,
         events,
     };
+}
+
+/**
+ * A stored pin, as the fields it may carry, or null when it carries none.
+ * Read through the same rules a pick from the composer goes through, so an
+ * effort or a mode this build does not know is dropped rather than handed to
+ * a runtime. Required here rather than at the top: it needs the settings,
+ * which nothing else in this file does.
+ */
+function readSettingsPatch(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return require('./conversation-settings').merge(null, raw);
 }
 
 /** Anything that is still recognisably one of our events. */
@@ -185,8 +203,10 @@ function unpack(record, currentProvider) {
     // Claude Code chat inside Codex either fails or, worse, continues something
     // else. Dropped when they disagree, which costs the model its memory of the
     // conversation and keeps the transcript, rather than the other way round.
+    // A conversation pinned to an agent of its own is answered by that one.
     const provider = typeof record.provider === 'string' ? record.provider : '';
-    const resumable = provider && provider === currentProvider;
+    const settingsPatch = readSettingsPatch(record.settingsPatch);
+    const resumable = provider && provider === (settingsPatch?.provider || currentProvider);
 
     // The hosts of a pinned set outlive the app; its sessions do not. Every
     // session id in a stored record belongs to a terminal that closed when the
@@ -222,6 +242,8 @@ function unpack(record, currentProvider) {
         carryOver: typeof record.carryOver === 'string' ? record.carryOver : '',
         pendingNote: typeof record.pendingNote === 'string' ? record.pendingNote : '',
         title: typeof record.title === 'string' ? record.title : '',
+        titleSource: record.titleSource === 'draft' ? 'draft' : '',
+        settingsPatch,
         createdAt: Number.isFinite(record.createdAt) ? record.createdAt : at,
         updatedAt: at,
     };
