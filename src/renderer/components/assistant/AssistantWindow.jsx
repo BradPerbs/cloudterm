@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 import AgentMark from './AgentMark';
 import AssistantWorkspace from './AssistantWorkspace';
 import WindowControls from '../ui/WindowControls';
 import { APP_GUTTER, TITLE_BAR_HEIGHT } from '../../lib/layout';
+import { DEFAULT_TOAST_MS, MAX_TOAST_MS, TOAST_EXIT_MS } from '../../lib/toast';
 import { useT } from '../../i18n';
 
 /**
@@ -101,6 +103,18 @@ export default function AssistantWindow() {
                     onOpenSnippets={openSnippets}
                 />
             </div>
+
+            {/* The app's toasts, set up as the main window's are. That one's
+                Toaster is in another renderer, so without this one anything
+                the panel confirms here (a conversation copied) says nothing. */}
+            <Toaster
+                position="bottom-right"
+                toastOptions={{
+                    duration: DEFAULT_TOAST_MS,
+                    removeDelay: TOAST_EXIT_MS,
+                    error: { duration: MAX_TOAST_MS },
+                }}
+            />
         </div>
     );
 }
