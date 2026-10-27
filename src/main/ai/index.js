@@ -204,6 +204,10 @@ function create(target = {}) {
 
     const id = nextId('conv');
     const scope = normalizeScope(target);
+    // Room is made before the new one goes in, never after: with the list at
+    // its cap, trimming afterwards took the youngest untitled conversation,
+    // which was this one, and the first message into it found it gone.
+    trim(1);
     conversations.set(id, {
         id,
         ...scope,
@@ -227,22 +231,25 @@ function create(target = {}) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
     });
-    trim();
     return { conversationId: id, ...scope };
 }
 
 /**
- * Forget the oldest parked conversations, once there are more than the cap.
+ * Forget the oldest parked conversations, so that `room` more fit under the cap.
  *
  * Only ones that are properly asleep are candidates: a conversation with a
  * running query, or one waiting on an approval, is in use whatever its age.
+ * Nor is one opened in the last minute with nothing in it yet: that is a panel
+ * somebody is about to type into, whatever the list looks like.
  */
-function trim() {
-    let excess = conversations.size - MAX_CONVERSATIONS;
+function trim(room = 0) {
+    let excess = conversations.size + room - MAX_CONVERSATIONS;
     if (excess <= 0) return;
 
+    const fresh = Date.now() - 60 * 1000;
     const parked = [...conversations.values()]
         .filter(conversation => !conversation.session && !conversation.starting && !conversation.busy)
+        .filter(conversation => !(conversation.createdAt > fresh && conversation.events.length === 0))
         // Untitled first, then oldest. Nothing was ever said in an untitled
         // one: the panel opens a conversation the moment it is mounted, and a
         // scratch conversation nobody typed into should not be able to push a
