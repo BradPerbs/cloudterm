@@ -568,7 +568,9 @@ async function listModels() {
         const timer = setTimeout(() => finish(null), 20000);
 
         try {
-            child = spawn(binary, ['app-server'], { stdio: ['pipe', 'pipe', 'ignore'] });
+            // Hidden, or Windows opens a console window for it on every read
+            // of the model list.
+            child = spawn(binary, ['app-server'], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
         } catch {
             finish(null);
             return;
@@ -576,6 +578,10 @@ async function listModels() {
 
         child.on('error', () => finish(null));
         child.on('exit', () => finish(null));
+        // A write to a process that has already gone fails on the stream, not
+        // in the call, and an unheard stream error takes the main process
+        // down with it. The exit above is what reports it.
+        child.stdin.on('error', () => {});
 
         const send = (payload) => {
             try { child.stdin.write(`${JSON.stringify(payload)}\n`); } catch { finish(null); }
