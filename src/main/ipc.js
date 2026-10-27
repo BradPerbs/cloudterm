@@ -34,6 +34,7 @@ const attention = require('./ai/attention');
 const exporter = require('./ai/export');
 const pasted = require('./ai/pasted-secrets');
 const liveMetrics = require('./ai/live-metrics');
+const aiSkills = require('./ai/skills');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -1724,7 +1725,10 @@ function register(getWindow) {
     });
     handle('ai-scope', (event, payload) => assistant.setScope(payload?.conversationId, payload || {}));
     handle('ai-send', (event, payload) =>
-        assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.specs));
+        assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.mentions, payload?.files));
+    // The slash skills on this machine, for the composer's `/` picker. Names
+    // and descriptions only: a skill's text is read when a message invokes it.
+    handle('ai-skills-list', () => aiSkills.list());
     handle('ai-interrupt', (event, conversationId) => assistant.interrupt(conversationId));
     // "New chat from here": a new conversation holding this one up to the
     // end of a turn, which the panel opens in a tab. See ai/branch.js.

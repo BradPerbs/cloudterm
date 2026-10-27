@@ -5,7 +5,7 @@ import {
     ArrowUp01Icon,
     StopCircleIcon,
     ImageAdd01Icon,
-    Note01Icon,
+    Attachment01Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
@@ -13,9 +13,13 @@ import Markdown from '../../lib/markdown';
 import useAssistant from '../../hooks/useAssistant';
 import useTypewriter from '../../hooks/useTypewriter';
 import useGroupToolCalls from '../../hooks/useGroupToolCalls';
-import { useSnippets } from '../../hooks/useSnippets';
-import { isSpec } from '../../lib/snippets';
-import SpecMenu from './SpecMenu';
+import useMentionables from '../../hooks/useMentionables';
+import useMentions from '../../hooks/useMentions';
+import useSlashSkills, { typedSkill } from '../../hooks/useSlashSkills';
+import MentionPicker from './MentionPicker';
+import SlashPicker from './SlashPicker';
+import MentionChips from './MentionChips';
+import ComposerButton from './ComposerButton';
 import Transcript, { Notice } from './Transcript';
 import { Thought } from './ToolGroup';
 import WorkingIndicator from './WorkingIndicator';
@@ -23,9 +27,13 @@ import ApprovalRequest from './ApprovalRequest';
 import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
+import AttachmentChips from './AttachmentChips';
+import DropOverlay, { useFileDrop } from './DropZone';
+import useComposerFiles from '../../hooks/useComposerFiles';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
 import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
+import { canReadImages } from '../../lib/image-gate';
 import { describe, toWire } from '../../lib/assistant-scope';
 
 /** The rule inside a card, which is lighter than the one between two cards. */
@@ -196,7 +204,6 @@ export default function AssistantConversation({
     onConversationChange,
     onStatus,
     onOpenSettings,
-    onOpenSnippets,
     /** Open a conversation by id in a tab: one branched from this. */
     onOpenConversation,
 }) {
@@ -228,34 +235,27 @@ export default function AssistantConversation({
     const [images, setImages] = useState([]);
     /** Which agents can be sent one, from main. The button shows only for those. */
     const [imageProviders, setImageProviders] = useState([]);
+    /** Which of those open a picture as a file, and so need the local tools on. */
+    const [localImageProviders, setLocalImageProviders] = useState([]);
     /** Why the last file did not make it in, shown under the thumbnails. */
     const [imageNotice, setImageNotice] = useState('');
 
     /**
-     * The specs going with the message, by id. Ids rather than records, so a
-     * spec edited in the library while it sits in the composer is sent as it
-     * now reads; main looks each one up when the message goes.
+     * Everything a message can tag with `@`: saved hosts, specs and the other
+     * snippets, proxies and keys. Specs used to have a menu of their own; a
+     * spec is now one more thing to tag, and reads to the model exactly as an
+     * attached one did.
      */
-    const [specIds, setSpecIds] = useState([]);
-    const { snippets } = useSnippets();
-    const specs = useMemo(() => snippets.filter(isSpec), [snippets]);
-
-    // Resolved against the live library, so a spec deleted while attached
-    // falls off the message rather than being sent as an id nothing answers.
-    const attached = useMemo(
-        () => specIds.map(id => specs.find(spec => spec.id === id)).filter(Boolean),
-        [specIds, specs],
-    );
-
-    const toggleSpec = useCallback((id) => {
-        setSpecIds(current => (
-            current.includes(id) ? current.filter(entry => entry !== id) : [...current, id]
-        ));
-    }, []);
+    const mentionables = useMentionables({ hosts });
 
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    /** What the message tags, and the `@` picker. See `useMentions`. */
+    const tags = useMentions({ text, setText, inputRef, mentionables });
+    /** The `/` picker; a picked skill joins the tags as a chip. See `useSlashSkills`. */
+    const slash = useSlashSkills({ text, setText, inputRef, onPick: tags.add });
     const fileRef = useRef(null);
+    const docRef = useRef(null);
     const stickToBottom = useRef(true);
 
     // `follow` is resolved against the pane in front here, so what goes over
@@ -274,6 +274,7 @@ export default function AssistantConversation({
     const first = assistant.items.find(item => item.kind === 'user');
     const title = String(
         first?.text
+        || first?.mentions?.[0]?.name
         || first?.specs?.[0]?.name
         || (first?.images?.length ? t('assistant.image') : ''),
     ).replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -291,6 +292,7 @@ export default function AssistantConversation({
                 setSettings(status?.settings || null);
                 setCatalogs(status?.catalogs || {});
                 setImageProviders(status?.imageProviders || []);
+                setLocalImageProviders(status?.localImageProviders || []);
             })
             .catch(() => {});
     }, []);
@@ -416,24 +418,11 @@ export default function AssistantConversation({
         if (id) onOpenConversation?.(id);
     }, [branchTurn, onOpenConversation]);
 
-    /** Whether the agent answering can be sent a picture. */
-    const canAttach = Boolean(settings && imageProviders.includes(settings.provider));
-
-    const submit = useCallback(() => {
-        const body = text.trim();
-        if ((!body && images.length === 0 && attached.length === 0) || assistant.busy) return;
-        setText('');
-        setImages([]);
-        setImageNotice('');
-        setSpecIds([]);
-        stickToBottom.current = true;
-        if (inputRef.current) inputRef.current.style.height = 'auto';
-        assistant.send(
-            body,
-            images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
-            attached.map(spec => spec.id),
-        );
-    }, [text, images, attached, assistant]);
+    /**
+     * Whether the agent answering, on the model it is set to, can be sent a
+     * picture. See `lib/image-gate`.
+     */
+    const canAttach = canReadImages(settings, { imageProviders, localImageProviders, catalogs });
 
     /**
      * Take in image files, however they arrived. One at a time, so a handful
@@ -457,27 +446,60 @@ export default function AssistantConversation({
         setImages(current => current.filter(image => image.id !== id));
     }, []);
 
-    // Ctrl+V with a picture on the clipboard, which is how a screenshot
-    // arrives nine times out of ten. A text paste is left to the textarea.
+    /**
+     * Documents waiting in the composer, and the one road every file takes
+     * in, picked, dropped or pasted: pictures to `addFiles` above when the
+     * agent can read them, everything else read into words. See
+     * `useComposerFiles`.
+     */
+    const focusInput = useCallback(() => inputRef.current?.focus({ preventScroll: true }), []);
+    const attachments = useComposerFiles({ canAttachImages: canAttach, addImages: addFiles, onSettled: focusInput });
+    const { dragging, dropProps } = useFileDrop(attachments.add);
+
+    const submit = useCallback(() => {
+        let body = text.trim();
+        const files = attachments.files;
+        let tagged = tags.mentions;
+        // `/name request` typed straight out, without taking the skill from
+        // the list, invokes it all the same.
+        const typed = typedSkill(body, slash.skills);
+        if (typed && !tagged.some(entry => entry.kind === 'skill' && entry.id === typed.skill.id)) {
+            body = typed.rest.trim();
+            tagged = [...tagged, { kind: 'skill', id: typed.skill.id, name: typed.skill.name || typed.skill.id }];
+        }
+        if ((!body && images.length === 0 && tagged.length === 0 && files.length === 0) || assistant.busy) return;
+        setText('');
+        setImages([]);
+        setImageNotice('');
+        tags.clear();
+        attachments.clear();
+        stickToBottom.current = true;
+        if (inputRef.current) inputRef.current.style.height = 'auto';
+        assistant.send(
+            body,
+            images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
+            tagged.map(({ kind, id }) => ({ kind, id })),
+            files.map(({ name, mediaType, text: words }) => ({ name, mediaType, text: words })),
+        );
+    }, [text, images, tags, slash.skills, attachments, assistant]);
+
+    // Ctrl+V with a file on the clipboard: a screenshot nine times out of ten,
+    // or a file copied in the file manager. A text paste is left to the
+    // textarea, and so is a picture that came with text, which is what
+    // copying cells out of a spreadsheet puts there.
     const onPaste = (event) => {
-        const files = imageFiles(event.clipboardData);
-        if (!files.length || !canAttach) return;
+        const files = Array.from(event.clipboardData?.files || []);
+        if (!files.length) return;
+        const pictures = imageFiles(event.clipboardData);
+        if (pictures.length === files.length && event.clipboardData.getData('text/plain')) return;
         event.preventDefault();
-        addFiles(files);
-    };
-
-    const onDrop = (event) => {
-        const files = imageFiles(event.dataTransfer);
-        if (!files.length || !canAttach) return;
-        event.preventDefault();
-        addFiles(files);
-    };
-
-    const onDragOver = (event) => {
-        if (canAttach && event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+        attachments.add(files);
     };
 
     const onKeyDown = (event) => {
+        // An open picker takes the arrows, Enter, Tab and Escape first, so the
+        // caret never has to leave the field to choose from it.
+        if (slash.onKeyDown(event) || tags.onKeyDown(event)) return;
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             submit();
@@ -491,6 +513,8 @@ export default function AssistantConversation({
     );
 
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;
+    /** Whether there is anything to send: words, or something going with them. */
+    const hasDraft = Boolean(text.trim() || images.length > 0 || tags.mentions.length > 0 || attachments.files.length > 0);
     const quickPrompts = settings?.quickPrompts || [];
 
     /**
@@ -502,7 +526,13 @@ export default function AssistantConversation({
     const asking = useMemo(() => groupApprovals(assistant.items), [assistant.items]);
 
     return (
-        <>
+        // The whole conversation takes a dropped file, not only the box: a
+        // file is dropped wherever the pointer happens to be over the panel.
+        // Laid out exactly as the column it sits in, which it replaces as the
+        // frame of the three parts below.
+        <div className="relative flex-1 min-h-0 flex flex-col" {...dropProps}>
+            {dragging && <DropOverlay />}
+
             {/* No header of its own: the tab strip above is the one row of
                 chrome, and which servers this tab is about is a chip on the
                 composer, beside the other things that shape the next
@@ -707,42 +737,35 @@ export default function AssistantConversation({
                 into it. */}
             <div className="shrink-0 p-3">
                 <div
-                    className="rounded-2xl transition-colors
+                    className="relative rounded-2xl transition-colors
                         border border-gray-300 dark:border-surface-control
                         focus-within:border-gray-400 dark:focus-within:border-neutral-600"
-                    onDrop={onDrop}
-                    onDragOver={onDragOver}
                 >
-                    {/* The specs going with the message, as chips. Each can be
-                        taken back until it is sent; the menu below toggles the
-                        same set. */}
-                    {attached.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                            {attached.map(spec => (
-                                <span
-                                    key={spec.id}
-                                    className="inline-flex items-center gap-1 pl-2 pr-1 h-6 rounded-md
-                                        text-xs font-medium select-none
-                                        bg-gray-100 dark:bg-surface-control
-                                        text-gray-700 dark:text-gray-200"
-                                >
-                                    <Note01Icon size={12} strokeWidth={2} className="shrink-0 opacity-70" />
-                                    <span className="max-w-[12rem] truncate">{spec.name}</span>
-                                    <button
-                                        type="button"
-                                        aria-label={t('assistant.removeSpec')}
-                                        onClick={() => toggleSpec(spec.id)}
-                                        className="w-4 h-4 flex items-center justify-center rounded
-                                            text-gray-500 dark:text-gray-400
-                                            hover:text-gray-900 dark:hover:text-white
-                                            hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors"
-                                    >
-                                        <Cancel01Icon size={10} strokeWidth={2.5} />
-                                    </button>
-                                </span>
-                            ))}
-                        </div>
+                    {/* What `/` opened, over the composer rather than in it. */}
+                    {slash.picker && (
+                        <SlashPicker
+                            items={slash.matches}
+                            query={slash.picker.query}
+                            active={slash.row}
+                            onPick={slash.pick}
+                            onHover={slash.setRow}
+                        />
                     )}
+                    {/* What `@` opened, over the composer rather than in it. */}
+                    {tags.picker && !slash.picker && (
+                        <MentionPicker
+                            items={tags.matches}
+                            query={tags.picker.query}
+                            active={tags.row}
+                            onPick={tags.pick}
+                            onHover={tags.setRow}
+                        />
+                    )}
+
+                    {/* What the message tags, as chips. Each can be taken back
+                        until it is sent; the words in the field are the
+                        user's own and are left alone. */}
+                    <MentionChips mentions={tags.mentions} onRemove={tags.remove} />
 
                     {/* What is going with the message, above the words about
                         it. Each thumbnail can be taken back until it is sent. */}
@@ -776,11 +799,30 @@ export default function AssistantConversation({
                             {imageNotice}
                         </div>
                     )}
+                    {/* Documents going with the message, as words. */}
+                    <AttachmentChips files={attachments.files} onRemove={attachments.remove} />
+                    {attachments.notice && (
+                        <div className="px-3 pt-2 text-xs text-amber-600 dark:text-amber-400">
+                            {attachments.notice}
+                        </div>
+                    )}
                     <textarea
                         ref={inputRef}
                         rows={1}
                         value={text}
-                        onChange={(event) => setText(event.target.value)}
+                        onChange={(event) => {
+                            setText(event.target.value);
+                            tags.follow(event.target.value, event.target.selectionStart);
+                            slash.follow(event.target.value, event.target.selectionStart);
+                        }}
+                        onClick={(event) => {
+                            tags.follow(event.target.value, event.target.selectionStart);
+                            slash.follow(event.target.value, event.target.selectionStart);
+                        }}
+                        onBlur={() => {
+                            tags.close();
+                            slash.close();
+                        }}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
                         placeholder={t('assistant.askAbout', { about: described.sentence })}
@@ -801,15 +843,59 @@ export default function AssistantConversation({
                             <ApprovalMenu settings={settings} onChange={changeSettings} />
                         )}
 
-                        {/* The documents from the library that go with the
-                            message. Every agent can read text, so this is
-                            there whichever one is answering. */}
-                        <SpecMenu
-                            specs={specs}
-                            selected={specIds}
-                            onToggle={toggleSpec}
-                            onCreate={onOpenSnippets}
+                        {/* A skill from ~/.claude/skills or ~/.agents/skills,
+                            sent with the message as its instructions. The
+                            same thing typing `/` first does, for a pointer. */}
+                        <ComposerButton
+                            label={t('assistant.runSkill')}
+                            hint="/"
+                            active={Boolean(slash.picker) || tags.mentions.some(entry => entry.kind === 'skill')}
+                            onClick={slash.open}
+                        >
+                            /
+                        </ComposerButton>
+
+                        {/* Anything saved can be named in a message: a host,
+                            a spec or another snippet, a proxy, a key. The
+                            same thing typing `@` does, for a pointer. */}
+                        <ComposerButton
+                            label={t('assistant.tag')}
+                            hint="@"
+                            active={Boolean(tags.picker) || tags.mentions.length > 0}
+                            onClick={tags.open}
+                        >
+                            @
+                        </ComposerButton>
+
+                        {/* Any file off the disk: pictures go as pictures where
+                            the agent reads them, everything else as words,
+                            which every agent reads. Drop and paste take the
+                            same road. */}
+                        <input
+                            ref={docRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(event) => {
+                                attachments.add(Array.from(event.target.files || []));
+                                event.target.value = '';
+                            }}
                         />
+                        <Tooltip label={t('assistant.attachFile')} hint={t('assistant.attachFileHint')} placement="top">
+                            <button
+                                type="button"
+                                aria-label={t('assistant.attachFile')}
+                                onClick={() => docRef.current?.click()}
+                                className={`w-7 h-7 shrink-0 flex items-center justify-center
+                                    rounded-full transition-colors
+                                    ${attachments.files.length > 0
+                                        ? 'bg-gray-100 dark:bg-surface-control text-gray-700 dark:text-gray-200'
+                                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-surface-control '
+                                            + 'hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                                <Attachment01Icon size={15} strokeWidth={2} />
+                            </button>
+                        </Tooltip>
 
                         {/* The picker, for the agents that can read a picture.
                             Paste and drop work without it; this is for the
@@ -882,7 +968,7 @@ export default function AssistantConversation({
                                         <StopCircleIcon size={15} strokeWidth={2} />
                                     </button>
                                 </Tooltip>
-                            ) : (text.trim() || images.length > 0 || attached.length > 0) ? (
+                            ) : hasDraft ? (
                                 <Tooltip label={t('assistant.send')} hint="Enter" placement="top">
                                     <button
                                         type="button"
@@ -901,6 +987,6 @@ export default function AssistantConversation({
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 }

@@ -8,6 +8,8 @@ import ApprovalRequest from './ApprovalRequest';
 import LiveMetric from './LiveMetric';
 import ReplyFooter from './ReplyFooter';
 import FilesChanged from './FilesChanged';
+import { SentFiles } from './AttachmentChips';
+import { SentMentions } from './MentionChips';
 import { useT } from '../../i18n';
 
 /**
@@ -97,6 +99,17 @@ function UserMessage({ item }) {
             <div className="assistant-bubble max-w-[88%] px-3 py-2 rounded-2xl rounded-br-md
                 bg-gray-900 dark:bg-white text-white dark:text-black
                 text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+                {/* Files that went with it, by name: their words went to the
+                    agent and are not kept. See AttachmentChips. */}
+                <SentFiles
+                    files={item.files}
+                    spaced={Boolean(item.text || item.images?.length || item.specs?.length || item.mentions?.length)}
+                />
+                {/* What it tagged with `@` or invoked with `/`, by name. */}
+                <SentMentions
+                    mentions={item.mentions}
+                    spaced={Boolean(item.text || item.images?.length || item.specs?.length)}
+                />
                 {/* The documents that went with it, by name. The text is in
                     the library, and a bubble holding a runbook would be the
                     whole panel. */}

@@ -8,7 +8,8 @@
  *
  * The items it makes, by `kind`:
  *
- *   user       `{ id, text, images, specs }`: what the user sent.
+ *   user       `{ id, text, images, specs, files, mentions }`: what the
+ *              user sent. `specs` is only on messages from before tagging.
  *   assistant  `{ id, text, thinking }`: a finished block of the reply, with
  *              the thinking that came before it. Either half can be empty.
  *   tool       `{ id, name, local, question, input, status, result, isError,
@@ -152,6 +153,10 @@ function step(state, event, owned) {
                 text: event.text,
                 images: event.images || [],
                 specs: event.specs || [],
+                // Documents by name: their words went to the agent only.
+                files: event.files || [],
+                // What was tagged, by name: the records are in the store.
+                mentions: event.mentions || [],
             });
             busy = true;
             draft = emptyDraft();
