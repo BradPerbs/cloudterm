@@ -1726,6 +1726,16 @@ function register(getWindow) {
     handle('ai-send', (event, payload) =>
         assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.specs));
     handle('ai-interrupt', (event, conversationId) => assistant.interrupt(conversationId));
+    // "New chat from here": a new conversation holding this one up to the
+    // end of a turn, which the panel opens in a tab. See ai/branch.js.
+    handle('ai-conversation-branch', (event, payload) =>
+        assistant.branch(String(payload?.conversationId || ''), payload?.turnId));
+    // What one turn did to files: the lines, for its card's review, and
+    // putting them back. See ai/checkpoints.js.
+    handle('ai-turn-changes', (event, payload) =>
+        assistant.turnChanges(String(payload?.conversationId || ''), payload?.turnId));
+    handle('ai-turn-revert', (event, payload) =>
+        assistant.revertTurn(String(payload?.conversationId || ''), payload?.turnId));
 
     // The two answers the window owes the main process: whether a tool call may
     // go ahead, and whether it managed to open or close the session it was

@@ -6,6 +6,8 @@ import ToolCall from './ToolCall';
 import ToolGroup, { Thought } from './ToolGroup';
 import ApprovalRequest from './ApprovalRequest';
 import LiveMetric from './LiveMetric';
+import ReplyFooter from './ReplyFooter';
+import FilesChanged from './FilesChanged';
 import { useT } from '../../i18n';
 
 /**
@@ -37,10 +39,10 @@ import { useT } from '../../i18n';
  *                       older ones are added above in the background, a few
  *                       hundred at a time, where they would have been anyway.
  *
- * Where the next things plug in: a footer under each finished turn goes in
- * `Row`, under its content, with the turn's end worked out here and passed
- * through `Segment` (whose comparison would then check it too). What a tool
- * row opens into, a diff included, is `ToolCall`'s.
+ * The footer under each finished turn is drawn by `Row`, under its content,
+ * with the turn's end worked out here (`findTurnEnds`) and passed through
+ * `Segment`, whose comparison checks it too. What a tool row opens into, a
+ * diff included, is `ToolCall`'s.
  */
 
 /** Rows drawn straight away when a conversation opens: more than a screen. */
@@ -144,7 +146,7 @@ function UserMessage({ item }) {
 }
 
 /** What one row draws as. */
-function RowContent({ item, onRespond }) {
+function RowContent({ item, onRespond, conversationId, onRevert }) {
     switch (item.kind) {
         case 'user':
             return <UserMessage item={item} />;
@@ -177,6 +179,8 @@ function RowContent({ item, onRespond }) {
             return <Divider item={item} />;
         case 'metric':
             return <LiveMetric item={item} />;
+        case 'changes':
+            return <FilesChanged item={item} conversationId={conversationId} onRevert={onRevert} />;
         default:
             return <Notice item={item} />;
     }
@@ -198,20 +202,64 @@ function isBlank(item) {
 }
 
 /**
- * One item. Its props are all values or stable callbacks, so it is drawn
- * again only when its own item changes.
+ * One item, and under it the footer of the turn that ends on it, if one does.
+ * Its props are all values or stable callbacks, so it is drawn again only when
+ * its own item, or the turn ending on it, changes.
  */
-const Row = memo(function Row({ item, onRespond }) {
+const Row = memo(function Row({
+    item, onRespond, onBranch, conversationId, onRevert, endTurnId, endText = '', endRate = null,
+}) {
     if (isBlank(item)) return null;
+    const ends = endTurnId !== undefined && Boolean(endText || endRate || onBranch);
 
     return (
         // Never squeezed by the column it sits in: a flex column would
         // otherwise shrink its rows to fit rather than scroll.
         <div className="shrink-0" style={ROW_STYLE}>
-            <RowContent item={item} onRespond={onRespond} />
+            <RowContent item={item} onRespond={onRespond} conversationId={conversationId} onRevert={onRevert} />
+            {ends && (
+                <div className="mt-1">
+                    <ReplyFooter
+                        text={endText}
+                        rate={endRate}
+                        onBranch={onBranch ? () => onBranch(endTurnId) : null}
+                    />
+                </div>
+            )}
         </div>
     );
 });
+
+/**
+ * Where each finished turn ends, by the index of its last drawn row, with the
+ * turn's id (its message's), its reply and its answer rate. The footer goes
+ * there. The turn still running has none until it is over.
+ */
+function findTurnEnds(items, busy, turnRates) {
+    const ends = new Map();
+    let turn = null;
+    const close = () => {
+        if (turn && turn.worked) {
+            turn.rate = turnRates?.[turn.turnId] || null;
+            ends.set(turn.last, turn);
+        }
+    };
+    items.forEach((item, index) => {
+        if (item.kind === 'user') {
+            close();
+            turn = { turnId: item.id, text: '', last: index, worked: false };
+            return;
+        }
+        // A divider is between turns rather than the end of one, and a blank
+        // row draws nothing to hang a footer under.
+        if (!turn || item.kind === 'divider' || isBlank(item)) return;
+        if (item.kind === 'assistant' && String(item.text || '').trim()) turn.text = item.text;
+        if (item.kind !== 'notice') turn.worked = true;
+        turn.last = index;
+    });
+    if (!busy) close();
+    return ends;
+}
 
 /**
  * A row's key: the item's own id, made unique if two items share one. Two
@@ -235,16 +283,32 @@ function rowKeys(items) {
  * object as last time, which is every segment but the last while a turn is
  * streaming in.
  */
-const Segment = memo(function Segment({ items, keys, from, to, rowProps }) {
+const Segment = memo(function Segment({ items, keys, ends, from, to, rowProps }) {
     const rows = [];
     for (let index = from; index < to; index += 1) {
-        rows.push(<Row key={keys[index]} item={items[index]} {...rowProps} />);
+        const end = ends?.get(index);
+        rows.push(
+            <Row
+                key={keys[index]}
+                item={items[index]}
+                endTurnId={end ? end.turnId : undefined}
+                endText={end ? end.text : ''}
+                endRate={end ? end.rate : null}
+                {...rowProps}
+            />,
+        );
     }
     return rows;
 }, (previous, next) => {
     if (previous.from !== next.from || previous.to !== next.to || previous.rowProps !== next.rowProps) return false;
     for (let index = next.from; index < next.to; index += 1) {
         if (previous.items[index] !== next.items[index] || previous.keys[index] !== next.keys[index]) return false;
+        // A turn starting or stopping ending here, or its footer changing.
+        const before = previous.ends?.get(index);
+        const after = next.ends?.get(index);
+        if (before?.turnId !== after?.turnId || before?.text !== after?.text || before?.rate !== after?.rate) {
+            return false;
+        }
     }
     return true;
 });
@@ -272,9 +336,20 @@ function Transcript({
     onLayout,
     /** Fold consecutive tool calls into one summary row. On unless switched off in settings. */
     groupTools = true,
+    /** Whether a turn is open: its footer waits until it is over. */
+    busy = false,
+    /** Each finished turn's answer rate, by its message's id. */
+    turnRates = null,
+    /** Start a new chat from the end of a turn, named by its message's id. */
+    onBranch = null,
+    /** The conversation drawn, which a files card reads its review from. */
+    conversationId = '',
+    /** Put back the files a turn changed, named by its message's id. */
+    onRevert = null,
 }) {
     const t = useT();
     const items = useGrouped(allItems, groupTools);
+    const ends = useMemo(() => findTurnEnds(items, busy, turnRates), [items, busy, turnRates]);
 
     // Newest first: the last rows are drawn straight away. The rest come in
     // above them while the browser is idle, as a transition, so a key pressed
@@ -294,12 +369,15 @@ function Transcript({
 
     useLayoutEffect(() => {
         onLayout?.();
-    }, [items, from, onLayout]);
+    }, [items, from, ends, onLayout]);
 
     const keys = useMemo(() => rowKeys(items), [items]);
     // One object for the props every row shares, so a segment can tell they
     // have not changed with one comparison.
-    const rowProps = useMemo(() => ({ onRespond }), [onRespond]);
+    const rowProps = useMemo(
+        () => ({ onRespond, onBranch, conversationId, onRevert }),
+        [onRespond, onBranch, conversationId, onRevert],
+    );
 
     const start = Math.min(from, items.length);
     const segments = [];
@@ -309,6 +387,7 @@ function Transcript({
                 key={first}
                 items={items}
                 keys={keys}
+                ends={ends}
                 from={Math.max(first, start)}
                 to={Math.min(first + SEGMENT, items.length)}
                 rowProps={rowProps}

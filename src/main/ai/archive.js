@@ -118,6 +118,10 @@ function pack(conversation) {
         provider: conversation.provider || '',
         title: conversation.title || '',
         costUsd: conversation.costUsd || 0,
+        // What a branch's first message is still to carry. See branch.js.
+        carryOver: conversation.carryOver || '',
+        // What the agent is still to be told, such as files an undo put back.
+        pendingNote: conversation.pendingNote || '',
         busy: Boolean(conversation.busy),
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
@@ -215,6 +219,8 @@ function unpack(record, currentProvider) {
         provider,
         needsRestart: false,
         costUsd: Number.isFinite(record.costUsd) ? record.costUsd : 0,
+        carryOver: typeof record.carryOver === 'string' ? record.carryOver : '',
+        pendingNote: typeof record.pendingNote === 'string' ? record.pendingNote : '',
         title: typeof record.title === 'string' ? record.title : '',
         createdAt: Number.isFinite(record.createdAt) ? record.createdAt : at,
         updatedAt: at,

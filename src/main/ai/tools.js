@@ -6,6 +6,7 @@ const transcript = require('../transcript');
 const exec = require('./exec');
 const terminalRun = require('./terminal-run');
 const fileText = require('./file-text');
+const checkpoints = require('./checkpoints');
 const snippetConfig = require('../snippet-config');
 const metricTools = require('./metric-tools');
 
@@ -614,13 +615,22 @@ const TOOLS = [
             const resolved = resolveSession(input, ctx);
             if (resolved.error) return fail(resolved.error);
 
+            const file = { where: 'remote', sessionId: resolved.sessionId, path: input.path };
             return viaSftp(resolved.sessionId, (handle, resolve) => {
-                handle.writeFile(input.path, input.content, { encoding: 'utf8' }, (error) => {
+                const write = () => handle.writeFile(input.path, input.content, { encoding: 'utf8' }, (error) => {
                     if (error) {
                         resolve(fail(`Could not write ${input.path}: ${error.message}`));
                         return;
                     }
+                    ctx.checkpoint?.after(file, checkpoints.stateOfText(input.content));
                     resolve(ok(`Wrote ${Buffer.byteLength(input.content)} bytes to ${input.path}.`));
+                });
+                // Read first, only so the turn's undo has something to put
+                // back, and only when something is recording. See checkpoints.js.
+                if (!ctx.checkpoint) write();
+                else checkpoints.readRemote(handle, input.path, (state) => {
+                    ctx.checkpoint.before(file, state);
+                    write();
                 });
             });
         },
@@ -687,11 +697,17 @@ const TOOLS = [
                             return;
                         }
 
+                        // Both sides of the write, and the passage, so the turn
+                        // can be undone. See checkpoints.js.
+                        const file = { where: 'remote', sessionId: resolved.sessionId, path: input.path };
+                        ctx.checkpoint?.before(file, checkpoints.stateOf(data));
                         handle.writeFile(input.path, applied.content, { encoding: 'utf8' }, (writeError) => {
                             if (writeError) {
                                 resolve(fail(`Could not write ${input.path}: ${writeError.message}`));
                                 return;
                             }
+                            ctx.checkpoint?.after(file, checkpoints.stateOfText(applied.content));
+                            ctx.checkpoint?.passage(file, { old: input.old, new: input.new, all: Boolean(input.all) });
                             resolve(ok(
                                 `Replaced ${applied.replaced} occurrence${applied.replaced === 1 ? '' : 's'} `
                                 + `in ${input.path}.`

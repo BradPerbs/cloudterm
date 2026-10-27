@@ -12,11 +12,13 @@
  *   assistant  `{ id, text, thinking }`: a finished block of the reply, with
  *              the thinking that came before it. Either half can be empty.
  *   tool       `{ id, name, local, question, input, status, result, isError,
- *              approval? }`: one call. `status` is running, waiting (on a
+ *              diff, approval? }`: one call. `status` is running, waiting (on a
  *              question to the user), done, error, or stopped (its turn ended
  *              before it reported back).
  *   approval   a question that arrived for a call the transcript never saw
  *              start. Rare; the question normally rides on its tool row.
+ *   changes    `{ id, turnId, files, from, status, failed, reverted }`: the
+ *              files a turn changed, with how an undo of them went.
  *   notice     `{ id, tone, text }`: a line the app wrote itself.
  *   divider    `{ id, text }`: the chat moved to another model or effort.
  *   metric     `{ id, watchId, spec, status, reason, code, vars, points,
@@ -59,6 +61,31 @@ function settleCalls(items, edit) {
 }
 
 /**
+ * A turn's answer rate, for the number under its reply: what the main process
+ * stamped on the result (see ai/turn-rate.js), with the wall time alongside
+ * when the turn took meaningfully longer than its active time. Null when it
+ * stamped nothing, and the footer then shows no number rather than a guess.
+ */
+function rateOf(event) {
+    const tps = Number(event.tokensPerSec);
+    const tokens = Number(event.outputTokens);
+    const ms = Number(event.durationMs);
+    if (!(tps > 0) || !(tokens > 0) || !(ms > 0)) return null;
+    const rate = { tps, tokens, seconds: Math.round(ms / 100) / 10 };
+    const wall = Number(event.wallMs);
+    if (wall > ms) rate.wall = Math.round(wall / 100) / 10;
+    return rate;
+}
+
+/** The rates, with this result's filed under the message that began its turn. */
+function addRate(turnRates, items, event) {
+    const rate = rateOf(event);
+    if (!rate) return turnRates;
+    const start = lastIndexWhere(items, item => item.kind === 'user');
+    return start >= 0 ? { ...turnRates, [items[start].id]: rate } : turnRates;
+}
+
+/**
  * Fold one event into the transcript.
  *
  * Pure, and the only place the shape of an item is decided, so replaying
@@ -85,6 +112,7 @@ function step(state, event, owned) {
     let draft = state.draft;
     let busy = state.busy;
     let costUsd = state.costUsd;
+    let turnRates = state.turnRates;
 
     /** Whatever streamed and was never closed by a finished block, kept as one. */
     const flushDraft = (id) => {
@@ -183,6 +211,9 @@ function step(state, event, owned) {
                 status: 'running',
                 result: '',
                 isError: false,
+                // The change an edit makes, worked out by the main process
+                // from the call's arguments. See ai/diff.js.
+                diff: event.diff || null,
             });
             // Anything that streamed before the call belongs above it: the
             // narration and, where the model thought without speaking, its
@@ -225,6 +256,7 @@ function step(state, event, owned) {
                 host: event.host,
                 status: 'pending',
                 feedback: '',
+                diff: event.diff || null,
             };
 
             // The question belongs to the call, so it is attached to the row
@@ -272,6 +304,40 @@ function step(state, event, owned) {
             break;
         }
 
+        // What the turn did to files, as the card at its foot. `from` is set
+        // on a branch's copy: the card is there to read, and undoing it
+        // belongs to the conversation that made the change.
+        case 'turn-changes':
+            edit().push({
+                kind: 'changes',
+                id: `c-${event.turnId}-${items.length}`,
+                turnId: event.turnId,
+                files: event.files || [],
+                from: event.from || '',
+                status: 'applied',
+                failed: [],
+                reverted: [],
+            });
+            break;
+
+        // An undo of that card. A second try after a partial one reports only
+        // the files it tried, so the ones already back are added up here.
+        case 'turn-reverted': {
+            const index = lastIndexWhere(items, item => (
+                item.kind === 'changes' && String(item.turnId) === String(event.turnId)
+            ));
+            if (index >= 0) {
+                const failed = event.failed || [];
+                edit()[index] = {
+                    ...items[index],
+                    status: failed.length === 0 ? 'reverted' : 'partial',
+                    failed,
+                    reverted: [...(items[index].reverted || []), ...(event.reverted || [])],
+                };
+            }
+            break;
+        }
+
         case 'account':
             return { ...state, account: event };
 
@@ -287,6 +353,7 @@ function step(state, event, owned) {
             settleCalls(items, edit);
             busy = false;
             costUsd += event.costUsd || 0;
+            turnRates = addRate(turnRates, items, event);
             if (event.isError && event.subtype !== 'success') {
                 edit().push({
                     kind: 'notice',
@@ -403,7 +470,7 @@ function step(state, event, owned) {
             break;
     }
 
-    return { ...state, items, draft, busy, costUsd };
+    return { ...state, items, draft, busy, costUsd, turnRates };
 }
 
 /** One event, on a list that is not the caller's to change. */
@@ -437,4 +504,7 @@ export const INITIAL = {
     // Both arrive from the runtime rather than being configured here.
     account: null,
     rateLimit: null,
+    // Each finished turn's answer rate, by the id of the message that began
+    // it, for the footer under its reply.
+    turnRates: {},
 };

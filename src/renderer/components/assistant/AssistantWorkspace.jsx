@@ -928,6 +928,7 @@ export default function AssistantWorkspace({
                         onStatus={reportStatus}
                         onOpenSettings={onOpenSettings}
                         onOpenSnippets={onOpenSnippets}
+                        onOpenConversation={openConversation}
                     />
                 </div>
             ))}
