@@ -68,6 +68,15 @@ function when(t, timestamp) {
     return t('monitor.daysAgo', { count: Math.floor(hours / 24) });
 }
 
+/**
+ * The last handover of tabs this window has acted on, by its `seq`. Kept
+ * outside the component because the column is unmounted whenever the panel
+ * shuts, while the handover it was given lives on in App: without this,
+ * reopening the panel acted on the old one again, jumping back to that tab
+ * and opening it afresh if it had been closed since.
+ */
+let adoptedSeq = 0;
+
 let tabCounter = 0;
 const newTab = (conversationId = '') => ({
     id: `tab-${Date.now().toString(36)}-${++tabCounter}`,
@@ -527,10 +536,11 @@ export default function AssistantWorkspace({
 
     // Tabs handed to this strip from a window that closed or gave them back.
     // Anything already open here is only brought forward.
-    const adopted = useRef(0);
+    const adopted = useRef(adoptedSeq);
     useEffect(() => {
         if (!adopt || adopt.seq === adopted.current) return;
         adopted.current = adopt.seq;
+        adoptedSeq = adopt.seq;
         setState(current => {
             const open = new Set(current.tabs.map(tab => tab.conversationId));
             const fresh = (adopt.conversationIds || [])
