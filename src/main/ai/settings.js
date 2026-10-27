@@ -82,11 +82,16 @@ const DEFAULTS = {
      * of those the next message goes to, and it moves every time a model is
      * picked out of that menu, because a model belongs to exactly one of them.
      *
-     * `provider` is always a member of `providers`, and `providers` is never
-     * empty. Both are enforced in `sanitize`, so nothing downstream has to
-     * check: a conversation still starts one agent, the same as it always did.
+     * `provider` is a member of `providers` whenever the list has anything in
+     * it, enforced in `sanitize`. The list can be empty: nothing is ticked on a
+     * machine with no agent installed, rather than an agent that is not there.
+     * `provider` then keeps its value and a conversation refuses to start (see
+     * `ensureProvider` in index.js).
+     *
+     * Empty here, and filled on the first run with Claude Code only if it is
+     * actually installed: see `firstRunProviders`.
      */
-    providers: ['claude-code'],
+    providers: [],
     provider: 'claude-code',
     // Only read when the provider is `local`. Kept here rather than in a
     // provider file because it is a setting the user types, and the settings
@@ -183,16 +188,38 @@ function cleanUrl(value, fallback) {
  * one running, so it is the only one switched on, and the machine goes on
  * behaving exactly as it did.
  *
- * Never empty. An empty list is a settings page with no agent to offer and a
- * composer with nothing in its menu, so the agent that was selected stays on
- * whatever the patch said.
+ * An empty list is kept as it is: that is a machine with no agent installed,
+ * or a person who unticked every one. A list that had names in it and lost
+ * them all to the filter (agents a newer build knows of) falls back to the
+ * agent that was selected, as it always did.
  */
 function readProviders(raw, provider) {
-    const kept = Array.isArray(raw.providers)
-        ? [...new Set(raw.providers.filter(name => PROVIDERS.has(name)))]
-        : [];
-    if (kept.length > 0) return kept;
-    return [provider];
+    if (Array.isArray(raw.providers)) {
+        const kept = [...new Set(raw.providers.filter(name => PROVIDERS.has(name)))];
+        if (kept.length > 0 || raw.providers.length === 0) return kept;
+        return [provider];
+    }
+    return PROVIDERS.has(raw.provider) ? [provider] : [...DEFAULTS.providers];
+}
+
+/**
+ * What is ticked the first time the app runs, before anyone has chosen.
+ *
+ * Claude Code if it is on this machine, and nothing otherwise. It used to be
+ * Claude Code unconditionally, which on a machine without it was a ticked card
+ * for an agent that was not there, and, being the only one, could not be
+ * unticked either. Only Claude Code is looked for because it was the default
+ * before; the others are a tick away and are checked when ticked.
+ *
+ * Required here rather than at the top: the provider requires this file.
+ */
+function firstRunProviders() {
+    try {
+        return require('./providers/claude-code').findClaude() ? ['claude-code'] : [];
+    } catch (error) {
+        console.error('Could not look for Claude Code on the first run:', error.message);
+        return [];
+    }
 }
 
 function sanitize(raw) {
@@ -211,8 +238,11 @@ function sanitize(raw) {
         // Whichever way the two disagree the list wins, because the list is
         // what the user was changing: switching off the agent you were on
         // hands the conversation to the first one still standing rather than
-        // leaving a model menu that cannot offer what is selected.
-        if (!next.providers.includes(next.provider)) next.provider = next.providers[0];
+        // leaving a model menu that cannot offer what is selected. With none
+        // standing, `provider` stays as it was: nothing runs until one is on.
+        if (next.providers.length > 0 && !next.providers.includes(next.provider)) {
+            next.provider = next.providers[0];
+        }
         if ('localBaseUrl' in raw) next.localBaseUrl = cleanUrl(raw.localBaseUrl, DEFAULTS.localBaseUrl);
         // Long enough for the publisher-and-repository ids a local server
         // reports, which run past the 80 characters an alias needs.
@@ -281,11 +311,16 @@ function load() {
             config = sanitize(parsed?.config);
             secrets = readSecrets(parsed, config.provider);
         } else {
+            // Not written until something is changed, so until then each
+            // start looks again and a Claude Code installed in the meantime
+            // is ticked on the next run.
             config = sanitize(null);
+            config.providers = firstRunProviders();
         }
     } catch (error) {
         console.error('Could not read the assistant settings:', error.message);
         config = sanitize(null);
+        config.providers = firstRunProviders();
     }
     return config;
 }
@@ -381,5 +416,5 @@ module.exports = {
     EFFORTS,
     PROVIDERS,
     DEFAULT_LOCAL_URL,
-    _test: { sanitize, readSecrets, cleanUrl },
+    _test: { sanitize, readSecrets, cleanUrl, firstRunProviders },
 };
