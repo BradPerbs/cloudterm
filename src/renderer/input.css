@@ -1647,3 +1647,100 @@ body.tab-dragging .session-tab {
 .scrollbar-none::-webkit-scrollbar {
     display: none;
 }
+
+/* ------------------------------------------------------------------ *
+ * Charts in replies (components/ui/Chart.jsx)
+ *
+ * The series colours are one validated order, light and dark each stepped for
+ * the surface the card sits on rather than one set flipped: the order is what
+ * keeps neighbours apart for colour-blind readers, so a slot is never reused
+ * or skipped. The status colours (warning, critical, up) are kept for state:
+ * meters, uptime cells, failed runs. They never stand in for a series.
+ *
+ * The dark card is the app's own base surface, so `--chart-surface` follows
+ * it, and with it any retint from the appearance settings: it is what rings a
+ * point and haloes a label so they stay legible where lines cross.
+ *
+ * The draw-in itself is GSAP's (lib/chartMotion.js). What is left here is the
+ * hover, the hatching on a span still running, and the shimmer of a chart
+ * still arriving.
+ * ------------------------------------------------------------------ */
+
+.chart-root {
+    --chart-surface: #ffffff;
+    --chart-1: #2a78d6;
+    --chart-2: #eb6834;
+    --chart-3: #1baf7a;
+    --chart-4: #eda100;
+    --chart-5: #e87ba4;
+    --chart-6: #008300;
+    --chart-7: #4a3aa7;
+    --chart-8: #e34948;
+    --chart-grid: rgb(0 0 0 / 0.055);
+    --chart-cursor: rgb(0 0 0 / 0.18);
+    --chart-track: rgb(0 0 0 / 0.055);
+    --chart-mark: rgb(0 0 0 / 0.32);
+    --chart-other: #b9b8b1;
+    /* A strip of good cells is most of every uptime chart, so "up" is a
+       quieter green than a status would be: present, not shouting. */
+    --chart-up: #3aa76d;
+    --chart-warning: #fab219;
+    --chart-critical: #d03b3b;
+}
+
+.dark .chart-root {
+    --chart-surface: rgb(var(--app-base));
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-6: #008300;
+    --chart-7: #9085e9;
+    --chart-8: #e66767;
+    --chart-grid: rgb(255 255 255 / 0.055);
+    --chart-cursor: rgb(255 255 255 / 0.22);
+    --chart-track: rgb(255 255 255 / 0.07);
+    --chart-mark: rgb(255 255 255 / 0.38);
+    --chart-other: #5c5b56;
+    --chart-up: #2a8a57;
+    --chart-warning: #fab219;
+    --chart-critical: #d03b3b;
+}
+
+.chart-bar {
+    transition: background-color 0.15s ease;
+}
+
+.chart-bar-row:hover .chart-bar {
+    background-color: color-mix(in srgb, var(--chart-1) 32%, transparent) !important;
+}
+
+/* A span still running: diagonal hatching, so it reads as unfinished
+   without a second colour. */
+.chart-running {
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 4px, transparent 4px 8px);
+}
+
+/* Where a chart will be while its reply is still arriving, or a live chart
+   is waiting for its first sample. */
+.chart-shimmer {
+    background-image: linear-gradient(100deg, transparent 30%, rgb(0 0 0 / 0.035) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: chart-shimmer 1.6s linear infinite;
+}
+
+.dark .chart-shimmer {
+    background-image: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.05) 50%, transparent 70%);
+}
+
+@keyframes chart-shimmer {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-shimmer {
+        animation: none;
+    }
+}
