@@ -15,7 +15,9 @@ import useTypewriter from '../../hooks/useTypewriter';
 import useGroupToolCalls from '../../hooks/useGroupToolCalls';
 import useMentionables from '../../hooks/useMentionables';
 import useMentions from '../../hooks/useMentions';
+import useSlashSkills, { typedSkill } from '../../hooks/useSlashSkills';
 import MentionPicker from './MentionPicker';
+import SlashPicker from './SlashPicker';
 import MentionChips from './MentionChips';
 import ComposerButton from './ComposerButton';
 import Transcript, { Notice } from './Transcript';
@@ -248,6 +250,8 @@ export default function AssistantConversation({
     const inputRef = useRef(null);
     /** What the message tags, and the `@` picker. See `useMentions`. */
     const tags = useMentions({ text, setText, inputRef, mentionables });
+    /** The `/` picker; a picked skill joins the tags as a chip. See `useSlashSkills`. */
+    const slash = useSlashSkills({ text, setText, inputRef, onPick: tags.add });
     const fileRef = useRef(null);
     const docRef = useRef(null);
     const stickToBottom = useRef(true);
@@ -444,9 +448,16 @@ export default function AssistantConversation({
     const { dragging, dropProps } = useFileDrop(attachments.add);
 
     const submit = useCallback(() => {
-        const body = text.trim();
+        let body = text.trim();
         const files = attachments.files;
-        const tagged = tags.mentions;
+        let tagged = tags.mentions;
+        // `/name request` typed straight out, without taking the skill from
+        // the list, invokes it all the same.
+        const typed = typedSkill(body, slash.skills);
+        if (typed && !tagged.some(entry => entry.kind === 'skill' && entry.id === typed.skill.id)) {
+            body = typed.rest.trim();
+            tagged = [...tagged, { kind: 'skill', id: typed.skill.id, name: typed.skill.name || typed.skill.id }];
+        }
         if ((!body && images.length === 0 && tagged.length === 0 && files.length === 0) || assistant.busy) return;
         setText('');
         setImages([]);
@@ -461,7 +472,7 @@ export default function AssistantConversation({
             tagged.map(({ kind, id }) => ({ kind, id })),
             files.map(({ name, mediaType, text: words }) => ({ name, mediaType, text: words })),
         );
-    }, [text, images, tags, attachments, assistant]);
+    }, [text, images, tags, slash.skills, attachments, assistant]);
 
     // Ctrl+V with a file on the clipboard: a screenshot nine times out of ten,
     // or a file copied in the file manager. A text paste is left to the
@@ -479,7 +490,7 @@ export default function AssistantConversation({
     const onKeyDown = (event) => {
         // An open picker takes the arrows, Enter, Tab and Escape first, so the
         // caret never has to leave the field to choose from it.
-        if (tags.onKeyDown(event)) return;
+        if (slash.onKeyDown(event) || tags.onKeyDown(event)) return;
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             submit();
@@ -716,8 +727,18 @@ export default function AssistantConversation({
                         border border-gray-300 dark:border-surface-control
                         focus-within:border-gray-400 dark:focus-within:border-neutral-600"
                 >
+                    {/* What `/` opened, over the composer rather than in it. */}
+                    {slash.picker && (
+                        <SlashPicker
+                            items={slash.matches}
+                            query={slash.picker.query}
+                            active={slash.row}
+                            onPick={slash.pick}
+                            onHover={slash.setRow}
+                        />
+                    )}
                     {/* What `@` opened, over the composer rather than in it. */}
-                    {tags.picker && (
+                    {tags.picker && !slash.picker && (
                         <MentionPicker
                             items={tags.matches}
                             query={tags.picker.query}
@@ -778,9 +799,16 @@ export default function AssistantConversation({
                         onChange={(event) => {
                             setText(event.target.value);
                             tags.follow(event.target.value, event.target.selectionStart);
+                            slash.follow(event.target.value, event.target.selectionStart);
                         }}
-                        onClick={event => tags.follow(event.target.value, event.target.selectionStart)}
-                        onBlur={tags.close}
+                        onClick={(event) => {
+                            tags.follow(event.target.value, event.target.selectionStart);
+                            slash.follow(event.target.value, event.target.selectionStart);
+                        }}
+                        onBlur={() => {
+                            tags.close();
+                            slash.close();
+                        }}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
                         placeholder={t('assistant.askAbout', { about: described.sentence })}
@@ -800,6 +828,18 @@ export default function AssistantConversation({
                         {settings && (
                             <ApprovalMenu settings={settings} onChange={changeSettings} />
                         )}
+
+                        {/* A skill from ~/.claude/skills or ~/.agents/skills,
+                            sent with the message as its instructions. The
+                            same thing typing `/` first does, for a pointer. */}
+                        <ComposerButton
+                            label={t('assistant.runSkill')}
+                            hint="/"
+                            active={Boolean(slash.picker) || tags.mentions.some(entry => entry.kind === 'skill')}
+                            onClick={slash.open}
+                        >
+                            /
+                        </ComposerButton>
 
                         {/* Anything saved can be named in a message: a host,
                             a spec or another snippet, a proxy, a key. The

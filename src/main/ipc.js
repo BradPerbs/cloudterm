@@ -30,6 +30,7 @@ const activity = require('./activity');
 const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const aiWindows = require('./ai/windows');
+const aiSkills = require('./ai/skills');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -1668,6 +1669,9 @@ function register(getWindow) {
     handle('ai-scope', (event, payload) => assistant.setScope(payload?.conversationId, payload || {}));
     handle('ai-send', (event, payload) =>
         assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.mentions, payload?.files));
+    // The slash skills on this machine, for the composer's `/` picker. Names
+    // and descriptions only: a skill's text is read when a message invokes it.
+    handle('ai-skills-list', () => aiSkills.list());
     handle('ai-interrupt', (event, conversationId) => assistant.interrupt(conversationId));
 
     // The two answers the window owes the main process: whether a tool call may

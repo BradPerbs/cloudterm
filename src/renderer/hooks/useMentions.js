@@ -122,6 +122,14 @@ export default function useMentions({ text, setText, inputRef, mentionables }) {
         return false;
     }, [picker, matches, row, pick]);
 
+    /** One more tag, from outside the picker: a skill picked with `/`. Once only. */
+    const add = useCallback((entry) => {
+        if (!entry?.kind || !entry?.id) return;
+        setMentions(current => (
+            current.some(held => held.kind === entry.kind && held.id === entry.id) ? current : [...current, entry]
+        ));
+    }, []);
+
     const remove = useCallback((kind, id) => {
         setMentions(current => current.filter(entry => !(entry.kind === kind && entry.id === id)));
     }, []);
@@ -138,6 +146,6 @@ export default function useMentions({ text, setText, inputRef, mentionables }) {
 
     return {
         mentions, setMentions, picker, matches, row, setRow,
-        follow, close, pick, open, onKeyDown, remove, restore, clear,
+        follow, close, pick, open, onKeyDown, add, remove, restore, clear,
     };
 }

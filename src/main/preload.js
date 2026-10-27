@@ -634,6 +634,10 @@ contextBridge.exposeInMainWorld('api', {
         // agent can take.
         send: (conversationId, text, images, mentions, files) =>
             ipcRenderer.invoke('ai-send', { conversationId, text, images, mentions, files }),
+        // The `SKILL.md` skills in ~/.agents/skills, ~/.claude/skills and
+        // ~/.pi/agent/skills, as `{ id, name, description, hint }` for the `/`
+        // picker. A message invokes one as the mention `{ kind: 'skill', id }`.
+        skills: () => ipcRenderer.invoke('ai-skills-list'),
         interrupt: (conversationId) => ipcRenderer.invoke('ai-interrupt', conversationId),
 
         // Every message, tool call and result for a conversation.

@@ -5,6 +5,7 @@ const archive = require('./archive');
 const { readImages } = require('./images');
 const { imageRefusal } = require('./image-gate');
 const { readMentions, mentionBlock, stripMentions } = require('./mentions');
+const skills = require('./skills');
 const { readFiles, fileBlock, stripFiles } = require('./attachments');
 const pasted = require('./pasted-secrets');
 const store = require('../store');
@@ -1063,14 +1064,22 @@ async function send(conversationId, text, attachments = [], tagged = [], attache
  * collections something was tagged from, and redacted as the store always
  * hands them out, so a password or a private key is not even in reach of
  * `mentions.js`, which reads only named fields anyway.
+ *
+ * A skill invoked with `/` is read by its id alone, from its own SKILL.md,
+ * rather than every skill installed being read for one. See `skills.js`.
  */
 function mentionSources(tagged) {
-    const kinds = new Set((Array.isArray(tagged) ? tagged : []).map(entry => entry?.kind));
+    const list = Array.isArray(tagged) ? tagged : [];
+    const kinds = new Set(list.map(entry => entry?.kind));
     return {
         hosts: kinds.has('host') ? store.getHosts() : [],
         snippets: kinds.has('snippet') ? store.getSnippets() : [],
         proxies: kinds.has('proxy') ? store.getProxies() : [],
         keys: kinds.has('key') ? store.getKeys() : [],
+        skills: list
+            .filter(entry => entry?.kind === 'skill' && entry?.id)
+            .map(entry => skills.get(String(entry.id)))
+            .filter(Boolean),
     };
 }
 
