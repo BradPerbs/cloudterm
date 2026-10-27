@@ -380,6 +380,10 @@ function createTranslator(onEvent) {
     let cost = 0;
     let usage = null;
     let sawError = false;
+    // The turn ceiling is a setting of this app rather than a fault of the
+    // CLI, and the session is intact. Reported the way Claude Code reports
+    // it, so the panel says what happened and that "continue" carries on.
+    let ceiling = false;
     const announced = new Set();
 
     /**
@@ -396,7 +400,7 @@ function createTranslator(onEvent) {
 
     return {
         get failed() {
-            return sawError;
+            return sawError || ceiling;
         },
         event(payload) {
             switch (payload?.type) {
@@ -473,15 +477,20 @@ function createTranslator(onEvent) {
                     return;
 
                 case 'error':
-                    sawError = true;
+                case 'max_turns_reached': {
                     flush();
+                    const said = firstString(payload, 'message', 'error', 'text') || '';
+                    if (payload.type === 'max_turns_reached' || /max[ _]turns/i.test(said)) {
+                        ceiling = true;
+                        return;
+                    }
+                    sawError = true;
                     onEvent({
                         type: 'error',
-                        message: describeFailure(
-                            firstString(payload, 'message', 'error', 'text') || 'Grok Build reported an error'
-                        ),
+                        message: describeFailure(said || 'Grok Build reported an error'),
                     });
                     return;
+                }
 
                 // A plan and the slash commands the session offers are about
                 // the agent's own interface rather than about this
@@ -491,16 +500,20 @@ function createTranslator(onEvent) {
         },
         finish(subtype = 'success') {
             flush();
+            let outcome = subtype;
+            if (sawError) outcome = 'error';
+            if (ceiling) outcome = 'error_max_turns';
             onEvent({
                 type: 'result',
-                subtype: sawError ? 'error' : subtype,
-                isError: sawError || subtype !== 'success',
+                subtype: outcome,
+                isError: outcome !== 'success',
                 costUsd: cost,
                 usage,
             });
             cost = 0;
             usage = null;
             sawError = false;
+            ceiling = false;
         },
     };
 }
