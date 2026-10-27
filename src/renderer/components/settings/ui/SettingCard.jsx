@@ -12,6 +12,7 @@ export default function SettingCard({ children, className = '' }) {
 
     return (
         <div
+            data-setting-card=""
             className={`bg-white dark:bg-neutral-800/50 border border-gray-200 dark:border-neutral-800
                 rounded-xl ${stacked ? 'p-4' : 'p-6'} ${className}`}
         >

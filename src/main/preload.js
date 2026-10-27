@@ -619,6 +619,15 @@ contextBridge.exposeInMainWorld('api', {
         // conversation can be picked up again from the history menu.
         park: (conversationId) => ipcRenderer.invoke('ai-conversation-park', conversationId),
         close: (conversationId) => ipcRenderer.invoke('ai-conversation-close', conversationId),
+        // The conversation as Markdown: as text for the clipboard, where
+        // `{ full: true }` adds the settings, every tool input and results
+        // untruncated; or saved to a file, where main asks where. `labels` is
+        // the document's words in the app's language, `agents` the runtimes'
+        // names, and `dialogTitle` the save dialog's title.
+        markdown: (conversationId, options) =>
+            ipcRenderer.invoke('ai-conversation-markdown', { conversationId, ...(options || {}) }),
+        exportMarkdown: (conversationId, options) =>
+            ipcRenderer.invoke('ai-conversation-export', { conversationId, ...(options || {}) }),
         // Which servers the panel is pointed at: the session in front, every
         // host, or a pinned set of sessions and saved hosts.
         setScope: (conversationId, target) =>
@@ -678,6 +687,14 @@ contextBridge.exposeInMainWorld('api', {
         // got: 'settings' or 'snippets'. The main window listens on the other.
         navigateMain: (nav) => ipcRenderer.invoke('ai-navigate-main', nav),
         onNavigate: (callback) => subscribe('ai-navigate', callback),
+
+        // The chats this window has in front, so main can tell a turn ending
+        // or a question asked out of sight and say so through the OS; the
+        // words for those notifications, in the app's language; and the sound
+        // that goes with them, played by whichever window main picks.
+        setInView: (conversationIds) => ipcRenderer.invoke('ai-in-view-set', conversationIds),
+        setNotificationText: (text) => ipcRenderer.invoke('ai-notification-text', text),
+        onChime: (callback) => subscribe('ai-chime', callback),
     },
 
     // Which OS this is, for the handful of places the interface has to differ:

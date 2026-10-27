@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 import AgentMark from './AgentMark';
 import AssistantWorkspace from './AssistantWorkspace';
 import WindowControls from '../ui/WindowControls';
 import { APP_GUTTER, TITLE_BAR_HEIGHT } from '../../lib/layout';
+import { DEFAULT_TOAST_MS, MAX_TOAST_MS, TOAST_EXIT_MS } from '../../lib/toast';
 import { useT } from '../../i18n';
 
 /**
@@ -51,6 +53,15 @@ export default function AssistantWindow() {
         return window.api.ai.onContext(next => { if (next) setContext(next); });
     }, []);
 
+    // A notification clicked for a chat this window holds: main brings the
+    // window forward and asks for that tab to be put in front, the same way
+    // the main window is handed tabs.
+    const [adopt, setAdopt] = useState(null);
+    useEffect(() => window.api.ai.onAdoptTabs?.(({ conversationIds }) => {
+        if (!Array.isArray(conversationIds) || conversationIds.length === 0) return;
+        setAdopt(current => ({ conversationIds, seq: (current?.seq || 0) + 1 }));
+    }), []);
+
     // The pages the panel can send you to live in the main window, so it is
     // asked to go there and brought forward.
     const openSettings = useCallback(() => window.api.ai.navigateMain('settings'), []);
@@ -87,10 +98,23 @@ export default function AssistantWindow() {
                     sessions={context.sessions}
                     hosts={context.hosts}
                     activeSessionId={context.activeSessionId}
+                    adopt={adopt}
                     onOpenSettings={openSettings}
                     onOpenSnippets={openSnippets}
                 />
             </div>
+
+            {/* The app's toasts, set up as the main window's are. That one's
+                Toaster is in another renderer, so without this one anything
+                the panel confirms here (a conversation copied) says nothing. */}
+            <Toaster
+                position="bottom-right"
+                toastOptions={{
+                    duration: DEFAULT_TOAST_MS,
+                    removeDelay: TOAST_EXIT_MS,
+                    error: { duration: MAX_TOAST_MS },
+                }}
+            />
         </div>
     );
 }

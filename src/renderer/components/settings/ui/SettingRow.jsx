@@ -33,7 +33,7 @@ export default function SettingRow({
     const stacked = useStacked();
 
     return (
-        <div className={className}>
+        <div data-setting-row="" className={className}>
             <div className={stacked
                 ? 'flex flex-col gap-3'
                 : `flex ${align === 'center' ? 'items-center' : 'items-start'} justify-between gap-6`}

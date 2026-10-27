@@ -136,6 +136,13 @@ const DEFAULTS = {
     // of things nobody here asked for is filler, and the useful ones are the
     // ones a particular person asks their particular fleet over and over.
     quickPrompts: [],
+    // A desktop notification when a conversation nobody is looking at
+    // finishes a turn, asks a question or needs an approval, and a chime with
+    // it. On, because a turn can take minutes and nobody watches it for all of
+    // them; the system's own switches still have the last word. See
+    // attention.js.
+    notify: true,
+    notifySound: true,
 };
 
 const stateFile = () => path.join(app.getPath('userData'), 'assistant.json');
@@ -253,6 +260,8 @@ function sanitize(raw) {
         next.maxTurns = clampNumber(raw.maxTurns, DEFAULTS.maxTurns, 1, 200);
         next.transcriptLines = clampNumber(raw.transcriptLines, DEFAULTS.transcriptLines, 20, 2000);
         if ('allowLocalTools' in raw) next.allowLocalTools = Boolean(raw.allowLocalTools);
+        if ('notify' in raw) next.notify = Boolean(raw.notify);
+        if ('notifySound' in raw) next.notifySound = Boolean(raw.notifySound);
         if (Array.isArray(raw.autoApproveCommands)) {
             next.autoApproveCommands = raw.autoApproveCommands
                 .map(entry => String(entry || '').trim().toLowerCase())

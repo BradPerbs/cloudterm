@@ -306,6 +306,8 @@ export default {
     'settings.nav.account': 'Учётная запись',
     'settings.nav.backup': 'Резервные копии',
     'settings.nav.about': 'О программе',
+    'settings.search': 'Поиск настроек',
+    'settings.search.empty': 'На этой странице нет ничего по запросу «{query}».',
 
     /* ---- Settings: General ---- */
     'settings.general.title': 'Общие',
@@ -539,6 +541,12 @@ export default {
     'settings.assistant.groupToolCallsDesc': 'Вызовы инструментов, сделанные подряд, сворачиваются в одну '
         + 'строку вроде «8 чтений · 3 команды», которая раскрывается в сами вызовы. Если выключено, у '
         + 'каждого вызова своя строка.',
+    'settings.assistant.notify': 'Уведомлять, когда разговор ждёт меня',
+    'settings.assistant.notifyDesc': 'Уведомление на рабочем столе, когда разговор, на который вы не '
+        + 'смотрите, завершается, задаёт вам вопрос или ждёт вашего одобрения. Щелчок по нему открывает '
+        + 'этот разговор. Разговор, который у вас перед глазами, уведомлений не присылает.',
+    'settings.assistant.notifySound': 'Со звуком',
+    'settings.assistant.notifySoundDesc': 'Короткий сигнал, когда приходит уведомление.',
     'settings.assistant.steps': 'Шагов за ход',
     'settings.assistant.stepsDesc': 'Сколько вызовов инструментов может занять один вопрос, прежде '
         + 'чем ассистент остановится и отчитается. Идущий вникуда прогон завершается сам, а не '
@@ -1254,6 +1262,32 @@ export default {
     'assistant.stop': 'Остановить',
     'assistant.askAbout': 'Спросите про {about}',
     'assistant.costHint': 'Оценка стоимости этого разговора, оплата по токенам',
+    'assistant.thisChat': 'Этот разговор',
+    'assistant.copyConversation': 'Скопировать разговор',
+    'assistant.copyConversationHint': 'Все вызовы и результаты, в Markdown',
+    'assistant.exportConversation': 'Сохранить как Markdown...',
+    'assistant.exportConversationHint': 'Текст разговора, по строке на вызов',
+    'assistant.exportDialogTitle': 'Сохранить разговор как Markdown',
+    'assistant.conversationCopied': 'Разговор скопирован',
+    'assistant.conversationSaved': 'Разговор сохранён',
+    'assistant.copyFailed': 'Не удалось скопировать разговор',
+    'assistant.exportFailed': 'Не удалось сохранить разговор: {message}',
+    'assistant.export.when': 'Начат {started} · экспортирован {exported}',
+    'assistant.export.setup': 'Агент: {agent} · модель {model} · усилие {effort} · подтверждения {approval}',
+    'assistant.export.defaultModel': 'по умолчанию агента',
+    'assistant.export.id': 'Id разговора: {id}',
+    'assistant.export.you': 'Вы',
+    'assistant.export.error': 'Ошибка',
+    'assistant.export.warning': 'Предупреждение',
+    'assistant.export.stopped': 'Остановлено.',
+    'assistant.export.image': 'Изображение: {name}',
+    'assistant.export.spec': 'Спецификация: {name}',
+    'assistant.export.more': 'Не показано символов: {count}',
+    'assistant.notify.done': '{title}: готово',
+    'assistant.notify.failed': '{title}: остановлено из-за ошибки',
+    'assistant.notify.question': '{title}: есть вопрос к вам',
+    'assistant.notify.approval': '{title}: нужно ваше одобрение',
+    'assistant.notify.untitled': 'ИИ-ассистент',
 
     'assistant.currentSession': 'Текущий сеанс',
     'assistant.nothingConnected': 'Ничего не подключено',

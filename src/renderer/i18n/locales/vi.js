@@ -279,6 +279,8 @@ export default {
     'settings.nav.account': 'Tài khoản',
     'settings.nav.backup': 'Sao lưu',
     'settings.nav.about': 'Giới thiệu',
+    'settings.search': 'Tìm trong cài đặt',
+    'settings.search.empty': 'Không có mục nào trên trang này khớp với “{query}”.',
 
     /* ---- Settings: General ---- */
     'settings.general.title': 'Chung',
@@ -505,6 +507,12 @@ export default {
     'settings.assistant.groupToolCalls': 'Gộp các lần gọi công cụ',
     'settings.assistant.groupToolCallsDesc': 'Gộp các lần gọi công cụ liên tiếp thành một dòng, chẳng hạn '
         + '"8 lần đọc · 3 lệnh", mở ra để xem từng lần gọi. Khi tắt, mỗi lần gọi là một dòng riêng.',
+    'settings.assistant.notify': 'Báo cho tôi khi một cuộc trò chuyện cần tôi',
+    'settings.assistant.notifyDesc': 'Một thông báo trên màn hình khi cuộc trò chuyện bạn không xem đã '
+        + 'xong, hỏi bạn điều gì đó hoặc chờ bạn phê duyệt. Bấm vào để mở cuộc trò chuyện đó. Cuộc trò '
+        + 'chuyện đang mở trước mặt bạn thì không bao giờ báo.',
+    'settings.assistant.notifySound': 'Phát âm thanh kèm theo',
+    'settings.assistant.notifySoundDesc': 'Một tiếng chuông ngắn khi thông báo đến.',
     'settings.assistant.steps': 'Số bước mỗi lượt',
     'settings.assistant.stepsDesc': 'Một câu hỏi được phép gọi công cụ bao nhiêu lần trước khi trợ '
         + 'lý dừng lại và báo cáo. Một lượt chạy không đi tới đâu sẽ tự kết thúc, thay vì đợi tới '
@@ -1110,6 +1118,32 @@ export default {
     'assistant.stop': 'Dừng',
     'assistant.askAbout': 'Hỏi về {about}',
     'assistant.costHint': 'Chi phí ước tính của cuộc trò chuyện này, tính theo token',
+    'assistant.thisChat': 'Cuộc trò chuyện này',
+    'assistant.copyConversation': 'Sao chép cuộc trò chuyện',
+    'assistant.copyConversationHint': 'Mọi lần gọi công cụ và kết quả, dạng Markdown',
+    'assistant.exportConversation': 'Lưu thành Markdown...',
+    'assistant.exportConversationHint': 'Nội dung trò chuyện, mỗi lần gọi một dòng',
+    'assistant.exportDialogTitle': 'Lưu cuộc trò chuyện thành Markdown',
+    'assistant.conversationCopied': 'Đã sao chép cuộc trò chuyện',
+    'assistant.conversationSaved': 'Đã lưu cuộc trò chuyện',
+    'assistant.copyFailed': 'Không sao chép được cuộc trò chuyện',
+    'assistant.exportFailed': 'Không lưu được cuộc trò chuyện: {message}',
+    'assistant.export.when': 'Bắt đầu {started} · xuất lúc {exported}',
+    'assistant.export.setup': 'Tác nhân: {agent} · mô hình {model} · mức nỗ lực {effort} · phê duyệt {approval}',
+    'assistant.export.defaultModel': 'mặc định của tác nhân',
+    'assistant.export.id': 'Mã cuộc trò chuyện: {id}',
+    'assistant.export.you': 'Bạn',
+    'assistant.export.error': 'Lỗi',
+    'assistant.export.warning': 'Cảnh báo',
+    'assistant.export.stopped': 'Đã dừng.',
+    'assistant.export.image': 'Hình ảnh: {name}',
+    'assistant.export.spec': 'Đặc tả: {name}',
+    'assistant.export.more': 'Số ký tự không hiển thị: {count}',
+    'assistant.notify.done': '{title} đã xong',
+    'assistant.notify.failed': '{title} đã dừng vì gặp sự cố',
+    'assistant.notify.question': '{title} có một câu hỏi',
+    'assistant.notify.approval': '{title} cần bạn phê duyệt',
+    'assistant.notify.untitled': 'Trợ lý AI',
 
     'assistant.currentSession': 'Phiên hiện tại',
     'assistant.nothingConnected': 'Chưa kết nối gì',
