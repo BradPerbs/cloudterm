@@ -7,6 +7,7 @@ const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
 const conversationSettings = require('./conversation-settings');
 const startModel = require('./start-model');
+const titles = require('./titles');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -144,6 +145,16 @@ const pins = conversationSettings.create({
     save: () => archive.save(),
 });
 
+/** Names a conversation once its first exchange is over. See titles.js. */
+const nameConversation = titles.createNamer({
+    providers: PROVIDERS,
+    effective: conversation => pins.effective(conversation),
+    alive: conversation => conversations.get(conversation.id) === conversation,
+    emit: (conversation, event) => emit(conversation, event),
+    save: () => archive.save(),
+    mask: (conversation, text) => pasted.mask(text, conversation.secrets),
+});
+
 // What new chats start on moved: every window's model menu draws its star
 // from it.
 startModel.onChange(() => notify('ai-start-model', pins.startState()));
@@ -273,6 +284,9 @@ function create(target = {}) {
         // menu has to label the entry with. Nothing else here knows what a
         // conversation was about.
         title: '',
+        // 'draft' while the title is still the first message, until the agent
+        // has named the chat. See titles.js.
+        titleSource: '',
         // The agent, model, effort and mode this conversation is pinned to,
         // over the settings. See conversation-settings.js.
         settingsPatch: null,
@@ -332,6 +346,12 @@ function emit(conversation, event) {
     // out with the message, which is the one place it is needed.
     const stamped = { ...pasted.maskDeep(event, conversation.secrets), at: Date.now() };
     conversation.updatedAt = stamped.at;
+    // How full the context is: only the latest reading is ever shown, so it
+    // takes the place of the one before rather than adding one per step.
+    if (stamped.type === 'context') {
+        const previous = conversation.events.findIndex(entry => entry.type === 'context');
+        if (previous >= 0) conversation.events.splice(previous, 1);
+    }
     conversation.events.push(stamped);
     if (conversation.events.length > MAX_EVENTS) {
         conversation.events.splice(0, conversation.events.length - MAX_EVENTS);
@@ -948,7 +968,15 @@ function handleProviderEvent(conversation, event) {
     if (event.type === 'tool-call' && !event.local) {
         recordToolActivity(conversation, event);
     }
+    // Whose window it is, so a panel shows it only while that agent is the
+    // one answering: a reading from before a switch is about another model.
+    if (event.type === 'context') {
+        emit(conversation, { ...event, provider: conversation.provider || '' });
+        return;
+    }
     emit(conversation, event);
+    // The first exchange is over: time to name the chat, off to the side.
+    if (event.type === 'result') nameConversation(conversation);
 }
 
 /**
@@ -1039,6 +1067,9 @@ async function send(conversationId, text, attachments = [], specIds = []) {
             (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' '),
             conversation.secrets
         ).slice(0, 80);
+        // Until the agent names the chat, once the first exchange is over.
+        // This stays if it never does. See titles.js.
+        conversation.titleSource = 'draft';
     }
 
     // The transcript keeps a spec's name and not its text: the text is in the

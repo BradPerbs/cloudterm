@@ -276,6 +276,15 @@ function step(state, event, owned) {
         case 'rate-limit':
             return { ...state, rateLimit: event };
 
+        // How full the model's context is after the latest reply, for the
+        // ring beside the model chip.
+        case 'context':
+            return { ...state, context: event };
+
+        // The agent's own short name for the chat, once it has given one.
+        case 'title':
+            return { ...state, title: event.title || '' };
+
         case 'result':
             // Words or thinking left over when the turn ends with no finished
             // block to carry them are kept as a reply of their own, rather
@@ -404,4 +413,11 @@ export const INITIAL = {
     // Both arrive from the runtime rather than being configured here.
     account: null,
     rateLimit: null,
+    // `{ used, limit, percent, cached, model, provider }`: the latest reply's
+    // tokens against the model's context window. Null where the runtime has
+    // reported nothing, and the ring is not drawn.
+    context: null,
+    // What the agent named the conversation. Empty until it has, and for one
+    // it never named, where the first message stands in.
+    title: '',
 };

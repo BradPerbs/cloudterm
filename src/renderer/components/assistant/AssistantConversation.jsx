@@ -23,6 +23,7 @@ import ApprovalRequest from './ApprovalRequest';
 import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
+import ContextRing from './ContextRing';
 import { shownSettings as withPin } from '../../lib/conversation-settings';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
@@ -266,12 +267,13 @@ export default function AssistantConversation({
 
     /**
      * What the tab strip says about this tab: what it is about, and whether it
-     * is working. The first thing the user said is the title, as it is in the
-     * history menu; a message that was only a picture or a spec is named by
-     * that.
+     * is working. The agent's short name for the chat once it has given one,
+     * as in the history menu; until then, or if it never does, the first
+     * thing the user said. A message that was only a picture or a spec is
+     * named by that.
      */
     const first = assistant.items.find(item => item.kind === 'user');
-    const title = String(
+    const title = assistant.title || String(
         first?.text
         || first?.specs?.[0]?.name
         || (first?.images?.length ? t('assistant.image') : ''),
@@ -358,6 +360,35 @@ export default function AssistantConversation({
     const changeMode = useCallback(({ approval }) => {
         if (approval) pinModel({ approval });
     }, [pinModel]);
+
+    /**
+     * What new chats start on, for the star in the model menu: `starred` is
+     * the model pinned for them, if any. Every window hears when it moves.
+     */
+    const [startModel, setStartModel] = useState(null);
+    useEffect(() => {
+        let live = true;
+        window.api.ai.startModel()
+            .then((answer) => { if (live) setStartModel(answer || null); })
+            .catch(() => {});
+        const off = window.api.ai.onStartModel((answer) => setStartModel(answer || null));
+        return () => {
+            live = false;
+            off?.();
+        };
+    }, []);
+    const starModel = useCallback(async (pin) => {
+        setStartModel(await window.api.ai.starModel(pin));
+    }, []);
+
+    // Which models each agent keeps out of the menu. A display setting for
+    // the whole app rather than for one chat, so it is the settings' own.
+    const hideModels = useCallback((provider, ids) => {
+        const hidden = { ...(settings?.hiddenModels || {}) };
+        if (ids.length > 0) hidden[provider] = ids;
+        else delete hidden[provider];
+        changeSettings({ hiddenModels: hidden });
+    }, [settings, changeSettings]);
 
     // `preventScroll` because the card is mounted at its full width inside a
     // column that is still only a rail wide, and clipped to it. Focusing the
@@ -853,6 +884,14 @@ export default function AssistantConversation({
                                 hasStoredKey={Boolean(settings?.hasApiKey)}
                             />
 
+                            {/* How full the model's context is, beside the
+                                model it belongs to. Drawn only once the
+                                runtime has reported a reading. */}
+                            <ContextRing
+                                context={assistant.context}
+                                provider={conversationSettings?.provider}
+                            />
+
                             {conversationSettings && (
                                 <ModelMenu
                                     settings={conversationSettings}
@@ -861,6 +900,10 @@ export default function AssistantConversation({
                                     loading={readingModels}
                                     onRefresh={() => readModels(providers, { refresh: true })}
                                     onChange={changeModel}
+                                    starred={startModel?.starred || null}
+                                    onStar={starModel}
+                                    hidden={settings?.hiddenModels || {}}
+                                    onHide={hideModels}
                                 />
                             )}
 

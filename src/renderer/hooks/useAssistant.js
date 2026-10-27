@@ -384,6 +384,10 @@ export default function useAssistant({
         costUsd: state.costUsd,
         account: state.account,
         rateLimit: state.rateLimit,
+        // How full the model's context is, for the ring by the model chip.
+        context: state.context,
+        // The agent's own short name for the chat, once it has given one.
+        title: state.title,
         // The conversation's own agent, model, effort and mode over the
         // settings, and the way to change them.
         pinned,

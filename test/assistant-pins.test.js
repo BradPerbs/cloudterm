@@ -364,6 +364,19 @@ async function main() {
         }
     });
 
+    await check('models hidden from the menu are kept per agent, and an unknown agent\'s are dropped', async () => {
+        const { sanitize } = assistant.settings._test;
+        const next = sanitize({
+            hiddenModels: { codex: ['gpt-5.1-codex-mini', 'gpt-5.1-codex-mini', ' '], nobody: ['x'], grok: [] },
+        });
+        assert.deepStrictEqual(next.hiddenModels, { codex: ['gpt-5.1-codex-mini'] });
+        assert.deepStrictEqual(sanitize({}).hiddenModels, {});
+        const saved = assistant.settings.set({ hiddenModels: { 'claude-code': ['haiku'] } });
+        assert.deepStrictEqual(saved.hiddenModels, { 'claude-code': ['haiku'] });
+        assert.deepStrictEqual(assistant.settings.set({ effort: 'low' }).hiddenModels, { 'claude-code': ['haiku'] },
+            'and kept through other changes');
+    });
+
     console.log(`\n${passed} passed, ${failed} failed\n`);
     process.exit(failed > 0 ? 1 : 0);
 }

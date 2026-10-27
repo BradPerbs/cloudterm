@@ -117,6 +117,9 @@ function pack(conversation) {
         providerSessionId: conversation.providerSessionId || '',
         provider: conversation.provider || '',
         title: conversation.title || '',
+        // Whether the title is still the first message, so a chat the app
+        // closed on before its agent named it is asked again.
+        titleSource: conversation.titleSource === 'draft' || conversation.titleSource === 'naming' ? 'draft' : '',
         // The agent, model, effort and mode the conversation was pinned to,
         // so it comes back on what it was left on.
         settingsPatch: conversation.settingsPatch || null,
@@ -233,6 +236,7 @@ function unpack(record, currentProvider) {
         needsRestart: false,
         costUsd: Number.isFinite(record.costUsd) ? record.costUsd : 0,
         title: typeof record.title === 'string' ? record.title : '',
+        titleSource: record.titleSource === 'draft' ? 'draft' : '',
         settingsPatch,
         createdAt: Number.isFinite(record.createdAt) ? record.createdAt : at,
         updatedAt: at,
