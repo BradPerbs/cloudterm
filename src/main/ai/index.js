@@ -8,6 +8,7 @@ const pasted = require('./pasted-secrets');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
+const liveMetrics = require('./live-metrics');
 
 /**
  * The assistant, from the app's point of view.
@@ -490,6 +491,10 @@ async function restart(conversation) {
  * no, not an exception somewhere up the stack.
  */
 function requestApproval(conversation, { toolName, name, input, local, question = false, signal = null }) {
+    // A live chart watched on this computer runs nothing on a server, so its
+    // card is a local one, with the same warning as a runtime's own shell.
+    if (name === 'watch_metric' && input?.local === true) local = true;
+
     return new Promise((resolve) => {
         // The runtime gave up on the call before it reached here. No card:
         // there is nobody left to act on the answer.
@@ -538,7 +543,8 @@ function requestApproval(conversation, { toolName, name, input, local, question 
         // against one. Looking one up here would hang the panel's scope on a
         // card that has nothing to do with it and name a machine on a menu of
         // two labels.
-        const target = question ? '' : (input?.session || conversation.boundSessionId || '');
+        // Nor is anything that runs on this computer.
+        const target = question || local ? '' : (input?.session || conversation.boundSessionId || '');
         const info = target ? transcript.info(target) : null;
 
         emit(conversation, {
@@ -846,6 +852,14 @@ function ensureProvider(conversation) {
             // The model saved a snippet. Every window caches the library, so
             // each is told to read it again.
             snippetsChanged: () => notify('snippets-changed', {}),
+            // Live charts in this conversation: started and ended in its log,
+            // the samples in between pushed to the windows. See live-metrics.js.
+            metrics: liveMetrics.forConversation({
+                conversationId: conversation.id,
+                owner: () => conversations.get(conversation.id),
+                emit,
+                notify: (channel, payload) => notify(channel, payload),
+            }),
         }),
         requestApproval: (request) => requestApproval(conversation, request),
         onEvent: (event) => handleProviderEvent(conversation, event),
@@ -1107,6 +1121,9 @@ async function close(conversationId) {
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
     conversations.delete(conversationId);
+    // Its live charts have nowhere left to be drawn, and their commands no
+    // reader.
+    liveMetrics.stopAll({ conversationId, code: 'closed' });
     // Anything it was still waiting on a person for goes with it. A question
     // whose turn has already ended has no timer of its own, and would
     // otherwise wait for an answer with nowhere to go until the app quits.
@@ -1309,6 +1326,9 @@ function status() {
  * the only honest answer is the one already on disk.
  */
 async function shutdown() {
+    // Before the flush, so each live chart's last points are in its
+    // conversation's log and it reads back as it was when the app went.
+    liveMetrics.stopAll({ code: 'quit' });
     archive.flush();
     archive.suspend();
 

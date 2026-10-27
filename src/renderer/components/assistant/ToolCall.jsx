@@ -158,10 +158,25 @@ export function describeCall(name, input = {}) {
         case 'shell':
         case 'command_execution':
         case 'run_terminal_cmd':
-        case 'watch_metric':
             // The verb already says Run, so the row carries the bare command
             // rather than a "command: ..." dump.
             return { mono: true, text: commandOf(input) };
+        case 'watch_metric':
+            // The command on the row; on the approval card, under it, the
+            // pattern, where it runs, and how often and for how long, since
+            // saying yes here is saying yes to it running on repeat.
+            return {
+                mono: true,
+                text: commandOf(input),
+                detail: [
+                    input.pattern ? translate('assistant.metric.pattern', { pattern: input.pattern }) : '',
+                    input.local ? translate('assistant.metric.onComputer') : '',
+                    input.every
+                        ? translate('assistant.metric.every', { seconds: input.every })
+                        : translate('assistant.metric.streamed'),
+                    translate('assistant.metric.forMinutes', { minutes: input.durationMinutes || 10 }),
+                ].filter(Boolean).join(' · '),
+            };
         case 'send_input':
             return { mono: true, text: input.text || '' };
         case 'write_file':

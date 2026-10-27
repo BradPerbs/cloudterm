@@ -19,6 +19,9 @@
  *              start. Rare; the question normally rides on its tool row.
  *   notice     `{ id, tone, text }`: a line the app wrote itself.
  *   divider    `{ id, text }`: the chat moved to another model or effort.
+ *   metric     `{ id, watchId, spec, status, reason, code, vars, points,
+ *              stats }`: a live chart (watch_metric), under the call that
+ *              started it. `status` is running until its end arrives.
  */
 
 /** A blank turn-in-progress, for the streaming text bubble. */
@@ -345,6 +348,43 @@ function step(state, event, owned) {
                 text: `${event.name} failed: ${event.message}`,
             });
             break;
+
+        // A live chart, where the call that started it is. Its samples are
+        // not events: they arrive on a channel of their own while it runs,
+        // and the chart holds them. The end carries the last window of
+        // points, which is what a conversation read back draws.
+        case 'metric-started':
+            edit().push({
+                kind: 'metric',
+                id: `m-${event.watchId}`,
+                watchId: event.watchId,
+                spec: event.spec || {},
+                status: 'running',
+                reason: '',
+                code: '',
+                vars: {},
+                points: [],
+                stats: null,
+                startedAt: event.at,
+            });
+            break;
+
+        case 'metric-ended': {
+            const index = lastIndexWhere(items, item => item.kind === 'metric' && item.watchId === event.watchId);
+            if (index >= 0) {
+                edit()[index] = {
+                    ...items[index],
+                    status: event.status || 'done',
+                    reason: event.reason || '',
+                    code: event.code || '',
+                    vars: event.vars || {},
+                    points: Array.isArray(event.points) ? event.points : [],
+                    stats: event.stats || null,
+                    endedAt: event.at,
+                };
+            }
+            break;
+        }
 
         case 'interrupted':
             busy = false;
