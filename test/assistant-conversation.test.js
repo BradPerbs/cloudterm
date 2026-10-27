@@ -57,6 +57,8 @@ require.cache[require.resolve(path.join(ROOT, 'ai', 'providers', 'claude-code'))
 
 const assistant = require(path.join(ROOT, 'ai'));
 const catalog = require(path.join(ROOT, 'ai', 'tools'));
+const pasted = require(path.join(ROOT, 'ai', 'pasted-secrets'));
+const activity = require(path.join(ROOT, 'activity'));
 
 const notified = [];
 assistant.setNotifier((channel, payload) => notified.push({ channel, ...payload }));
@@ -238,6 +240,54 @@ async function main() {
         const result = await reply;
         assert.strictEqual(result.isError, true);
         assert.ok(/stopped the run/.test(result.text));
+    });
+
+    await check('a key pasted into chat reaches the agent, and is masked everywhere the chat is kept', async () => {
+        const key = 'ghp_Zq81LmNoPqRsTuVwXyZa0123456789abcd';
+        const { conversationId } = assistant.create({ scope: 'global' });
+
+        // Recorded before the key was pasted: the same value printed by a
+        // tool, which must not survive in the history either.
+        const early = await assistant.send(conversationId, 'what is in the deploy env file?');
+        assert.ok(early.success);
+        agent.options.onEvent({ type: 'tool-result', id: 'call-1', text: `GITHUB_TOKEN=${key}\n` });
+
+        const before = agent.sent.length;
+        const sent = await assistant.send(conversationId, `use ${key} for the deploy`);
+        assert.ok(sent.success);
+        assert.ok(agent.sent[before].includes(key), 'the agent is sent the value, so the turn can use it');
+
+        // The agent using it in a command, and quoting it back.
+        agent.options.onEvent({
+            type: 'tool-call', id: 'call-2', name: 'run_command',
+            input: { command: `gh auth login --with-token <<< ${key}` },
+        });
+        agent.options.onEvent({ type: 'assistant-text', text: `Logged in with ${key}.` });
+        agent.options.onEvent({ type: 'result', costUsd: 0 });
+
+        const live = eventsOf(conversationId);
+        assert.ok(!JSON.stringify(live.slice(-4)).includes(key), 'what the window is sent is masked');
+        const history = assistant.history(conversationId);
+        assert.ok(!JSON.stringify(history.events).includes(key), 'and so is what a reload replays, earlier events too');
+        assert.ok(history.events.some(event => event.type === 'user-message' && event.text === `use ${pasted.MASK} for the deploy`));
+
+        // Written to disk: the history file and the activity log.
+        await assistant.shutdown();
+        const saved = fs.readFileSync(path.join(userData, 'assistant-history.json'), 'utf8');
+        assert.ok(saved.includes('for the deploy'), 'the conversation was written');
+        assert.ok(!saved.includes(key), 'without the key');
+        activity.flush();
+        const logged = fs.readFileSync(path.join(userData, 'activity.json'), 'utf8');
+        assert.ok(logged.includes('gh auth login'), 'the command was logged');
+        assert.ok(!logged.includes(key), 'without the key');
+    });
+
+    await check('a title taken from a message with a key in it is masked', async () => {
+        const key = 'sk-ant-api03-Qw3rTy8UiOp0AsDfGhJkLzXcVbNm12';
+        const { conversationId } = assistant.create({ scope: 'global' });
+        await assistant.send(conversationId, `${key} is the key`);
+        const listed = assistant.list().find(entry => entry.conversationId === conversationId);
+        assert.strictEqual(listed.title, `${pasted.MASK} is the key`);
     });
 
     await assistant.shutdown();

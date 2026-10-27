@@ -4,6 +4,7 @@ const catalog = require('./tools');
 const archive = require('./archive');
 const { readImages } = require('./images');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
+const pasted = require('./pasted-secrets');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -292,7 +293,10 @@ function get(conversationId) {
  * what a panel that stayed open received.
  */
 function emit(conversation, event) {
-    const stamped = { ...event, at: Date.now() };
+    // A key the user pasted is masked here, before the event reaches the log,
+    // the history file or a window. The agent already has the value: it went
+    // out with the message, which is the one place it is needed.
+    const stamped = { ...pasted.maskDeep(event, conversation.secrets), at: Date.now() };
     conversation.updatedAt = stamped.at;
     conversation.events.push(stamped);
     if (conversation.events.length > MAX_EVENTS) {
@@ -303,6 +307,41 @@ function emit(conversation, event) {
     // A stream preview is not worth a write of its own: the finished block that
     // replaces it is an event in its own right, and that one schedules one.
     if (!archive.isTransient(stamped.type)) archive.save();
+}
+
+/**
+ * Note any key or token in something the user wrote, so it is masked from
+ * here on wherever the conversation is recorded. See `pasted-secrets.js`.
+ *
+ * Held on the conversation in memory and nowhere else: a list of the secrets
+ * to keep out of the history file cannot itself go into the history file. A
+ * conversation read back from disk starts with none, which is right, since
+ * what it recorded was masked on the way out.
+ *
+ * Anything already recorded that carries a newly found value is masked too,
+ * such as a tool result that printed the same key before the user pasted it.
+ */
+function rememberSecrets(conversation, text) {
+    const found = pasted.find(text);
+    if (found.length === 0) return;
+
+    if (!conversation.secrets) conversation.secrets = new Set();
+    const fresh = found.filter(value => !conversation.secrets.has(value));
+    if (fresh.length === 0) return;
+    for (const value of fresh) conversation.secrets.add(value);
+
+    let changed = false;
+    conversation.events = conversation.events.map((event) => {
+        const clean = pasted.maskDeep(event, conversation.secrets);
+        if (clean !== event) changed = true;
+        return clean;
+    });
+    const title = pasted.mask(conversation.title, conversation.secrets);
+    if (title !== conversation.title) {
+        conversation.title = title;
+        changed = true;
+    }
+    if (changed) archive.save();
 }
 
 /** Point an existing conversation at a different session, set, or all of them. */
@@ -559,6 +598,9 @@ function requestQuestion(conversation, { question, options = [], signal = null }
             emit(conversation, { type: 'approval-settled', requestId, status });
 
             const reply = verdict.approved ? answerOf(verdict.input, text) : '';
+            // Typed by the user, like a message, so it is searched the same
+            // way before the tool result that carries it is recorded.
+            if (reply) rememberSecrets(conversation, reply);
 
             if (!parked) {
                 resolve(reply
@@ -860,9 +902,12 @@ function recordToolActivity(conversation, event) {
 
     const target = event.input?.session || conversation.boundSessionId || '';
     const info = target ? transcript.info(target) : null;
+    // The activity log is a file on disk too, so a pasted key is masked out
+    // of it the same way it is out of the history.
+    const input = pasted.maskDeep(event.input, conversation.secrets);
     const summary = event.name === 'run_command'
-        ? String(event.input?.command || '').slice(0, 300)
-        : summarise(event.input);
+        ? String(input?.command || '').slice(0, 300)
+        : summarise(input);
 
     activity.record({
         category: 'connection',
@@ -920,8 +965,15 @@ async function send(conversationId, text, attachments = [], specIds = []) {
         return { success: false, message: 'This agent cannot read images. Claude Code and Codex can.' };
     }
 
+    // Before anything is recorded: the message itself, and the title taken
+    // from it, are the first places a pasted key would land.
+    rememberSecrets(conversation, body);
+
     if (!conversation.title) {
-        conversation.title = (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' ').slice(0, 80);
+        conversation.title = pasted.mask(
+            (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' '),
+            conversation.secrets
+        ).slice(0, 80);
     }
 
     // The transcript keeps a spec's name and not its text: the text is in the
