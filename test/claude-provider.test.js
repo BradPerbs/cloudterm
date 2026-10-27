@@ -331,6 +331,26 @@ async function run() {
 
     await nativeVerdictTests();
 
+    // Signed out, the CLI answers with a canned "Not logged in" message marked
+    // `authentication_failed` and a result that says success. That is an
+    // error, not an answer, and the result counts as a failure.
+    const signedOut = [];
+    provider._test.translate({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { content: [{ type: 'text', text: 'Not logged in · Please run /login' }] },
+    }, event => signedOut.push(event));
+    provider._test.translate({
+        type: 'result', subtype: 'success', is_error: true, result: 'Not logged in · Please run /login',
+    }, event => signedOut.push(event));
+    assert.deepStrictEqual(signedOut.map(event => event.type), ['error', 'result']);
+    assert.match(signedOut[0].message, /authenticate/);
+    assert.strictEqual(signedOut[1].isError, true);
+
+    const fine = [];
+    provider._test.translate({ type: 'result', subtype: 'success', result: 'ok' }, event => fine.push(event));
+    assert.strictEqual(fine[0].isError, false);
+
     console.log('claude-provider tests passed');
 }
 

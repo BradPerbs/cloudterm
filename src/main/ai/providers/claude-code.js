@@ -936,6 +936,15 @@ function translate(message, onEvent) {
         }
 
         case 'assistant': {
+            // Signed out, the CLI does not fail: it answers every message with
+            // a canned "Not logged in · Please run /login", marked with this
+            // error, and a result that says success. So the chat printed that
+            // as the answer and treated the turn as fine. It is an error, with
+            // the sentence that says how to sign in.
+            if (message.error === 'authentication_failed') {
+                onEvent({ type: 'error', message: describeFailure('authentication failed') });
+                break;
+            }
             const blocks = message.message?.content || [];
             const text = blocks.filter(block => block.type === 'text').map(block => block.text).join('');
             if (text.trim()) onEvent({ type: 'assistant-text', text });
@@ -988,7 +997,9 @@ function translate(message, onEvent) {
             onEvent({
                 type: 'result',
                 subtype: message.subtype,
-                isError: message.subtype !== 'success',
+                // A turn can fail and still be a `success` subtype: the
+                // signed-out answer above is one. `is_error` is what says so.
+                isError: message.subtype !== 'success' || message.is_error === true,
                 text: message.result || '',
                 costUsd: message.total_cost_usd || 0,
                 usage: message.usage || null,
@@ -1066,4 +1077,5 @@ module.exports = {
     // provider); the agents driven through a text prompt have no slot at all,
     // and the composer only offers the button where main says it works.
     supportsImages: true,
+    _test: { translate },
 };
