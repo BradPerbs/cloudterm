@@ -903,8 +903,14 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
 
     // A forced ask drops what is held for this agent and starts again. The
     // menu offers it when a read came back with nothing, which is usually a
-    // runtime that was not up yet rather than an agent with no models.
-    if (refresh) modelCatalogs.delete(asked);
+    // runtime that was not up yet rather than an agent with no models. It
+    // re-reads every agent that is on, so the list one had is kept aside: a
+    // re-read that fails puts it back rather than leaving a working menu empty.
+    let previous = null;
+    if (refresh) {
+        previous = modelCatalogs.get(asked) || null;
+        modelCatalogs.delete(asked);
+    }
 
     if (modelCatalogs.has(asked)) return Promise.resolve(modelCatalogs.get(asked));
     if (!refresh && modelsPending.has(asked)) return modelsPending.get(asked);
@@ -914,7 +920,7 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
 
     const promise = provider.listModels({ settings: resolvedFor(asked) })
         .then((rows) => {
-            const list = rows?.length ? rows : null;
+            const list = rows?.length ? rows : previous;
             // Stored against the agent that answered, whether or not that is
             // still the one selected. A later ask for a different agent reads
             // its own entry, and a switch back does not have to ask again.
@@ -928,7 +934,11 @@ function models({ refresh = false, provider: wanted = '' } = {}) {
             // menu. Not cached either, so the next ask tries again rather than
             // inheriting one bad start for the life of the app.
             console.error(`Could not read the model list from ${asked}:`, error.message);
-            return null;
+            if (previous) {
+                modelCatalogs.set(asked, previous);
+                notify('ai-models', { provider: asked, models: previous });
+            }
+            return previous;
         })
         .finally(() => {
             if (modelsPending.get(asked) === promise) modelsPending.delete(asked);
