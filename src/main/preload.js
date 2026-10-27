@@ -637,6 +637,13 @@ contextBridge.exposeInMainWorld('api', {
         // conversationId }` for the panel to open in a tab.
         branch: (conversationId, turnId) =>
             ipcRenderer.invoke('ai-conversation-branch', { conversationId, turnId }),
+        // The files one turn changed: each one's change as lines, for the
+        // card's review, and putting them back as they were before the turn.
+        // An undo answers `{ success, reverted, failed }`, one entry per file.
+        turnChanges: (conversationId, turnId) =>
+            ipcRenderer.invoke('ai-turn-changes', { conversationId, turnId }),
+        revertTurn: (conversationId, turnId) =>
+            ipcRenderer.invoke('ai-turn-revert', { conversationId, turnId }),
 
         // Every message, tool call and result for a conversation.
         onEvent: (callback) => subscribe('ai-event', callback),

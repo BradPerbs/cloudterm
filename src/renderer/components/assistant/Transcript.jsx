@@ -6,6 +6,7 @@ import ToolCall from './ToolCall';
 import ToolGroup, { Thought } from './ToolGroup';
 import ApprovalRequest from './ApprovalRequest';
 import ReplyFooter from './ReplyFooter';
+import FilesChanged from './FilesChanged';
 import { useT } from '../../i18n';
 
 /**
@@ -144,7 +145,7 @@ function UserMessage({ item }) {
 }
 
 /** What one row draws as. */
-function RowContent({ item, onRespond }) {
+function RowContent({ item, onRespond, conversationId, onRevert }) {
     switch (item.kind) {
         case 'user':
             return <UserMessage item={item} />;
@@ -175,6 +176,8 @@ function RowContent({ item, onRespond }) {
             );
         case 'divider':
             return <Divider item={item} />;
+        case 'changes':
+            return <FilesChanged item={item} conversationId={conversationId} onRevert={onRevert} />;
         default:
             return <Notice item={item} />;
     }
@@ -200,7 +203,9 @@ function isBlank(item) {
  * Its props are all values or stable callbacks, so it is drawn again only when
  * its own item, or the turn ending on it, changes.
  */
-const Row = memo(function Row({ item, onRespond, onBranch, endTurnId, endText = '', endRate = null }) {
+const Row = memo(function Row({
+    item, onRespond, onBranch, conversationId, onRevert, endTurnId, endText = '', endRate = null,
+}) {
     if (isBlank(item)) return null;
     const ends = endTurnId !== undefined && Boolean(endText || endRate || onBranch);
 
@@ -208,7 +213,7 @@ const Row = memo(function Row({ item, onRespond, onBranch, endTurnId, endText = 
         // Never squeezed by the column it sits in: a flex column would
         // otherwise shrink its rows to fit rather than scroll.
         <div className="shrink-0" style={ROW_STYLE}>
-            <RowContent item={item} onRespond={onRespond} />
+            <RowContent item={item} onRespond={onRespond} conversationId={conversationId} onRevert={onRevert} />
             {ends && (
                 <div className="mt-1">
                     <ReplyFooter
@@ -334,6 +339,10 @@ function Transcript({
     turnRates = null,
     /** Start a new chat from the end of a turn, named by its message's id. */
     onBranch = null,
+    /** The conversation drawn, which a files card reads its review from. */
+    conversationId = '',
+    /** Put back the files a turn changed, named by its message's id. */
+    onRevert = null,
 }) {
     const t = useT();
     const items = useGrouped(allItems, groupTools);
@@ -362,7 +371,10 @@ function Transcript({
     const keys = useMemo(() => rowKeys(items), [items]);
     // One object for the props every row shares, so a segment can tell they
     // have not changed with one comparison.
-    const rowProps = useMemo(() => ({ onRespond, onBranch }), [onRespond, onBranch]);
+    const rowProps = useMemo(
+        () => ({ onRespond, onBranch, conversationId, onRevert }),
+        [onRespond, onBranch, conversationId, onRevert],
+    );
 
     const start = Math.min(from, items.length);
     const segments = [];

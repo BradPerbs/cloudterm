@@ -17,6 +17,8 @@
  *              before it reported back).
  *   approval   a question that arrived for a call the transcript never saw
  *              start. Rare; the question normally rides on its tool row.
+ *   changes    `{ id, turnId, files, from, status, failed, reverted }`: the
+ *              files a turn changed, with how an undo of them went.
  *   notice     `{ id, tone, text }`: a line the app wrote itself.
  *   divider    `{ id, text }`: the chat moved to another model or effort.
  */
@@ -295,6 +297,40 @@ function step(state, event, owned) {
                         status: event.status === 'approved' && item.status === 'waiting' ? 'running' : item.status,
                         approval: { ...item.approval, status: event.status, feedback },
                     };
+            }
+            break;
+        }
+
+        // What the turn did to files, as the card at its foot. `from` is set
+        // on a branch's copy: the card is there to read, and undoing it
+        // belongs to the conversation that made the change.
+        case 'turn-changes':
+            edit().push({
+                kind: 'changes',
+                id: `c-${event.turnId}-${items.length}`,
+                turnId: event.turnId,
+                files: event.files || [],
+                from: event.from || '',
+                status: 'applied',
+                failed: [],
+                reverted: [],
+            });
+            break;
+
+        // An undo of that card. A second try after a partial one reports only
+        // the files it tried, so the ones already back are added up here.
+        case 'turn-reverted': {
+            const index = lastIndexWhere(items, item => (
+                item.kind === 'changes' && String(item.turnId) === String(event.turnId)
+            ));
+            if (index >= 0) {
+                const failed = event.failed || [];
+                edit()[index] = {
+                    ...items[index],
+                    status: failed.length === 0 ? 'reverted' : 'partial',
+                    failed,
+                    reverted: [...(items[index].reverted || []), ...(event.reverted || [])],
+                };
             }
             break;
         }

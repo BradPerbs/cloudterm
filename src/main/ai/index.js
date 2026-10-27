@@ -8,6 +8,7 @@ const pasted = require('./pasted-secrets');
 const diff = require('./diff');
 const turnRate = require('./turn-rate');
 const branching = require('./branch');
+const checkpoints = require('./checkpoints');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -164,6 +165,10 @@ function hydrate() {
             conversations.set(conversation.id, conversation);
         }
     }
+
+    // The undo snapshots of conversations that fell off the end of the
+    // history since the last run. See checkpoints.js.
+    checkpoints.prune(conversations.keys());
 }
 
 /**
@@ -287,6 +292,7 @@ function trim(room = 0) {
     for (const conversation of parked) {
         if (excess <= 0) break;
         conversations.delete(conversation.id);
+        checkpoints.forget(conversation.id);
         excess -= 1;
     }
 }
@@ -319,6 +325,11 @@ function emit(conversation, event) {
     // The turn's answer rate, for the number under its reply. Stamped on the
     // stored result so every window, and a reload, agrees. See turn-rate.js.
     if (stamped.type === 'result') turnRate.stampTurnRate(conversation.events, stamped);
+
+    // A turn that changed files ends with a card listing them, recorded just
+    // ahead of the event that ends it. See checkpoints.js.
+    const changes = checkpoints.track(conversation.id, stamped, { secrets: conversation.secrets });
+    if (changes) emit(conversation, changes);
 
     conversation.updatedAt = stamped.at;
     conversation.events.push(stamped);
@@ -841,6 +852,9 @@ function ensureProvider(conversation) {
             // The model saved a snippet. Every window caches the library, so
             // each is told to read it again.
             snippetsChanged: () => notify('snippets-changed', {}),
+            // Our edit tools record the file on either side of the write, so
+            // the turn can be undone. See checkpoints.js.
+            checkpoint: checkpoints.hooksFor(conversation.id),
         }),
         requestApproval: (request) => requestApproval(conversation, request),
         onEvent: (event) => handleProviderEvent(conversation, event),
@@ -1043,6 +1057,12 @@ async function send(conversationId, text, attachments = [], specIds = []) {
             parts.push(branching.carryOverBlock(conversation.carryOver));
             conversation.carryOver = '';
         }
+        // Something the agent has to know before it goes on, such as files
+        // put back by an undo since its last turn. See `revertTurn`.
+        if (conversation.pendingNote) {
+            parts.push(`<app-note>\n${conversation.pendingNote}\n</app-note>`);
+            conversation.pendingNote = '';
+        }
         if (context !== conversation.lastContext) {
             conversation.lastContext = context;
             parts.push(`<app-context>\n${context}\n</app-context>`);
@@ -1108,6 +1128,9 @@ async function close(conversationId) {
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
     conversations.delete(conversationId);
+    // Thrown away for good, so its undo snapshots go too. Not on a shutdown,
+    // which closes every conversation without meaning to forget any of them.
+    if (!closingAll) checkpoints.forget(conversationId);
     // Anything it was still waiting on a person for goes with it. A question
     // whose turn has already ended has no timer of its own, and would
     // otherwise wait for an answer with nowhere to go until the app quits.
@@ -1174,6 +1197,36 @@ function branch(conversationId, turnId) {
     branching.fill(source, conversations.get(id), turnId);
     archive.save();
     return { success: true, conversationId: id };
+}
+
+/** What one turn did to files, as lines, for its card's review. See checkpoints.js. */
+function turnChanges(conversationId, turnId) {
+    return checkpoints.changes(String(conversationId || ''), turnId);
+}
+
+/**
+ * Put back the files one turn changed. Recorded in the conversation, so every
+ * window's card says what came back and what did not, and the agent is told
+ * on its next message, or it would carry on from files that are no longer
+ * what it wrote.
+ */
+async function revertTurn(conversationId, turnId) {
+    hydrate();
+
+    const conversation = conversations.get(conversationId);
+    if (!conversation) return { success: false, message: 'That conversation is gone' };
+
+    const result = await checkpoints.revert(conversationId, turnId, { secrets: conversation.secrets });
+    if (!result.success || result.already) return result;
+
+    emit(conversation, { type: 'turn-reverted', turnId, reverted: result.reverted, failed: result.failed });
+    if (result.reverted.length > 0) {
+        conversation.pendingNote = [conversation.pendingNote, checkpoints.revertNote(result.reverted)]
+            .filter(Boolean)
+            .join('\n\n');
+        archive.save();
+    }
+    return result;
 }
 
 /**
@@ -1327,6 +1380,12 @@ function status() {
 }
 
 /**
+ * Set while a shutdown closes everything: that puts each conversation down
+ * rather than throwing it away, so `close` leaves its undo snapshots alone.
+ */
+let closingAll = false;
+
+/**
  * Tear every conversation down, for a lock or a quit.
  *
  * Written out first, and then no further writes at all: `close` empties the map
@@ -1341,7 +1400,9 @@ async function shutdown() {
     archive.suspend();
 
     const ids = [...conversations.keys()];
+    closingAll = true;
     await Promise.all(ids.map(id => close(id)));
+    closingAll = false;
     for (const entry of [...pendingApprovals.values()]) {
         entry.resolve({ approved: false, message: 'The app closed the conversation.' }, 'denied');
     }
@@ -1377,4 +1438,6 @@ module.exports = {
     respondToAction,
     settings,
     branch,
+    turnChanges,
+    revertTurn,
 };

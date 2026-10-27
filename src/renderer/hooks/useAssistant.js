@@ -299,6 +299,17 @@ export default function useAssistant({
         return null;
     }, [conversationId, dispatch]);
 
+    /**
+     * Put back the files a turn changed. The card hears how it went from the
+     * `turn-reverted` event main records, like every other window does, and
+     * from the answer here for what only it asked.
+     */
+    const revertTurn = useCallback(async (turnId) => {
+        if (!conversationId) return { success: false, message: '' };
+        return window.api.ai.revertTurn(conversationId, turnId)
+            .catch(error => ({ success: false, message: error.message }));
+    }, [conversationId]);
+
     /** What the history menu lists. Asked for rather than pushed. */
     const refreshConversations = useCallback(async () => {
         try {
@@ -378,6 +389,7 @@ export default function useAssistant({
         remove,
         refreshConversations,
         branch,
+        revertTurn,
     };
 }
 

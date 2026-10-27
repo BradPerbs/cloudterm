@@ -619,6 +619,8 @@ export default function AssistantConversation({
                     busy={assistant.busy}
                     turnRates={assistant.turnRates}
                     onBranch={onOpenConversation ? branchFrom : null}
+                    conversationId={assistant.conversationId}
+                    onRevert={assistant.revertTurn}
                 />
 
                 {/* The turn in progress. Replaced by a finished block the
