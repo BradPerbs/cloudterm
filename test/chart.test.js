@@ -8,12 +8,34 @@
  * itself and the reasons it gives for refusing one are checked against every
  * catalog, since a key missing there prints as the key.
  *
+ * Then the system prompt, whose examples are what the model copies from, so
+ * each of them has to be a chart itself.
+ *
  * The modules under test are ESM for the bundler, so they are imported
- * dynamically, as in the reducer's test.
+ * dynamically, as in the reducer's test. `electron` is stubbed for the
+ * prompt, which reads the open sessions.
  */
+const Module = require('module');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const assert = require('assert');
 const { pathToFileURL } = require('url');
+
+const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-test-chart-'));
+const electronStub = {
+    app: { getPath: () => userData, getVersion: () => '1.0.0', on: () => {}, whenReady: () => new Promise(() => {}) },
+    safeStorage: {
+        isEncryptionAvailable: () => false,
+        encryptString: () => { throw new Error('unavailable'); },
+        decryptString: () => { throw new Error('unavailable'); },
+    },
+};
+const realLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+    if (request === 'electron') return electronStub;
+    return realLoad.call(this, request, parent, isMain);
+};
 
 let passed = 0;
 let failed = 0;
@@ -575,6 +597,33 @@ async function main() {
                 assert.deepStrictEqual(marks(catalog[key]), marks(locales.en[key]), `${language} ${key}`);
             }
         }
+    });
+
+    console.log('\nthe system prompt');
+
+    const prompt = require(path.join(__dirname, '..', 'src', 'main', 'ai', 'prompt'));
+
+    check('the fixed text teaches the fence, so it is cached with the rest', () => {
+        assert.ok(prompt.BASE.includes('## Charts'));
+        assert.ok(prompt.BASE.includes('fenced block whose language is `chart`'));
+        assert.ok(/Plot only values you actually received from a tool/.test(prompt.BASE));
+    });
+
+    const examples = prompt.BASE.match(/\{"type":"[^\r\n]+?\}(?=\r?\n|$)/g) || [];
+
+    check('every example in the prompt is itself a chart', () => {
+        assert.ok(examples.length >= 9, `found ${examples.length} examples`);
+        for (const example of examples) {
+            const { error } = parseChart(example);
+            assert.strictEqual(error, undefined, `${example}: ${error}`);
+        }
+    });
+
+    check('the prompt shows every form there is, and no other', () => {
+        const shown = examples.map(example => JSON.parse(example).type);
+        for (const type of CHART_TYPES.filter(form => form !== 'area')) assert.ok(shown.includes(type), type);
+        assert.ok(shown.every(type => CHART_TYPES.includes(type)), shown.join(', '));
+        assert.ok(/- line or area/.test(prompt.BASE));
     });
 
     console.log(`\n${passed} checks passed${failed > 0 ? `, ${failed} failed` : ''}`);
