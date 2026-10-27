@@ -1278,6 +1278,11 @@ export default {
     'assistant.effortMax': 'Max',
     'assistant.effortUltra': 'Ultra',
 
+    'assistant.switchedTo': 'Switched to {what}',
+    'assistant.switchedModelOnAgent': '{model} on {agent}',
+    'assistant.switchedAgentDefault': '{agent} default',
+    'assistant.switchedEffort': '{effort} effort',
+
     'assistant.approvalsLabel': 'Approvals: {mode}',
     'assistant.approvalAlways': 'Ask every time',
     'assistant.approvalAlwaysHint': 'Every tool call waits for you',

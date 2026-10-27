@@ -1226,6 +1226,11 @@ export default {
     'assistant.effortMax': 'Máximo',
     'assistant.effortUltra': 'Ultra',
 
+    'assistant.switchedTo': 'Mudou para {what}',
+    'assistant.switchedModelOnAgent': '{model} no {agent}',
+    'assistant.switchedAgentDefault': 'predefinido do {agent}',
+    'assistant.switchedEffort': 'esforço {effort}',
+
     'assistant.approvalsLabel': 'Aprovações: {mode}',
     'assistant.approvalAlways': 'Perguntar sempre',
     'assistant.approvalAlwaysHint': 'Todas as chamadas a ferramentas esperam por si',

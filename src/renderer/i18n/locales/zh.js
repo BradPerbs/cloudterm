@@ -1044,6 +1044,11 @@ export default {
     'assistant.effortMax': '最高',
     'assistant.effortUltra': '超高',
 
+    'assistant.switchedTo': '已切换到 {what}',
+    'assistant.switchedModelOnAgent': '{agent} 上的 {model}',
+    'assistant.switchedAgentDefault': '{agent} 的默认模型',
+    'assistant.switchedEffort': '{effort}思考强度',
+
     'assistant.approvalsLabel': '批准方式：{mode}',
     'assistant.approvalAlways': '每次都询问',
     'assistant.approvalAlwaysHint': '每一次工具调用都会等你确认',

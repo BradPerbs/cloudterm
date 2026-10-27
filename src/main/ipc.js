@@ -1652,6 +1652,9 @@ function register(getWindow) {
                 changes,
             });
         }
+        // A model, effort or mode chosen here is the latest one chosen: new
+        // chats start on it, as they do after a pick on a composer's chip.
+        assistant.startModel.follow(before, next);
 
         // The settings page and the panel both show some of this, and they are
         // on screen at the same time. Whoever did not make the change hears
@@ -1665,6 +1668,30 @@ function register(getWindow) {
     handle('ai-conversation-history', (event, conversationId) => assistant.history(conversationId));
     handle('ai-conversation-park', (event, conversationId) => assistant.park(conversationId));
     handle('ai-conversation-close', (event, conversationId) => assistant.close(conversationId));
+    // The agent, model, effort and mode one conversation is pinned to, picked
+    // on the composer's chips. A pick is also what new chats start on, and a
+    // mode moved from the chip is logged as one moved on the settings page.
+    handle('ai-conversation-model', (event, payload) => {
+        const result = assistant.setConversationModel(
+            String(payload?.conversationId || ''),
+            payload?.patch || {},
+            { remember: true }
+        );
+        if (result?.mode) {
+            activity.record({
+                category: 'security',
+                action: 'assistant.configure',
+                outcome: 'info',
+                target: 'Assistant',
+                detail: `Approvals: ${result.mode.to}, for one conversation`,
+                changes: [{ field: 'approvals', from: result.mode.from, to: result.mode.to }],
+            });
+        }
+        return result;
+    });
+    // What new chats start on, and the star that pins one model for them.
+    handle('ai-start-model', () => assistant.startModelState());
+    handle('ai-start-model-star', (event, pin) => assistant.starModel(pin || null));
     handle('ai-scope', (event, payload) => assistant.setScope(payload?.conversationId, payload || {}));
     handle('ai-send', (event, payload) =>
         assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.specs));

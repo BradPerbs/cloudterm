@@ -18,7 +18,8 @@
  *   approval   a question that arrived for a call the transcript never saw
  *              start. Rare; the question normally rides on its tool row.
  *   notice     `{ id, tone, text }`: a line the app wrote itself.
- *   divider    `{ id, text }`: the chat moved to another model or effort.
+ *   divider    `{ id, text, change? }`: the chat moved to another model or
+ *              effort. `change` is what moved, when main said.
  */
 
 /** A blank turn-in-progress, for the streaming text bubble. */
@@ -334,7 +335,13 @@ function step(state, event, owned) {
         // middle of one. `text` is written by the main process, which knows
         // what the change was from and to.
         case 'model-changed':
-            edit().push({ kind: 'divider', id: `mc-${event.at}-${items.length}`, text: event.text || '' });
+            edit().push({
+                kind: 'divider',
+                id: `mc-${event.at}-${items.length}`,
+                text: event.text || '',
+                // What moved, for the divider to say in the reader's language.
+                ...(event.change ? { change: event.change } : {}),
+            });
             break;
 
         case 'tool-failed':

@@ -91,6 +91,14 @@ export default function useAssistant({
     }, []);
 
     const [conversationId, setConversationId] = useState('');
+    /**
+     * The agent, model, effort and mode this conversation is pinned to on its
+     * composer's chips, over the app's settings, or null for the settings
+     * throughout. Main owns it; this is the copy the chips draw, refreshed by
+     * every answer that carries it and by a `pinned` event when it moved
+     * somewhere else.
+     */
+    const [pinned, setPinned] = useState(null);
     const [starting, setStarting] = useState(true);
     const [failure, setFailure] = useState('');
     const [conversations, setConversations] = useState([]);
@@ -153,6 +161,7 @@ export default function useAssistant({
                     if (past?.found) {
                         adopt(given);
                         replaceState(replay(past.events));
+                        setPinned(past.pinned || null);
                         setStarting(false);
                         return;
                     }
@@ -161,6 +170,8 @@ export default function useAssistant({
                 const created = await window.api.ai.start(targetRef.current);
                 if (cancelled) return;
                 adopt(created.conversationId);
+                // Main has put it on what new chats start on already.
+                setPinned(created.pinned || null);
                 setStarting(false);
             } catch (error) {
                 if (!cancelled) {
@@ -205,6 +216,12 @@ export default function useAssistant({
         if (!enabled) return undefined;
         const off = window.api.ai.onEvent(({ conversationId: id, event }) => {
             if (id !== conversationRef.current) return;
+            // The pin moved, from this window or another one showing the same
+            // conversation: the chips follow. Not part of the transcript.
+            if (event.type === 'pinned') {
+                setPinned(event.pinned || null);
+                return;
+            }
             dispatch(event);
 
             if (ENDS_TURN.has(event.type)) {
@@ -313,6 +330,7 @@ export default function useAssistant({
         const created = await window.api.ai.start(targetRef.current);
         adopt(created.conversationId);
         replaceState(INITIAL);
+        setPinned(created.pinned || null);
     }, [conversationId, adopt, replaceState]);
 
     /** Go back to an earlier conversation, replaying it through the reducer. */
@@ -327,7 +345,20 @@ export default function useAssistant({
         if (conversationId) await window.api.ai.park(conversationId);
         adopt(id);
         replaceState(replay(past.events));
+        setPinned(past.pinned || null);
     }, [conversationId, refreshConversations, adopt, replaceState]);
+
+    /**
+     * Pin this conversation to an agent, model, effort or mode, over the
+     * settings: what the composer's chips do. Only this conversation moves,
+     * and the pick is what the next new chat starts on. Main answers with the
+     * pin as it now stands, which is what the chips are set to.
+     */
+    const pinModel = useCallback(async (patch) => {
+        if (!conversationId) return;
+        const result = await window.api.ai.setModel(conversationId, patch);
+        if (result && !result.error) setPinned(result.pinned || null);
+    }, [conversationId]);
 
     /**
      * Throw one away for good. Deleting the conversation being read leaves the
@@ -341,6 +372,7 @@ export default function useAssistant({
             const created = await window.api.ai.start(targetRef.current);
             adopt(created.conversationId);
             replaceState(INITIAL);
+            setPinned(created.pinned || null);
         }
         await refreshConversations();
     }, [conversationId, refreshConversations, adopt, replaceState]);
@@ -352,6 +384,10 @@ export default function useAssistant({
         costUsd: state.costUsd,
         account: state.account,
         rateLimit: state.rateLimit,
+        // The conversation's own agent, model, effort and mode over the
+        // settings, and the way to change them.
+        pinned,
+        pinModel,
         conversationId,
         conversations,
         starting,

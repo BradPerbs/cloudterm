@@ -5,6 +5,7 @@ import { groupRows } from '../../lib/group-rows';
 import ToolCall from './ToolCall';
 import ToolGroup, { Thought } from './ToolGroup';
 import ApprovalRequest from './ApprovalRequest';
+import { switchLine } from '../../lib/model-switch';
 import { useT } from '../../i18n';
 
 /**
@@ -74,6 +75,10 @@ export function Notice({ item }) {
 
 /** A thin rule with a few words on it: the chat moved to another model or effort. */
 function Divider({ item }) {
+    const t = useT();
+    // In the reader's language when main said what moved; the stored
+    // English line otherwise.
+    const text = switchLine(item.change, t) || item.text;
     return (
         <div
             role="separator"
@@ -81,7 +86,7 @@ function Divider({ item }) {
                 text-gray-400 dark:text-neutral-500"
         >
             <span className="h-px flex-1 bg-gray-200 dark:bg-white/[0.08]" />
-            <span className="shrink-0 max-w-[80%] truncate" title={item.text}>{item.text}</span>
+            <span className="shrink-0 max-w-[80%] truncate" title={text}>{text}</span>
             <span className="h-px flex-1 bg-gray-200 dark:bg-white/[0.08]" />
         </div>
     );

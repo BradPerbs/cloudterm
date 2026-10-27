@@ -1288,6 +1288,11 @@ export default {
     'assistant.effortMax': 'Максимум',
     'assistant.effortUltra': 'Ультра',
 
+    'assistant.switchedTo': 'Переключено на {what}',
+    'assistant.switchedModelOnAgent': '{model} в {agent}',
+    'assistant.switchedAgentDefault': '{agent}, модель по умолчанию',
+    'assistant.switchedEffort': 'усилие: {effort}',
+
     'assistant.approvalsLabel': 'Подтверждения: {mode}',
     'assistant.approvalAlways': 'Спрашивать каждый раз',
     'assistant.approvalAlwaysHint': 'Каждый вызов инструмента ждёт вас',

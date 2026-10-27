@@ -3,7 +3,11 @@ import PanelMenu from './PanelMenu';
 import { useT } from '../../i18n';
 
 /**
- * What the assistant will do before asking, as a chip in the composer.
+ * What the assistant will do before asking, as a chip in the composer. It is
+ * the conversation's, like the model: a pick moves this tab only, so a
+ * read-only chat on a production box can sit beside one that runs on its own
+ * against a test box. It is also the mode the next new chat starts in, and a
+ * move is logged in the activity log like one made on the settings page.
  *
  * This is the setting people reach for mid-conversation more than any other:
  * loosen it because the approvals are getting in the way of an investigation,

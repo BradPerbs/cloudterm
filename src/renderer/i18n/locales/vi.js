@@ -1141,6 +1141,11 @@ export default {
     'assistant.effortMax': 'Tối đa',
     'assistant.effortUltra': 'Cực đại',
 
+    'assistant.switchedTo': 'Đã chuyển sang {what}',
+    'assistant.switchedModelOnAgent': '{model} trên {agent}',
+    'assistant.switchedAgentDefault': 'mặc định của {agent}',
+    'assistant.switchedEffort': 'mức nỗ lực {effort}',
+
     'assistant.approvalsLabel': 'Phê duyệt: {mode}',
     'assistant.approvalAlways': 'Hỏi mọi lúc',
     'assistant.approvalAlwaysHint': 'Mọi lần gọi công cụ đều chờ bạn',

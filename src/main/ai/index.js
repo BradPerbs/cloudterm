@@ -5,6 +5,8 @@ const archive = require('./archive');
 const { readImages } = require('./images');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
+const conversationSettings = require('./conversation-settings');
+const startModel = require('./start-model');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -125,6 +127,26 @@ const modelsPending = new Map();
 function setNotifier(fn) {
     notify = fn;
 }
+
+/**
+ * The agent, model, effort and mode each conversation is pinned to, over the
+ * settings, and what new chats start on. See conversation-settings.js.
+ */
+const pins = conversationSettings.create({
+    providers: PROVIDERS,
+    catalogs: modelCatalogs,
+    find: (conversationId) => {
+        hydrate();
+        return conversations.get(conversationId);
+    },
+    emit: (conversation, event) => emit(conversation, event),
+    notify: (channel, payload) => notify(channel, payload),
+    save: () => archive.save(),
+});
+
+// What new chats start on moved: every window's model menu draws its star
+// from it.
+startModel.onChange(() => notify('ai-start-model', pins.startState()));
 
 function nextId(prefix) {
     counter += 1;
@@ -251,10 +273,15 @@ function create(target = {}) {
         // menu has to label the entry with. Nothing else here knows what a
         // conversation was about.
         title: '',
+        // The agent, model, effort and mode this conversation is pinned to,
+        // over the settings. See conversation-settings.js.
+        settingsPatch: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
     });
-    return { conversationId: id, ...scope };
+    // On what new chats start on: the starred or last model, the last effort
+    // and the last mode. See start-model.js.
+    return { conversationId: id, ...scope, pinned: pins.startOnPick(id) };
 }
 
 /**
@@ -381,10 +408,20 @@ function resolved() {
 }
 
 /**
- * Settings the SDK bakes into a running query and cannot be told about later.
- * Changing one of these means the query has to be started again.
+ * The settings one conversation runs under: the app's, with what the
+ * conversation was pinned to on its composer's chips on top.
  */
-const RESTART_ON = ['provider', 'maxTurns', 'allowLocalTools'];
+function effectiveSettings(conversation) {
+    return pins.effective(conversation);
+}
+
+/**
+ * Settings the SDK bakes into a running query and cannot be told about later.
+ * Changing one of these means the query has to be started again. A change of
+ * agent does too, and is read per conversation in `reconfigure`, since one
+ * pinned to an agent of its own does not move with the setting.
+ */
+const RESTART_ON = ['maxTurns', 'allowLocalTools'];
 
 /**
  * Note that the configuration moved.
@@ -423,19 +460,27 @@ function reconfigure(before, after) {
 
     for (const conversation of conversations.values()) {
         const session = conversation.session;
-        if (session) {
+        // A conversation pinned on its chips keeps its pin: the settings
+        // moving is news only to the fields it still takes from them.
+        const own = conversation.settingsPatch || {};
+        // The agent it runs on is no longer the one it would start on: the
+        // settings' agent changed under a conversation following it, or the
+        // agent it was pinned to was switched off.
+        const moved = Boolean(conversation.provider)
+            && effectiveSettings(conversation).provider !== conversation.provider;
+        if (session && !moved) {
             // Only when it is still the same agent's session. Picking a model
             // out of the composer's merged menu can move both at once, and a
             // model name belonging to one agent means nothing to the one that
             // is running: the query is restarted below, which is what actually
             // applies the pair. Effort has no such trouble, since a level is a
             // level whoever is listening.
-            if (before.provider === after.provider && before.model !== after.model) {
+            if (!own.provider && before.provider === after.provider && before.model !== after.model) {
                 session.setModel?.(after.model);
             }
-            if (before.effort !== after.effort) session.setEffort?.(after.effort);
+            if (!own.effort && before.effort !== after.effort) session.setEffort?.(after.effort);
         }
-        if (RESTART_ON.some(field => before[field] !== after[field])) {
+        if (moved || RESTART_ON.some(field => before[field] !== after[field])) {
             if (session || conversation.starting) conversation.needsRestart = true;
         }
     }
@@ -767,7 +812,8 @@ function ensureProvider(conversation) {
     if (conversation.session) return Promise.resolve(conversation.session);
     if (conversation.starting) return conversation.starting;
 
-    const current = resolved();
+    // This conversation's own agent, model, effort and mode, over the app's.
+    const current = effectiveSettings(conversation);
     // Nothing ticked: a fresh machine with no agent installed. Said as that,
     // rather than as whichever runtime `provider` still names failing to find
     // itself.
@@ -808,7 +854,7 @@ function ensureProvider(conversation) {
         // mid-run takes effect on the next call rather than the next
         // conversation. The snapshot above is only for the options the SDK
         // fixes when the query starts.
-        getSettings: resolved,
+        getSettings: () => effectiveSettings(conversation),
         systemPrompt: prompt.build(context()),
         toolContext: () => ({
             scope: conversation.scope,
@@ -818,7 +864,7 @@ function ensureProvider(conversation) {
             // than the next conversation.
             sessionIds: conversation.sessionIds,
             hostIds: conversation.hostIds,
-            settings: resolved(),
+            settings: effectiveSettings(conversation),
             sessionAction: (payload) => requestAction(conversation, payload),
             // A question to the person, answered on a card. See requestQuestion.
             askUser: (payload) => requestQuestion(conversation, payload || {}),
@@ -850,7 +896,9 @@ function handleProviderEvent(conversation, event) {
     // not spend a slot in the conversation's event log.
     if (event.type === 'models') {
         if (event.models?.length) {
-            const provider = resolved().provider;
+            // Filed under the agent that said it, which is this
+            // conversation's and not necessarily the settings' one.
+            const provider = conversation.provider || resolved().provider;
             modelCatalogs.set(provider, event.models);
             notify('ai-models', { provider, models: event.models });
         }
@@ -975,8 +1023,10 @@ async function send(conversationId, text, attachments = [], specIds = []) {
     }
 
     // Refused here rather than quietly dropped: a question about a screenshot
-    // the model never saw would get an answer that reads as if it had.
-    if (images.length > 0 && PROVIDERS[resolved().provider]?.supportsImages !== true) {
+    // the model never saw would get an answer that reads as if it had. Judged
+    // by the agent this conversation runs on, which a pin can make another
+    // than the settings' one.
+    if (images.length > 0 && PROVIDERS[effectiveSettings(conversation).provider]?.supportsImages !== true) {
         return { success: false, message: 'This agent cannot read images. Claude Code and Codex can.' };
     }
 
@@ -1000,6 +1050,8 @@ async function send(conversationId, text, attachments = [], specIds = []) {
         ...(specs.length ? { specs: stripSpecs(specs) } : {}),
     });
     conversation.busy = true;
+    // What this was sent with is what the next new chat starts on.
+    pins.rememberUsed(conversation);
 
     try {
         // A model or effort change since the last message. Restarting here,
@@ -1124,6 +1176,8 @@ function history(conversationId) {
         busy: conversation.busy,
         costUsd: conversation.costUsd,
         title: conversation.title,
+        // What the conversation is pinned to, for its composer's chips.
+        pinned: conversation.settingsPatch || null,
     };
 }
 
@@ -1326,5 +1380,12 @@ module.exports = {
     shutdown,
     respondToApproval,
     respondToAction,
+    // A conversation's own agent, model, effort and mode, and what new chats
+    // start on. See conversation-settings.js and start-model.js.
+    setConversationModel: (...args) => pins.set(...args),
+    effectiveSettings,
+    startModelState: () => pins.startState(),
+    starModel: pin => pins.star(pin),
+    startModel,
     settings,
 };

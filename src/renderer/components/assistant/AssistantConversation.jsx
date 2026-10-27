@@ -23,6 +23,7 @@ import ApprovalRequest from './ApprovalRequest';
 import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
+import { shownSettings as withPin } from '../../lib/conversation-settings';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
 import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
@@ -343,6 +344,20 @@ export default function AssistantConversation({
         const next = await window.api.ai.setSettings(patch);
         setSettings(next);
     }, []);
+
+    // The agent, model, effort and mode belong to the conversation: a pick on
+    // a chip moves this tab only, and is what the next new chat starts on.
+    // The chips show the settings with this conversation's pin on top, so
+    // whatever the pin leaves out still follows the settings page.
+    const conversationSettings = useMemo(
+        () => withPin(settings, assistant.pinned),
+        [settings, assistant.pinned],
+    );
+    const pinModel = assistant.pinModel;
+    const changeModel = useCallback((patch) => pinModel(patch), [pinModel]);
+    const changeMode = useCallback(({ approval }) => {
+        if (approval) pinModel({ approval });
+    }, [pinModel]);
 
     // `preventScroll` because the card is mounted at its full width inside a
     // column that is still only a rail wide, and clipped to it. Focusing the
@@ -783,8 +798,8 @@ export default function AssistantConversation({
                     <div className="flex items-center gap-1 pl-2 pr-2 pb-2">
                         {/* The standing state of the panel: what it will do
                             before asking, and where it is changed. */}
-                        {settings && (
-                            <ApprovalMenu settings={settings} onChange={changeSettings} />
+                        {conversationSettings && (
+                            <ApprovalMenu settings={conversationSettings} onChange={changeMode} />
                         )}
 
                         {/* The documents from the library that go with the
@@ -838,14 +853,14 @@ export default function AssistantConversation({
                                 hasStoredKey={Boolean(settings?.hasApiKey)}
                             />
 
-                            {settings && (
+                            {conversationSettings && (
                                 <ModelMenu
-                                    settings={settings}
+                                    settings={conversationSettings}
                                     catalogs={catalogs}
                                     providers={providers}
                                     loading={readingModels}
                                     onRefresh={() => readModels(providers, { refresh: true })}
-                                    onChange={changeSettings}
+                                    onChange={changeModel}
                                 />
                             )}
 
