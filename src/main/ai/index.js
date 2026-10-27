@@ -400,15 +400,32 @@ async function restart(conversation) {
  * answer to "may I restart this service" when nobody is there to say yes is
  * no, not an exception somewhere up the stack.
  */
-function requestApproval(conversation, { toolName, name, input, local, question = false }) {
+function requestApproval(conversation, { toolName, name, input, local, question = false, signal = null }) {
     return new Promise((resolve) => {
+        // The runtime gave up on the call before it reached here. No card:
+        // there is nobody left to act on the answer.
+        if (signal?.aborted) {
+            resolve({ approved: false, message: 'The runtime stopped waiting for this approval.', input: null });
+            return;
+        }
+
         const definition = catalog.BY_NAME.get(name);
         const requestId = nextId('approve');
+
+        // The runtime gave up on the call while the card was up: OpenCode does
+        // after twenty seconds. The agent has already been told the call
+        // failed, so the card comes down rather than waiting for a click that
+        // would run the command behind its back.
+        const giveUp = () => settle(
+            { approved: false, message: 'The runtime stopped waiting for this approval.' },
+            'expired'
+        );
 
         const settle = (verdict, status) => {
             const entry = pendingApprovals.get(requestId);
             if (!entry) return;
             clearTimeout(entry.timer);
+            signal?.removeEventListener('abort', giveUp);
             pendingApprovals.delete(requestId);
             // Recorded, not just sent. The request itself is in the event log,
             // so without this a window that reloads after answering replays the
@@ -426,6 +443,7 @@ function requestApproval(conversation, { toolName, name, input, local, question 
         }, APPROVAL_TIMEOUT);
 
         pendingApprovals.set(requestId, { resolve: settle, timer, conversationId: conversation.id });
+        signal?.addEventListener('abort', giveUp, { once: true });
 
         // A question is put to the person, not to a server, so it is not drawn
         // against one. Looking one up here would hang the panel's scope on a
