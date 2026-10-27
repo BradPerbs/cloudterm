@@ -13,6 +13,7 @@ import ContextMenu from '../ui/ContextMenu';
 import PanelMenu from './PanelMenu';
 import ScopeMenu from './ScopeMenu';
 import AssistantConversation, { HAIRLINE } from './AssistantConversation';
+import { Ring } from './WorkingIndicator';
 import { useT } from '../../i18n';
 import { PANE_HEADER_HEIGHT } from '../../lib/layout';
 import {
@@ -187,14 +188,30 @@ function Tab({
             <div className="min-w-0 flex-1 flex">
                 <ScopeMenu compact inert={!active || closing} scope={scope} {...scopeProps} />
             </div>
-            {/* Working, said as a dot: a tab that is answering while another is
-                in front should be visibly doing so. */}
-            {status?.busy && (
+            {/* Working, said with the ring the chat's own working line turns:
+                a tab that is answering while another is in front should be
+                visibly doing so. Done while you were elsewhere, a still dot
+                in the same place until the tab is picked, so one becomes the
+                other without the title moving. */}
+            {status?.busy ? (
                 <span
-                    aria-hidden="true"
-                    className="shrink-0 mr-2 w-1.5 h-1.5 rounded-full bg-current animate-pulse"
-                />
-            )}
+                    role="img"
+                    aria-label={t('assistant.working')}
+                    title={t('assistant.working')}
+                    className="shrink-0 mr-2 w-3 h-3 flex items-center justify-center"
+                >
+                    <Ring />
+                </span>
+            ) : status?.finished ? (
+                <span
+                    role="img"
+                    aria-label={t('assistant.finished')}
+                    title={t('assistant.finished')}
+                    className="shrink-0 mr-2 w-3 h-3 flex items-center justify-center"
+                >
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-900 dark:bg-white" />
+                </span>
+            ) : null}
             <button
                 type="button"
                 aria-label={closeLabel}
@@ -235,7 +252,11 @@ export default function AssistantWorkspace({
         : readStoredTabs()));
     const [ready, setReady] = useState(!detached);
 
-    /** What each tab reports about itself: `{ title, busy }`, by tab id. */
+    /**
+     * What each tab reports about itself, `{ title, busy }`, by tab id, plus
+     * `finished`: a turn ended while the tab was behind another, and it has
+     * not been looked at since.
+     */
     const [statuses, setStatuses] = useState({});
 
     const { tabs, activeId } = state;
@@ -725,10 +746,23 @@ export default function AssistantWorkspace({
     const reportStatus = useCallback((tabId, status) => {
         setStatuses(current => {
             const held = current[tabId];
-            if (held && held.title === status.title && held.busy === status.busy) return current;
-            return { ...current, [tabId]: status };
+            // A turn ending behind another tab is marked until the tab is
+            // picked. One that ends in front was watched, so it is not.
+            const finished = !status.busy && Boolean(
+                held?.finished || (held?.busy && tabId !== stateRef.current.activeId),
+            );
+            if (held && held.title === status.title && held.busy === status.busy
+                && Boolean(held.finished) === finished) return current;
+            return { ...current, [tabId]: { ...status, finished } };
         });
     }, []);
+
+    // Picking a tab is looking at it, which is what clears the mark.
+    useEffect(() => {
+        setStatuses(current => (current[activeId]?.finished
+            ? { ...current, [activeId]: { ...current[activeId], finished: false } }
+            : current));
+    }, [activeId]);
 
     /**
      * The strip as drawn: the live tabs, with each closing one put back at the
