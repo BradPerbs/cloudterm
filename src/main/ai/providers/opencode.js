@@ -2,6 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
+const http = require('http');
+const { Readable } = require('stream');
 const { spawnSync } = require('child_process');
 const spawn = require('cross-spawn');
 const { app } = require('electron');
@@ -229,6 +231,77 @@ async function launchServer(binary, config, directory) {
     });
 }
 
+/**
+ * The client's `fetch`, over plain http, because a turn can take longer than
+ * five minutes.
+ *
+ * `client.session.prompt` holds one request open for the whole of a turn:
+ * the answer arrives on the event stream, and that call resolves when the
+ * agent has finished. Node's own fetch gives a response 300 seconds to
+ * begin, and past that it drops the socket, which surfaced as "fetch failed"
+ * and ended the turn.
+ *
+ * The timeout cannot be moved without reaching for undici, which is not a
+ * dependency of the packaged app. Node's own http client has no such limit,
+ * so this is that: one request, streamed both ways, aborting when the
+ * caller's signal says to. The server is on the loopback interface, so there
+ * is no TLS and no redirect to handle.
+ */
+async function loopbackFetch(request) {
+    const url = new URL(request.url);
+    const body = ['GET', 'HEAD'].includes(request.method)
+        ? null
+        : Buffer.from(await request.arrayBuffer());
+
+    return new Promise((resolve, reject) => {
+        const headers = {};
+        request.headers.forEach((value, name) => { headers[name] = value; });
+        if (body) headers['content-length'] = String(body.length);
+
+        const outgoing = http.request({
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port,
+            path: `${url.pathname}${url.search}`,
+            method: request.method,
+            headers,
+        }, (incoming) => {
+            resolve(new Response(
+                // A stream rather than a buffer: the event subscription is an
+                // open-ended one, and buffering it would never resolve.
+                incoming.statusCode === 204 || incoming.statusCode === 304
+                    ? null
+                    : Readable.toWeb(incoming),
+                {
+                    status: incoming.statusCode,
+                    statusText: incoming.statusMessage,
+                    headers: Object.entries(incoming.headers)
+                        .filter(([, value]) => value !== undefined)
+                        .map(([name, value]) => [name, Array.isArray(value) ? value.join(', ') : String(value)]),
+                },
+            ));
+        });
+
+        outgoing.on('error', reject);
+
+        const signal = request.signal;
+        if (signal) {
+            if (signal.aborted) {
+                outgoing.destroy(new Error('aborted'));
+                reject(new DOMException('The request was aborted', 'AbortError'));
+                return;
+            }
+            signal.addEventListener('abort', () => {
+                outgoing.destroy(new Error('aborted'));
+                reject(new DOMException('The request was aborted', 'AbortError'));
+            }, { once: true });
+        }
+
+        if (body) outgoing.write(body);
+        outgoing.end();
+    });
+}
+
 function dataOf(response) {
     return response && Object.prototype.hasOwnProperty.call(response, 'data')
         ? response.data
@@ -409,6 +482,8 @@ async function start({
             baseUrl: server.url,
             directory,
             throwOnError: true,
+            // See loopbackFetch: a turn outlives Node's own fetch timeout.
+            fetch: loopbackFetch,
         });
 
         if (resumeSessionId) {
@@ -545,6 +620,8 @@ async function listModels() {
             baseUrl: server.url,
             directory,
             throwOnError: true,
+            // See loopbackFetch: a turn outlives Node's own fetch timeout.
+            fetch: loopbackFetch,
         });
         const response = dataOf(await client.config.providers());
         const rows = [];
@@ -603,5 +680,5 @@ module.exports = {
     serverConfig,
     createTranslator,
     SERVER_NAME,
-    _test: { launchServer, closeProcess },
+    _test: { launchServer, closeProcess, loopbackFetch },
 };

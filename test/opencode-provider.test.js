@@ -174,7 +174,70 @@ async function run() {
     assert.strictEqual(emitted[4].costUsd, 0.012);
     assert.strictEqual(emitted[4].isError, false);
 
+    await loopbackFetchTests();
+
     console.log('opencode-provider tests passed');
+}
+
+// The client talks to its server over plain http so a turn longer than
+// Node's 300 second fetch limit survives. Check that the replacement carries
+// a body both ways, streams a response, and honours an abort signal.
+async function loopbackFetchTests() {
+    const http = require('http');
+    const { loopbackFetch } = provider._test;
+    const server = http.createServer((request, response) => {
+        if (request.url.startsWith('/echo')) {
+            let body = '';
+            request.on('data', (chunk) => { body += chunk; });
+            request.on('end', () => {
+                response.writeHead(201, { 'content-type': 'application/json', 'x-seen': request.headers['x-test'] || '' });
+                response.end(JSON.stringify({ method: request.method, url: request.url, body }));
+            });
+            return;
+        }
+        if (request.url === '/stream') {
+            response.writeHead(200, { 'content-type': 'text/event-stream' });
+            response.write('data: one\n\n');
+            setTimeout(() => response.end('data: two\n\n'), 20);
+            return;
+        }
+        if (request.url === '/empty') {
+            response.writeHead(204);
+            response.end();
+        }
+        // /hang never answers, for the abort check.
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${server.address().port}`;
+
+    try {
+        const echoed = await loopbackFetch(new Request(`${base}/echo?x=1`, {
+            method: 'POST',
+            headers: { 'x-test': 'yes', 'content-type': 'application/json' },
+            body: JSON.stringify({ hello: 'world' }),
+        }));
+        assert.strictEqual(echoed.status, 201);
+        assert.strictEqual(echoed.headers.get('x-seen'), 'yes');
+        assert.deepStrictEqual(await echoed.json(), {
+            method: 'POST',
+            url: '/echo?x=1',
+            body: '{"hello":"world"}',
+        });
+
+        const streamed = await loopbackFetch(new Request(`${base}/stream`));
+        assert.strictEqual(await streamed.text(), 'data: one\n\ndata: two\n\n');
+
+        const empty = await loopbackFetch(new Request(`${base}/empty`));
+        assert.strictEqual(empty.status, 204);
+
+        const controller = new AbortController();
+        const pending = loopbackFetch(new Request(`${base}/hang`, { signal: controller.signal }));
+        setTimeout(() => controller.abort(), 20);
+        await assert.rejects(pending, error => error.name === 'AbortError');
+    } finally {
+        if (server.closeAllConnections) server.closeAllConnections();
+        await new Promise(resolve => server.close(resolve));
+    }
 }
 
 run().catch((error) => {
