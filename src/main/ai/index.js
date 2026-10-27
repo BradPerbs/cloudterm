@@ -1071,6 +1071,13 @@ async function close(conversationId) {
     const conversation = conversations.get(conversationId);
     if (!conversation) return { success: true };
     conversations.delete(conversationId);
+    // Anything it was still waiting on a person for goes with it. A question
+    // whose turn has already ended has no timer of its own, and would
+    // otherwise wait for an answer with nowhere to go until the app quits.
+    for (const entry of [...pendingApprovals.values()]) {
+        if (entry.conversationId !== conversationId) continue;
+        entry.resolve({ approved: false, message: 'The conversation was closed.' }, 'denied');
+    }
     // Thrown away for good, so it goes from the file too. Suspended during a
     // shutdown, which closes every conversation without meaning to forget any
     // of them.

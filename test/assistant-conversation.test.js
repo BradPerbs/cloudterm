@@ -242,6 +242,26 @@ async function main() {
         assert.ok(/stopped the run/.test(result.text));
     });
 
+    await check('closing a conversation takes down a question whose turn already ended', async () => {
+        const { conversationId, toolContext } = await started();
+        const controller = new AbortController();
+        const reply = catalog.BY_NAME.get('ask_user').handler(
+            { question: 'Which one?' },
+            { ...toolContext(), signal: controller.signal }
+        );
+        await tick();
+        const card = eventsOf(conversationId).filter(event => event.type === 'approval-request').pop();
+        controller.abort();
+        await reply;
+
+        await assistant.close(conversationId);
+        assert.ok(eventsOf(conversationId).some(event => event.type === 'approval-settled'
+            && event.requestId === card.requestId), 'the card is settled');
+        assert.strictEqual(assistant.respondToApproval({
+            requestId: card.requestId, approved: true, input: { answers: { 'Which one?': 'that one' } },
+        }), false, 'and an answer has nowhere to go');
+    });
+
     await check('a key pasted into chat reaches the agent, and is masked everywhere the chat is kept', async () => {
         const key = 'ghp_Zq81LmNoPqRsTuVwXyZa0123456789abcd';
         const { conversationId } = assistant.create({ scope: 'global' });
