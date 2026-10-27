@@ -5,6 +5,7 @@ const sftp = require('../sftp');
 const transcript = require('../transcript');
 const exec = require('./exec');
 const terminalRun = require('./terminal-run');
+const fileText = require('./file-text');
 
 // zod 4 exports both a namespace and a `z` binding depending on how it is
 // reached. Taking either keeps this working whichever the installed build is.
@@ -154,6 +155,27 @@ async function viaSftp(sessionId, fn) {
     const result = await sftp.withSftp(sessionId, fn);
     if (result && typeof result.text === 'string') return result;
     return fail(result?.message || 'SFTP could not be opened on that session.');
+}
+
+/**
+ * A stretch of a file read by line, with a header saying which lines these
+ * are and how long the file is, so the next read can start where this one
+ * stopped. Asking past the end says so rather than coming back empty.
+ */
+function describeSlice(file, slice) {
+    if (slice.past) {
+        return slice.lines !== undefined
+            ? `${file} has ${slice.lines} line${slice.lines === 1 ? '' : 's'}, so there is nothing from line ${slice.from}.`
+            : `Line ${slice.from} of ${file} is further in than a read by line goes `
+                + `(${Math.round(fileText.MAX_SCAN_BYTES / 1048576)} MB). Use run_command with tail or sed -n to reach it.`;
+    }
+
+    const notes = [];
+    if (slice.trimmed) notes.push(`cut to what one read returns; carry on from line ${slice.to + 1}`);
+    else if (slice.scanLimit) notes.push(`stopped ${Math.round(fileText.MAX_SCAN_BYTES / 1048576)} MB in; carry on from line ${slice.to + 1}`);
+
+    const of = slice.lines !== undefined ? ` of ${slice.lines}` : '';
+    return `${file}, lines ${slice.from}-${slice.to}${of}${notes.length ? ` (${notes.join('; ')})` : ''}:\n\n${slice.content}`;
 }
 
 /**
@@ -483,14 +505,23 @@ const TOOLS = [
         description:
             'Read a text file from a session\'s server over SFTP. Use this for config files and logs '
             + 'rather than running cat, because it returns the file cleanly and tells you when it was '
-            + 'trimmed. Reads with the same access the user already has on that server.',
+            + 'trimmed. Give offset and limit to read a stretch of it by line rather than the whole '
+            + 'thing, which is what you want for a long file or a big log: offset is the first line, '
+            + 'counting from 1. Reads with the same access the user already has on that server.',
         shape: {
             session: z.string().optional().describe('Session id. Defaults to the session in front of the user.'),
             path: z.string().describe('Absolute path to the file.'),
+            offset: z.number().int().min(1).optional()
+                .describe('The first line to return, counting from 1. Omit for the start of the file.'),
+            limit: z.number().int().min(1).max(5000).optional()
+                .describe('How many lines to return. Omit for the rest of the file.'),
         },
         handler: async (input, ctx) => {
             const resolved = resolveSession(input, ctx);
             if (resolved.error) return fail(resolved.error);
+
+            const byLine = Boolean(input.offset || input.limit);
+            const stretch = { offset: input.offset, limit: input.limit };
 
             return viaSftp(resolved.sessionId, (handle, resolve) => {
                 handle.stat(input.path, (statError, attrs) => {
@@ -498,22 +529,45 @@ const TOOLS = [
                         resolve(fail(`Could not read ${input.path}: ${statError.message}`));
                         return;
                     }
+
                     if (attrs.size > MAX_FILE_BYTES * 8) {
-                        resolve(fail(
-                            `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to read whole. `
-                            + 'Use run_command with tail, head or grep to get the part you need.'
-                        ));
+                        if (!byLine) {
+                            resolve(fail(
+                                `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to read whole. `
+                                + 'Give offset and limit to read a stretch of it by line, or use run_command with '
+                                + 'tail or grep to get the part you need.'
+                            ));
+                            return;
+                        }
+                        // Too big to bring over whole, so it is read as a
+                        // stream and the read stops once the stretch is in.
+                        let stream;
+                        try {
+                            stream = handle.createReadStream(input.path);
+                        } catch (error) {
+                            resolve(fail(`Could not read ${input.path}: ${error.message}`));
+                            return;
+                        }
+                        fileText.streamLines(stream, stretch).then(
+                            slice => resolve(ok(describeSlice(input.path, slice))),
+                            error => resolve(fail(`Could not read ${input.path}: ${error.message}`))
+                        );
                         return;
                     }
+
                     handle.readFile(input.path, (readError, data) => {
                         if (readError) {
                             resolve(fail(`Could not read ${input.path}: ${readError.message}`));
                             return;
                         }
                         const text = data.toString('utf8');
+                        if (byLine) {
+                            resolve(ok(describeSlice(input.path, fileText.sliceLines(text, stretch))));
+                            return;
+                        }
                         const trimmed = text.length > MAX_FILE_BYTES;
                         resolve(ok(
-                            `${input.path}${trimmed ? ' (first part only)' : ''}:\n\n`
+                            `${input.path}${trimmed ? ' (first part only; give offset and limit to read further)' : ''}:\n\n`
                             + (trimmed ? text.slice(0, MAX_FILE_BYTES) : text)
                         ));
                     });
@@ -547,6 +601,83 @@ const TOOLS = [
                         return;
                     }
                     resolve(ok(`Wrote ${Buffer.byteLength(input.content)} bytes to ${input.path}.`));
+                });
+            });
+        },
+    },
+
+    {
+        name: 'edit_file',
+        title: 'Edit a remote file',
+        readOnly: false,
+        description:
+            'Replace one passage of a text file on a session\'s server over SFTP, leaving the rest as it '
+            + 'is. Prefer this to write_file for a change to a file that exists: it is smaller to review '
+            + 'and cannot discard lines you did not see. `old` must match the file exactly, whitespace '
+            + 'included, and exactly once unless `all` is set. Line endings need not match: the file '
+            + 'keeps its own. Read the file first.',
+        // The tool-call event carries `path`, `old` and `new` as they are, so
+        // a card or a row can draw the change as a diff.
+        shape: {
+            session: z.string().optional().describe('Session id. Defaults to the session in front of the user.'),
+            path: z.string().describe('Absolute path of the file.'),
+            old: z.string().min(1).describe('The exact text to replace.'),
+            new: z.string().describe('What it becomes. Empty to delete the passage.'),
+            all: z.boolean().optional().describe('Replace every occurrence rather than requiring exactly one.'),
+        },
+        handler: async (input, ctx) => {
+            const resolved = resolveSession(input, ctx);
+            if (resolved.error) return fail(resolved.error);
+
+            return viaSftp(resolved.sessionId, (handle, resolve) => {
+                handle.stat(input.path, (statError, attrs) => {
+                    if (statError) {
+                        resolve(fail(`Could not read ${input.path}: ${statError.message}`));
+                        return;
+                    }
+                    if (attrs.size > MAX_FILE_BYTES * 8) {
+                        resolve(fail(
+                            `${input.path} is ${Math.round(attrs.size / 1024)} KB, which is too large to edit in `
+                            + 'place. Use run_command with sed.'
+                        ));
+                        return;
+                    }
+
+                    handle.readFile(input.path, (readError, data) => {
+                        if (readError) {
+                            resolve(fail(`Could not read ${input.path}: ${readError.message}`));
+                            return;
+                        }
+
+                        // Written back as UTF-8, so a file that is not UTF-8
+                        // would come back with bytes changed that nobody
+                        // asked to change. Refused rather than mangled.
+                        const text = data.toString('utf8');
+                        if (fileText.looksBinary(data) || !Buffer.from(text, 'utf8').equals(data)) {
+                            resolve(fail(
+                                `${input.path} is not UTF-8 text, so editing it here would change bytes outside `
+                                + 'the passage. Use run_command with sed instead.'
+                            ));
+                            return;
+                        }
+
+                        const applied = fileText.applyEdit(text, input.old, input.new, { all: Boolean(input.all) });
+                        if (applied.error) {
+                            resolve(fail(`${input.path} was not changed. ${applied.error}`));
+                            return;
+                        }
+
+                        handle.writeFile(input.path, applied.content, { encoding: 'utf8' }, (writeError) => {
+                            if (writeError) {
+                                resolve(fail(`Could not write ${input.path}: ${writeError.message}`));
+                                return;
+                            }
+                            resolve(ok(
+                                `Replaced ${applied.replaced} occurrence${applied.replaced === 1 ? '' : 's'} `
+                                + `in ${input.path}.`
+                            ));
+                        });
+                    });
                 });
             });
         },
