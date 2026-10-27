@@ -7,6 +7,7 @@ const exec = require('./exec');
 const terminalRun = require('./terminal-run');
 const fileText = require('./file-text');
 const snippetConfig = require('../snippet-config');
+const metricTools = require('./metric-tools');
 
 // zod 4 exports both a namespace and a `z` binding depending on how it is
 // reached. Taking either keeps this working whichever the installed build is.
@@ -963,6 +964,22 @@ const TOOLS = [
             return ok({ saved: existing ? 'updated' : 'created', ...publicSnippet(saved) });
         },
     },
+
+    /* -------------------------------------------------------------- *
+     * Live charts: a command watched, its numbers pulled out with the
+     * assistant's own pattern. See metric-tools.js.
+     * -------------------------------------------------------------- */
+    ...metricTools.build({
+        z,
+        ok,
+        fail,
+        resolveSession,
+        // Read at call time: blockedMessage is defined further down.
+        blocked: (name, input, settings) => {
+            const rule = blockedReason(name, input, settings);
+            return rule ? blockedMessage(rule) : '';
+        },
+    }),
 ];
 
 const BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]));
@@ -1133,6 +1150,8 @@ function commandTextFor(toolName, input) {
     // Typing into the terminal reaches the same shell by another door. A list
     // that only covered run_command would be one tool call away from useless.
     if (toolName === 'send_input') return String(input?.text ?? '');
+    // A watched command runs again and again, wherever it runs.
+    if (toolName === 'watch_metric') return String(input?.command ?? '');
     return '';
 }
 
@@ -1220,6 +1239,14 @@ function isAutoApproved(toolName, input, settings) {
         return settings.autoApproveCommands.some(prefix => (
             command === prefix || command.startsWith(`${prefix} `)
         ));
+    }
+
+    // A watched command is judged as the command it is, by the same safe
+    // list, on a server or on this computer as a runtime's own shell is:
+    // what the list waves through once it waves through on repeat
+    // (`cat /proc/loadavg`), and `ping` asks, as it would.
+    if (toolName === 'watch_metric') {
+        return isAutoApproved('run_command', { command: input?.command ?? '' }, settings);
     }
 
     return false;

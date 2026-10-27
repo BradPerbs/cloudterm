@@ -73,6 +73,7 @@ const TITLES = {
     list_snippets: 'assistant.askListSnippets',
     read_snippet: 'assistant.askReadSnippet',
     save_snippet: 'assistant.askSaveSnippet',
+    watch_metric: 'assistant.askWatchMetric',
 };
 
 const SETTLED = {

@@ -5,6 +5,7 @@ import { groupRows } from '../../lib/group-rows';
 import ToolCall from './ToolCall';
 import ToolGroup, { Thought } from './ToolGroup';
 import ApprovalRequest from './ApprovalRequest';
+import LiveMetric from './LiveMetric';
 import { useT } from '../../i18n';
 
 /**
@@ -174,6 +175,8 @@ function RowContent({ item, onRespond }) {
             );
         case 'divider':
             return <Divider item={item} />;
+        case 'metric':
+            return <LiveMetric item={item} />;
         default:
             return <Notice item={item} />;
     }

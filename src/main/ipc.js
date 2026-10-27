@@ -30,6 +30,7 @@ const activity = require('./activity');
 const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const aiWindows = require('./ai/windows');
+const liveMetrics = require('./ai/live-metrics');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -1675,6 +1676,11 @@ function register(getWindow) {
     // asked to.
     handle('ai-approval-response', (event, payload) => assistant.respondToApproval(payload || {}));
     handle('ai-action-response', (event, payload) => assistant.respondToAction(payload || {}));
+
+    // A live chart: the points so far, for a window opening it mid-watch, and
+    // its stop button. The samples themselves arrive on `ai-metric`.
+    handle('ai-metric-snapshot', (event, watchId) => liveMetrics.snapshot(watchId));
+    handle('ai-metric-stop', (event, watchId) => ({ stopped: liveMetrics.stop(String(watchId || ''), 'user') }));
 
     /* ---------------- Assistant: windows of its own ---------------- */
 

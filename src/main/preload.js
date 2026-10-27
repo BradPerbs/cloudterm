@@ -652,6 +652,15 @@ contextBridge.exposeInMainWorld('api', {
         respondToAction: (requestId, result) =>
             ipcRenderer.invoke('ai-action-response', { requestId, ...result }),
 
+        // Live charts (watch_metric). `onMetric` hears `{ conversationId,
+        // watchId, points, stats, unmatched, lastError, ended }` a few times a
+        // second while one runs; `metricSnapshot` is the points so far, for a
+        // chart opened mid-watch (`{ found: false }` once it is gone);
+        // `stopMetric` is its stop button.
+        onMetric: (callback) => subscribe('ai-metric', callback),
+        metricSnapshot: (watchId) => ipcRenderer.invoke('ai-metric-snapshot', watchId),
+        stopMetric: (watchId) => ipcRenderer.invoke('ai-metric-stop', watchId),
+
         // Windows of the assistant's own. `detach` opens one holding these
         // conversations; a window asks `windowTabs` for what it holds and
         // reports changes with `setWindowTabs`; `reattach` hands some or all
