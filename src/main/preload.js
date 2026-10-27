@@ -619,6 +619,15 @@ contextBridge.exposeInMainWorld('api', {
         // conversation can be picked up again from the history menu.
         park: (conversationId) => ipcRenderer.invoke('ai-conversation-park', conversationId),
         close: (conversationId) => ipcRenderer.invoke('ai-conversation-close', conversationId),
+        // The conversation as Markdown: as text for the clipboard, where
+        // `{ full: true }` adds the settings, every tool input and results
+        // untruncated; or saved to a file, where main asks where. `labels` is
+        // the document's words in the app's language, `agents` the runtimes'
+        // names, and `dialogTitle` the save dialog's title.
+        markdown: (conversationId, options) =>
+            ipcRenderer.invoke('ai-conversation-markdown', { conversationId, ...(options || {}) }),
+        exportMarkdown: (conversationId, options) =>
+            ipcRenderer.invoke('ai-conversation-export', { conversationId, ...(options || {}) }),
         // Which servers the panel is pointed at: the session in front, every
         // host, or a pinned set of sessions and saved hosts.
         setScope: (conversationId, target) =>

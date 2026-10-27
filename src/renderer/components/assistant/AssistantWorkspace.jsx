@@ -17,6 +17,7 @@ import { Ring } from './WorkingIndicator';
 import { useT } from '../../i18n';
 import { PANE_HEADER_HEIGHT } from '../../lib/layout';
 import { useAttentionView } from '../../hooks/useAttention';
+import { conversationSections } from '../../lib/conversation-export';
 import {
     FOLLOW,
     GLOBAL,
@@ -640,6 +641,8 @@ export default function AssistantWorkspace({
         // The short list first. The chats can run to twenty and scroll, and
         // the moves between windows should not be at the bottom of that.
         return [
+            // The chat in front, copied or saved as Markdown.
+            ...conversationSections(activeConversationId, t),
             {
                 heading: t('assistant.windows'),
                 value: '',

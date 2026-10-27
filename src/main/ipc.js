@@ -31,6 +31,8 @@ const sessionLog = require('./session-log');
 const assistant = require('./ai');
 const aiWindows = require('./ai/windows');
 const attention = require('./ai/attention');
+const exporter = require('./ai/export');
+const pasted = require('./ai/pasted-secrets');
 const updates = require('./updates');
 const startup = require('./startup');
 const proxy = require('./proxy');
@@ -158,6 +160,27 @@ function readCertificateFile(privateKeyPath) {
     } catch {
         return '';
     }
+}
+
+/**
+ * A conversation and its Markdown, for the two ways of taking it out of the
+ * app, or null when it is gone. Asked for through `history` first, which is
+ * what reads the stored conversations in if nothing has yet. The document's
+ * words and the runtimes' names come from the renderer; the settings are the
+ * ones the full cut reports.
+ */
+function exportConversation(payload, full) {
+    const conversationId = String(payload?.conversationId || '');
+    if (!conversationId || !assistant.history(conversationId).found) return null;
+    const conversation = assistant.get(conversationId);
+    if (!conversation) return null;
+    const markdown = exporter.toMarkdown(conversation, {
+        full,
+        labels: payload?.labels,
+        agents: payload?.agents,
+        settings: assistant.settings.get(),
+    });
+    return { conversation, markdown };
 }
 
 // requestId -> resolve, for host key prompts awaiting a user decision.
@@ -1675,6 +1698,29 @@ function register(getWindow) {
     handle('ai-conversation-history', (event, conversationId) => assistant.history(conversationId));
     handle('ai-conversation-park', (event, conversationId) => assistant.park(conversationId));
     handle('ai-conversation-close', (event, conversationId) => assistant.close(conversationId));
+    // A conversation as Markdown, built from its stored events: as text for
+    // the clipboard, or saved where the user says. See ai/export.js.
+    handle('ai-conversation-markdown', (event, payload) => exportConversation(payload, Boolean(payload?.full))?.markdown || '');
+    handle('ai-conversation-export', async (event, payload) => {
+        const found = exportConversation(payload, false);
+        if (!found) return { success: false, message: 'That conversation is gone' };
+        // The window that asked, so the dialog is over a detached window
+        // rather than the main one behind it.
+        const window = BrowserWindow.fromWebContents(event.sender) || getWindow();
+        const name = exporter.fileName(pasted.scrub(found.conversation.title, found.conversation.secrets));
+        const { canceled, filePath } = await dialog.showSaveDialog(window, {
+            title: String(payload?.dialogTitle || '').slice(0, 200) || undefined,
+            defaultPath: path.join(app.getPath('documents'), name),
+            filters: [{ name: 'Markdown', extensions: ['md'] }],
+        });
+        if (canceled || !filePath) return { success: false, canceled: true };
+        try {
+            fs.writeFileSync(filePath, found.markdown, 'utf8');
+            return { success: true, filePath };
+        } catch (error) {
+            return { success: false, message: error.message };
+        }
+    });
     handle('ai-scope', (event, payload) => assistant.setScope(payload?.conversationId, payload || {}));
     handle('ai-send', (event, payload) =>
         assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.specs));
