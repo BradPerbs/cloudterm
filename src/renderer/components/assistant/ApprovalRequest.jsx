@@ -66,6 +66,13 @@ const TITLES = {
     list_directory: 'assistant.askListDirectory',
     list_hosts: 'assistant.askListHosts',
     list_sessions: 'assistant.askListSessions',
+    edit_file: 'assistant.askEditFile',
+    // Normally drawn by QuestionRequest instead; this is for the rare card
+    // that arrives without the row it belongs to.
+    ask_user: 'assistant.askQuestion',
+    list_snippets: 'assistant.askListSnippets',
+    read_snippet: 'assistant.askReadSnippet',
+    save_snippet: 'assistant.askSaveSnippet',
 };
 
 const SETTLED = {
@@ -241,6 +248,17 @@ export default function ApprovalRequest({ group, sessions = [], onRespond }) {
                             label={summary.mono ? t('assistant.copyCommand') : t('common.copy')}
                             className="absolute right-1 top-1"
                         />
+                    </div>
+                )}
+
+                {/* What the line alone does not say: for an edit, the text it
+                    takes out and the text it puts in, verbatim. Saying yes to
+                    a path without them is not saying yes to the change. */}
+                {summary.detail && (
+                    <div className="rounded-lg px-2.5 py-2 max-h-48 overflow-auto
+                        bg-gray-50 dark:bg-black/30 text-gray-700 dark:text-gray-300
+                        font-jetbrains text-[11px] leading-[1.6] whitespace-pre-wrap break-words">
+                        {summary.detail}
                     </div>
                 )}
 
