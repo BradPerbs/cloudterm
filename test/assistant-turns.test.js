@@ -1,6 +1,7 @@
 /**
  * What goes under a reply, as the conversation layer in `ai/index.js` makes
- * it: the change an edit carries, and how fast a turn wrote its answer.
+ * it: the change an edit carries, how fast a turn wrote its answer, and a new
+ * chat branched from the end of a turn.
  *
  * The events are played through the stub agent's `onEvent`, the road a
  * runtime's events take, so what is checked is the log a panel rebuilds
@@ -117,6 +118,83 @@ async function main() {
         } finally {
             Date.now = realNow;
         }
+    });
+
+    // Two turns, the second with a call still waiting when the branch is made.
+    const first = await started('Which port does it listen on?');
+    first.say({ type: 'text-delta', text: 'Port ' });
+    first.say({ type: 'assistant-text', text: 'Port 80.' });
+    first.say({ type: 'result', costUsd: 0 });
+    const turnOne = first.events().find(event => event.type === 'user-message').at;
+    // Stamps are milliseconds, and a turn is named by its message's.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await assistant.send(first.conversationId, 'Move it to 8080');
+    first.say({ type: 'tool-call', id: 'pending_1', name: 'Bash', rawName: 'Bash', local: true, input: { command: 'sed' } });
+
+    let branchId = '';
+    await check('a branch holds the conversation up to the end of that turn, and nothing after', async () => {
+        const made = assistant.branch(first.conversationId, turnOne);
+        assert.strictEqual(made.success, true, made.message);
+        branchId = made.conversationId;
+        const copied = assistant.history(branchId);
+        assert.deepStrictEqual(
+            copied.events.filter(event => event.type === 'user-message').map(event => event.text),
+            ['Which port does it listen on?'],
+        );
+        assert.ok(copied.events.some(event => event.type === 'assistant-text' && event.text === 'Port 80.'));
+        assert.ok(!copied.events.some(event => event.type === 'text-delta'), 'the stream previews stay behind');
+        assert.strictEqual(copied.title, assistant.history(first.conversationId).title);
+        assert.strictEqual(copied.scope, 'global', 'the copy is about the same servers');
+        assert.strictEqual(copied.busy, false);
+    });
+
+    await check('the source is still there, untouched, with its later turn', async () => {
+        const source = assistant.history(first.conversationId);
+        assert.strictEqual(source.found, true);
+        assert.strictEqual(source.events.filter(event => event.type === 'user-message').length, 2);
+    });
+
+    await check('the branch\'s first message carries what was said, and only the first', async () => {
+        agent.sent = [];
+        const result = await assistant.send(branchId, 'Make it 9090 instead');
+        assert.ok(result.success, result.message);
+        assert.ok(agent.sent[0].includes('<earlier-conversation>'), 'the agent is told what came before');
+        assert.ok(agent.sent[0].includes('Which port does it listen on?'));
+        assert.ok(agent.sent[0].includes('Port 80.'));
+        assert.ok(!agent.sent[0].includes('Move it to 8080'), 'nothing after the branch point');
+        assert.ok(agent.sent[0].trim().endsWith('Make it 9090 instead'), 'the message itself comes last');
+        await assistant.send(branchId, 'Thanks');
+        assert.ok(!agent.sent[1].includes('<earlier-conversation>'));
+    });
+
+    await check('a turn that is not in the conversation cannot be branched from', async () => {
+        assert.strictEqual(assistant.branch(first.conversationId, 12345).success, false);
+        assert.strictEqual(assistant.branch('no-such-conversation', turnOne).success, false);
+    });
+
+    await check('nothing left waiting is copied, and a long past is cut from the front', async () => {
+        const branching = require(path.join(ROOT, 'ai', 'branch'));
+        const copied = branching.copyEvents([
+            { type: 'user-message', text: 'go', at: 1 },
+            { type: 'tool-call', id: 'done', at: 2 },
+            { type: 'tool-result', id: 'done', at: 3 },
+            { type: 'tool-call', id: 'open', at: 4 },
+            { type: 'approval-request', requestId: 'asked', at: 5 },
+            { type: 'turn-changes', turnId: 1, files: [], at: 6 },
+        ], 6, 'source-1');
+        assert.deepStrictEqual(copied.map(event => event.type), ['user-message', 'tool-call', 'tool-result', 'turn-changes']);
+        assert.strictEqual(copied[3].from, 'source-1', 'a copied files card is marked as not the copy\'s own');
+
+        const long = Array.from({ length: 400 }, (unused, index) => ({ type: 'user-message', text: `${index} ${'x'.repeat(300)}` }));
+        const said = branching.carryOver(long);
+        assert.strictEqual(said.length, branching.MAX_CARRY_OVER);
+        assert.ok(said.includes('399 '), 'the newest is kept');
+    });
+
+    await check('what a branch is still to carry survives the app closing', async () => {
+        const archive = require(path.join(ROOT, 'ai', 'archive'));
+        const packed = archive.pack({ id: 'b1', events: [], carryOver: '## User\n\nhello' });
+        assert.strictEqual(archive.unpack(JSON.parse(JSON.stringify(packed)), 'claude-code').carryOver, '## User\n\nhello');
     });
 
     console.log(`\n${passed} passed, ${failed} failed\n`);

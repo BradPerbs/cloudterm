@@ -1016,6 +1016,7 @@ export default {
     'assistant.tokensPerSecond': '{rate} tok/s',
     'assistant.turnRateHint': '生成用时 {seconds} 秒，输出 {tokens} 个 token',
     'assistant.turnRateHintWall': '生成用时 {seconds} 秒，输出 {tokens} 个 token，整轮用时 {wall} 秒',
+    'assistant.branchChat': '从这里开始新对话',
 
     'assistant.send': '发送',
     'assistant.attachImage': '添加图片',

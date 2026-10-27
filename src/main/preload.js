@@ -632,6 +632,11 @@ contextBridge.exposeInMainWorld('api', {
         send: (conversationId, text, images, specs) =>
             ipcRenderer.invoke('ai-send', { conversationId, text, images, specs }),
         interrupt: (conversationId) => ipcRenderer.invoke('ai-interrupt', conversationId),
+        // A new conversation holding this one up to the end of the turn that
+        // `turnId` (its message's stamp) began. Resolves `{ success,
+        // conversationId }` for the panel to open in a tab.
+        branch: (conversationId, turnId) =>
+            ipcRenderer.invoke('ai-conversation-branch', { conversationId, turnId }),
 
         // Every message, tool call and result for a conversation.
         onEvent: (callback) => subscribe('ai-event', callback),

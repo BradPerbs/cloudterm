@@ -200,9 +200,9 @@ function isBlank(item) {
  * Its props are all values or stable callbacks, so it is drawn again only when
  * its own item, or the turn ending on it, changes.
  */
-const Row = memo(function Row({ item, onRespond, endTurnId, endText = '', endRate = null }) {
+const Row = memo(function Row({ item, onRespond, onBranch, endTurnId, endText = '', endRate = null }) {
     if (isBlank(item)) return null;
-    const ends = endTurnId !== undefined && Boolean(endText || endRate);
+    const ends = endTurnId !== undefined && Boolean(endText || endRate || onBranch);
 
     return (
         // Never squeezed by the column it sits in: a flex column would
@@ -211,7 +211,11 @@ const Row = memo(function Row({ item, onRespond, endTurnId, endText = '', endRat
             <RowContent item={item} onRespond={onRespond} />
             {ends && (
                 <div className="mt-1">
-                    <ReplyFooter text={endText} rate={endRate} />
+                    <ReplyFooter
+                        text={endText}
+                        rate={endRate}
+                        onBranch={onBranch ? () => onBranch(endTurnId) : null}
+                    />
                 </div>
             )}
         </div>
@@ -328,6 +332,8 @@ function Transcript({
     busy = false,
     /** Each finished turn's answer rate, by its message's id. */
     turnRates = null,
+    /** Start a new chat from the end of a turn, named by its message's id. */
+    onBranch = null,
 }) {
     const t = useT();
     const items = useGrouped(allItems, groupTools);
@@ -356,7 +362,7 @@ function Transcript({
     const keys = useMemo(() => rowKeys(items), [items]);
     // One object for the props every row shares, so a segment can tell they
     // have not changed with one comparison.
-    const rowProps = useMemo(() => ({ onRespond }), [onRespond]);
+    const rowProps = useMemo(() => ({ onRespond, onBranch }), [onRespond, onBranch]);
 
     const start = Math.min(from, items.length);
     const segments = [];

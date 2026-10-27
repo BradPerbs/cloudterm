@@ -286,6 +286,19 @@ export default function useAssistant({
         for (const approval of group.items) settle(approval.requestId, approved, message, input);
     }, [settle]);
 
+    /**
+     * A new conversation holding this one up to the end of a turn, named by
+     * its message's id. Answers its id, or null with the reason said in the
+     * transcript, the way a send that failed says so.
+     */
+    const branch = useCallback(async (turnId) => {
+        if (!conversationId) return null;
+        const result = await window.api.ai.branch(conversationId, turnId).catch(error => ({ message: error.message }));
+        if (result?.success) return result.conversationId;
+        if (result?.message) dispatch({ type: 'warning', message: result.message, at: Date.now() });
+        return null;
+    }, [conversationId, dispatch]);
+
     /** What the history menu lists. Asked for rather than pushed. */
     const refreshConversations = useCallback(async () => {
         try {
@@ -364,6 +377,7 @@ export default function useAssistant({
         open,
         remove,
         refreshConversations,
+        branch,
     };
 }
 

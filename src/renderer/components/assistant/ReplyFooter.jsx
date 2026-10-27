@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy01Icon, Tick01Icon } from 'hugeicons-react';
+import { Copy01Icon, GitBranchIcon, Tick01Icon } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import { localeTag, useT } from '../../i18n';
 
@@ -12,6 +12,11 @@ import { localeTag, useT } from '../../i18n';
  * there, between tool calls, is narration. Any key the user pasted into the
  * chat is already masked in it: that happens in the main process before the
  * text ever reaches a window.
+ *
+ * New chat from here copies the conversation up to the end of this turn into
+ * a new one, opened in a tab of its own, so a different direction can be
+ * tried without losing this one. The agent there is handed what was said,
+ * since it has no memory of it (see ai/branch.js).
  *
  * The number is how fast the turn wrote its answer, in output tokens per
  * second of the model's own time: tool runs and time spent waiting on an
@@ -49,11 +54,23 @@ function formatRate(tps) {
     return new Intl.NumberFormat(localeTag(), { maximumFractionDigits: tps >= 20 ? 0 : 1 }).format(tps);
 }
 
-export default function ReplyFooter({ text = '', rate = null, children = null }) {
+export default function ReplyFooter({ text = '', rate = null, onBranch = null }) {
     const t = useT();
     const [copied, setCopied] = useState(false);
+    const [branching, setBranching] = useState(false);
     const timer = useRef(0);
     useEffect(() => () => clearTimeout(timer.current), []);
+
+    // Held off while one is being made, so a double click is one new tab.
+    const branch = useCallback(async () => {
+        if (branching || !onBranch) return;
+        setBranching(true);
+        try {
+            await onBranch();
+        } finally {
+            setBranching(false);
+        }
+    }, [branching, onBranch]);
 
     const copy = useCallback(async () => {
         if (!text) return;
@@ -85,7 +102,11 @@ export default function ReplyFooter({ text = '', rate = null, children = null })
                         : <Copy01Icon size={14} strokeWidth={1.75} />}
                 </FooterButton>
             )}
-            {children}
+            {onBranch && (
+                <FooterButton label={t('assistant.branchChat')} onClick={branch} disabled={branching}>
+                    <GitBranchIcon size={14} strokeWidth={1.75} />
+                </FooterButton>
+            )}
             {rate && (
                 <Tooltip
                     label={showWall

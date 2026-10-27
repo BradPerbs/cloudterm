@@ -1177,6 +1177,7 @@ export default {
     'assistant.tokensPerSecond': '{rate} tok/s',
     'assistant.turnRateHint': '{tokens} tokens de saída em {seconds} s de geração',
     'assistant.turnRateHintWall': '{tokens} tokens de saída em {seconds} s de geração, {wall} s no turno inteiro',
+    'assistant.branchChat': 'Nova conversa a partir daqui',
 
     'assistant.send': 'Enviar',
     'assistant.attachImage': 'Adicionar uma imagem',

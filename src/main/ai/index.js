@@ -7,6 +7,7 @@ const { readSpecs, specBlock, stripSpecs } = require('./specs');
 const pasted = require('./pasted-secrets');
 const diff = require('./diff');
 const turnRate = require('./turn-rate');
+const branching = require('./branch');
 const store = require('../store');
 const transcript = require('../transcript');
 const activity = require('../activity');
@@ -1036,6 +1037,12 @@ async function send(conversationId, text, attachments = [], specIds = []) {
         // wrote: the question comes last so it is the thing the model is
         // answering, with everything above it as the material to answer from.
         const parts = [];
+        // A branch's first message carries what was said before it, which
+        // the agent behind the new chat has never seen. See branch.js.
+        if (conversation.carryOver) {
+            parts.push(branching.carryOverBlock(conversation.carryOver));
+            conversation.carryOver = '';
+        }
         if (context !== conversation.lastContext) {
             conversation.lastContext = context;
             parts.push(`<app-context>\n${context}\n</app-context>`);
@@ -1140,6 +1147,33 @@ function history(conversationId) {
         costUsd: conversation.costUsd,
         title: conversation.title,
     };
+}
+
+/**
+ * A new conversation holding this one up to the end of a turn, for "new chat
+ * from here" under a reply. The panel opens it in a tab. See branch.js.
+ */
+function branch(conversationId, turnId) {
+    hydrate();
+
+    const source = conversations.get(conversationId);
+    if (!source) return { success: false, message: 'That conversation is gone' };
+    if (branching.turnEnd(source.events, turnId) < 0) {
+        return { success: false, message: 'That turn is no longer in the conversation' };
+    }
+
+    // Branching from it is using it, and it must not be the conversation the
+    // new one makes room by pushing off the end of the history.
+    source.updatedAt = Date.now();
+    const { conversationId: id } = create({
+        scope: source.scope,
+        sessionId: source.boundSessionId,
+        sessionIds: source.sessionIds,
+        hostIds: source.hostIds,
+    });
+    branching.fill(source, conversations.get(id), turnId);
+    archive.save();
+    return { success: true, conversationId: id };
 }
 
 /**
@@ -1342,4 +1376,5 @@ module.exports = {
     respondToApproval,
     respondToAction,
     settings,
+    branch,
 };

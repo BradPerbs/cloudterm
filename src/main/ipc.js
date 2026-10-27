@@ -1669,6 +1669,10 @@ function register(getWindow) {
     handle('ai-send', (event, payload) =>
         assistant.send(payload?.conversationId, payload?.text, payload?.images, payload?.specs));
     handle('ai-interrupt', (event, conversationId) => assistant.interrupt(conversationId));
+    // "New chat from here": a new conversation holding this one up to the
+    // end of a turn, which the panel opens in a tab. See ai/branch.js.
+    handle('ai-conversation-branch', (event, payload) =>
+        assistant.branch(String(payload?.conversationId || ''), payload?.turnId));
 
     // The two answers the window owes the main process: whether a tool call may
     // go ahead, and whether it managed to open or close the session it was

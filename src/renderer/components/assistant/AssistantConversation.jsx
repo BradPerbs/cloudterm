@@ -197,6 +197,8 @@ export default function AssistantConversation({
     onStatus,
     onOpenSettings,
     onOpenSnippets,
+    /** Open a conversation by id in a tab: one branched from this. */
+    onOpenConversation,
 }) {
     const t = useT();
     const [settings, setSettings] = useState(null);
@@ -407,6 +409,13 @@ export default function AssistantConversation({
 
     const [groupTools] = useGroupToolCalls();
 
+    // "New chat from here", under a reply: the copy opens in a tab of its own.
+    const { branch: branchTurn } = assistant;
+    const branchFrom = useCallback(async (turnId) => {
+        const id = await branchTurn(turnId);
+        if (id) onOpenConversation?.(id);
+    }, [branchTurn, onOpenConversation]);
+
     /** Whether the agent answering can be sent a picture. */
     const canAttach = Boolean(settings && imageProviders.includes(settings.provider));
 
@@ -609,6 +618,7 @@ export default function AssistantConversation({
                     groupTools={groupTools}
                     busy={assistant.busy}
                     turnRates={assistant.turnRates}
+                    onBranch={onOpenConversation ? branchFrom : null}
                 />
 
                 {/* The turn in progress. Replaced by a finished block the

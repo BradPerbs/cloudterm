@@ -1113,6 +1113,7 @@ export default {
     'assistant.tokensPerSecond': '{rate} tok/s',
     'assistant.turnRateHint': '{tokens} token đầu ra trong {seconds} giây tạo',
     'assistant.turnRateHintWall': '{tokens} token đầu ra trong {seconds} giây tạo, cả lượt mất {wall} giây',
+    'assistant.branchChat': 'Cuộc trò chuyện mới từ đây',
 
     'assistant.send': 'Gửi',
     'assistant.attachImage': 'Thêm ảnh',

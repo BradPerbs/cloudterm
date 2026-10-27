@@ -1241,6 +1241,7 @@ export default {
     'assistant.tokensPerSecond': '{rate} ток/с',
     'assistant.turnRateHint': 'Выходных токенов: {tokens}, генерация {seconds} с',
     'assistant.turnRateHintWall': 'Выходных токенов: {tokens}, генерация {seconds} с, весь ход {wall} с',
+    'assistant.branchChat': 'Новый чат отсюда',
 
     'assistant.send': 'Отправить',
     'assistant.attachImage': 'Добавить изображение',
