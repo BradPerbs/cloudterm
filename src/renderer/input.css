@@ -256,6 +256,173 @@ input[type="color"]::-webkit-color-swatch {
     animation: connect-sweep 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
+/* The boot splash -----------------------------------------------------------
+   The window's first face, from index.html, while the bundle loads: the
+   CloudTerm cloud rising into place, with light running across it. Everything
+   that moves is a transform or an opacity, which the compositor runs on its
+   own; the page's main thread is busy parsing the bundle for as long as this
+   is up, and anything that needed it would stand still. The way out is
+   lib/boot-splash.js, once the app has drawn. Only the main window shows it:
+   boot.js sets `booting`. */
+.boot-splash {
+    display: none;
+}
+
+.booting .boot-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: block;
+    /* The light shell's ground (gray-100), so it leaves without a flash. */
+    background-color: #f3f4f6;
+    color: #1f2937;
+    /* The window is frameless and has no title bar yet; it can still be moved. */
+    -webkit-app-region: drag;
+}
+
+.dark.booting .boot-splash {
+    background-color: rgb(var(--app-base));
+    color: #e4e4e7;
+}
+
+/* Following the system: see boot.js for why this is not the `dark` class. */
+@media (prefers-color-scheme: dark) {
+    .booting:not(.boot-light) .boot-splash {
+        background-color: rgb(var(--app-base));
+        color: #e4e4e7;
+    }
+}
+
+/* The logo's own proportions, 159 by 132. */
+.boot-splash-mark {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 96px;
+    height: 80px;
+    margin: -40px 0 0 -48px;
+    animation: boot-splash-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+
+@keyframes boot-splash-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.92);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.boot-splash-float {
+    position: absolute;
+    inset: 0;
+    animation: boot-splash-float 5s cubic-bezier(0.45, 0, 0.55, 1) 0.74s infinite;
+}
+
+@keyframes boot-splash-float {
+
+    0%,
+    100% {
+        transform: none;
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+.boot-splash-logo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* A band of light, cut to the cloud by the same drawing used as a mask. Until
+   the mask has loaded the layer draws nothing at all, so the band can never
+   cross the window as a bare rectangle. */
+.boot-splash-glint {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    -webkit-mask: url('./logoterminal.svg') center / contain no-repeat;
+    mask: url('./logoterminal.svg') center / contain no-repeat;
+}
+
+.boot-splash-glint::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+    transform: translateX(-100%);
+    animation: boot-splash-glint 2.6s cubic-bezier(0.45, 0, 0.25, 1) 0.6s infinite;
+}
+
+@keyframes boot-splash-glint {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    55%,
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Only for a slow start: it fades in once the logo has been up a while, so a
+   quick one never shows it. */
+.boot-splash-track {
+    position: absolute;
+    left: 50%;
+    top: calc(50% + 72px);
+    width: 88px;
+    height: 2px;
+    margin-left: -44px;
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: rgba(127, 127, 127, 0.16);
+    background-color: color-mix(in srgb, currentColor 12%, transparent);
+    animation: boot-splash-fade 0.6s ease 1.4s both;
+}
+
+.boot-splash-sweep {
+    display: block;
+    width: 34%;
+    height: 100%;
+    border-radius: inherit;
+    background-color: #307af0;
+    animation: connect-sweep 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes boot-splash-fade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .boot-splash-mark {
+        animation-name: boot-splash-fade;
+    }
+
+    .boot-splash-float,
+    .boot-splash-glint::before {
+        animation: none;
+    }
+
+    .boot-splash-glint,
+    .boot-splash-track {
+        display: none;
+    }
+}
+
 
 /* The session screen's other faces -----------------------------------------
    A pane with no session up shows one screen, and every surface on it is mixed

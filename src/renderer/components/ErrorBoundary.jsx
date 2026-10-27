@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { dismissBootSplash } from '../lib/boot-splash';
 
 /**
  * The last thing standing between a render error and a blank window.
@@ -28,6 +29,8 @@ class ErrorBoundary extends Component {
         // which the text below cannot.
         console.error('Unhandled render error:', error, info?.componentStack);
         this.setState({ info });
+        // A crash before the app first drew would otherwise sit behind it.
+        dismissBootSplash();
     }
 
     render() {
