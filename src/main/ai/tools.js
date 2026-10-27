@@ -6,6 +6,7 @@ const transcript = require('../transcript');
 const exec = require('./exec');
 const terminalRun = require('./terminal-run');
 const fileText = require('./file-text');
+const snippetConfig = require('../snippet-config');
 
 // zod 4 exports both a namespace and a `z` binding depending on how it is
 // reached. Taking either keeps this working whichever the installed build is.
@@ -212,6 +213,24 @@ function publicHost(host) {
         viaJumpHost: Boolean(host.jumpHostId),
         viaProxy: Boolean(host.proxyId),
         lastConnectedAt: host.lastConnectedAt || 0,
+    };
+}
+
+/** The kinds `snippet-config` stores, in the order its editor offers them. */
+const SNIPPET_KINDS = ['command', 'package', 'spec'];
+
+/** A snippet as a list shows it: what it is, not its text. */
+function publicSnippet(snippet) {
+    return {
+        id: snippet.id,
+        name: snippet.name,
+        kind: snippet.kind,
+        description: snippet.description || '',
+        tags: snippet.tags || [],
+        // Empty means every host.
+        hostIds: snippet.hostIds || [],
+        steps: snippet.kind === 'package' ? (snippet.steps || []).length : undefined,
+        length: snippet.kind === 'package' ? undefined : String(snippet.command || '').length,
     };
 }
 
@@ -787,6 +806,161 @@ const TOOLS = [
             if (reply.parked) return ok(reply.message);
             if (!reply.answered) return fail(reply.message || 'The user did not answer.');
             return ok({ answer: reply.answer, chosen: reply.chosen || undefined });
+        },
+    },
+
+    /* -------------------------------------------------------------- *
+     * The snippet library
+     *
+     * A spec reached the model only when the user remembered to attach it,
+     * so a runbook written for exactly this job sat unread. These let the
+     * model find it, and keep a command or a procedure that worked.
+     * -------------------------------------------------------------- */
+
+    {
+        name: 'list_snippets',
+        title: 'List snippets',
+        readOnly: true,
+        description:
+            'List the user\'s snippets: saved commands, packages of commands run as one series, and '
+            + 'specs. A spec is a document the user wrote for you, such as a runbook, a checklist or house '
+            + 'rules. Check for one before starting a task the user may have written a procedure for. '
+            + 'Returns names and ids; use read_snippet for the text.',
+        shape: {
+            query: z.string().optional().describe('Filter by name, description or tag. Omit to list everything.'),
+            kind: z.enum(SNIPPET_KINDS).optional().describe('Only this kind.'),
+            limit: z.number().int().min(1).max(500).optional().describe('Maximum snippets to return. Defaults to 200.'),
+        },
+        handler: async (input) => {
+            const needle = String(input.query || '').trim().toLowerCase();
+            const found = store.getSnippets()
+                .filter(snippet => !input.kind || snippet.kind === input.kind)
+                .filter(snippet => !needle || [snippet.name, snippet.description, ...(snippet.tags || [])]
+                    .join(' ').toLowerCase().includes(needle));
+            const limit = input.limit || 200;
+            return ok({
+                total: found.length,
+                returned: Math.min(found.length, limit),
+                snippets: found.slice(0, limit).map(publicSnippet),
+            });
+        },
+    },
+
+    {
+        name: 'read_snippet',
+        title: 'Read a snippet',
+        readOnly: true,
+        description:
+            'Read one snippet by id: the command text, the steps of a package, or the whole text of a '
+            + 'spec. A spec is the user\'s own instructions; follow it. A command is something the user '
+            + 'keeps, not something that has run. {{name}} in a command is a field the user fills in when '
+            + 'they use it from the terminal; replace it yourself before running one.',
+        shape: {
+            id: z.string().describe('The snippet id, from list_snippets.'),
+        },
+        handler: async (input) => {
+            const library = store.getSnippets();
+            const snippet = library.find(entry => entry.id === input.id);
+            if (!snippet) {
+                return fail(`There is no snippet with the id "${input.id}". Call list_snippets for the current list.`);
+            }
+
+            // A package is read as what it sends, with any step whose
+            // snippet has since gone named rather than silently dropped.
+            const composed = snippet.kind === 'package' ? snippetConfig.composeSnippet(snippet, library) : null;
+            const text = composed ? composed.text : snippet.command;
+            const fields = snippet.kind === 'spec' ? [] : snippetConfig.placeholdersIn(text);
+
+            return ok({
+                ...publicSnippet(snippet),
+                text,
+                steps: composed
+                    ? composed.steps.map(step => ({ name: step.name || undefined, command: step.command }))
+                    : undefined,
+                chain: snippet.kind === 'package' ? snippet.chain : undefined,
+                missingSteps: composed?.missing?.length ? composed.missing : undefined,
+                fields: fields.length ? fields : undefined,
+                runImmediately: snippet.runImmediately || undefined,
+            });
+        },
+    },
+
+    {
+        name: 'save_snippet',
+        title: 'Save a snippet',
+        readOnly: false,
+        description:
+            'Create or update one of the user\'s snippets: a command worth keeping, a package of commands '
+            + 'run as one series, or a spec, which is a document such as a runbook or a procedure you '
+            + 'worked out. Commands and packages are what the user sends from the Snippets button of a '
+            + 'terminal; {{name}} in the text becomes a field they fill in first. Give an id to update one; '
+            + 'omit it to create. Save a procedure as a spec once it has worked, so it can be found next '
+            + 'time. Never put a password, a key or a token in a snippet: the library is synced and backed up.',
+        shape: {
+            id: z.string().optional().describe('The id of the snippet to update. Omit to create a new one.'),
+            name: z.string().min(1).max(snippetConfig.MAX_NAME_LENGTH).optional()
+                .describe('The name. Required when creating.'),
+            kind: z.enum(SNIPPET_KINDS).optional()
+                .describe('"command" for shell text, "package" for a series of steps, "spec" for a document. '
+                    + 'Defaults to command when creating, or package when steps are given.'),
+            text: z.string().optional().describe('The command text, or the document for a spec.'),
+            steps: z.array(z.object({
+                ref: z.string().optional().describe('The id of a command snippet to run as this step.'),
+                command: z.string().optional().describe('Or the command for this step, written here.'),
+            })).min(1).max(snippetConfig.MAX_STEPS).optional()
+                .describe('For a package: its steps in order, replacing the current ones.'),
+            chain: z.boolean().optional()
+                .describe('For a package: stop at the first step that fails (joined with &&) rather than run every step.'),
+            runImmediately: z.boolean().optional()
+                .describe('Press Enter for the user as soon as they pick it, rather than leave it at the prompt.'),
+            description: z.string().max(snippetConfig.MAX_NAME_LENGTH * 4).optional()
+                .describe('One line on what it is for.'),
+            tags: z.array(z.string()).optional().describe('Tags, replacing the current set.'),
+            hostIds: z.array(z.string()).optional()
+                .describe('Ids of the saved hosts it applies to. Empty or omitted means every host.'),
+        },
+        handler: async (input, ctx) => {
+            const library = store.getSnippets();
+            const existing = input.id ? library.find(entry => entry.id === input.id) : null;
+            if (input.id && !existing) {
+                return fail(`There is no snippet with the id "${input.id}". Omit the id to create a new one.`);
+            }
+
+            const kind = input.kind || existing?.kind || (input.steps ? 'package' : 'command');
+            if (kind === 'package' && input.text !== undefined) {
+                return fail('A package is its steps: give them as steps, each a ref to a command snippet or a command.');
+            }
+            if (kind !== 'package' && (input.steps !== undefined || input.chain !== undefined)) {
+                return fail('steps and chain are for a package. Give kind "package", or the command as text.');
+            }
+            if ((input.steps || []).some(step => step.ref && step.command)) {
+                return fail('Each step is either a ref to a snippet or a command, not both.');
+            }
+            // A step that runs another snippet must run a command that exists:
+            // anything else would be a step that silently sends nothing.
+            const unknown = (input.steps || []).find(step => step.ref
+                && library.find(entry => entry.id === step.ref)?.kind !== 'command');
+            if (unknown) return fail(`There is no command snippet with the id "${unknown.ref}" to use as a step.`);
+
+            const record = snippetConfig.normalizeSnippet({
+                ...(existing || {}),
+                ...(input.name !== undefined ? { name: input.name } : {}),
+                kind,
+                ...(input.text !== undefined ? { command: input.text } : {}),
+                ...(input.steps !== undefined ? { steps: input.steps } : {}),
+                ...(input.chain !== undefined ? { chain: input.chain } : {}),
+                ...(input.runImmediately !== undefined ? { runImmediately: input.runImmediately } : {}),
+                ...(input.description !== undefined ? { description: input.description } : {}),
+                ...(input.tags !== undefined ? { tags: input.tags } : {}),
+                ...(input.hostIds !== undefined ? { hostIds: input.hostIds } : {}),
+            });
+            const problem = snippetConfig.validateSnippet(record);
+            if (problem) return fail(problem);
+
+            const saved = store.saveSnippet(record);
+            // The palettes in open windows cache the library; tell them.
+            ctx?.snippetsChanged?.();
+            return ok({ saved: existing ? 'updated' : 'created', ...publicSnippet(saved) });
         },
     },
 ];

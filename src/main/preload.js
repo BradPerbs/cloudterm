@@ -140,6 +140,8 @@ contextBridge.exposeInMainWorld('api', {
         list: () => ipcRenderer.invoke('get-snippets'),
         save: (snippet) => ipcRenderer.invoke('save-snippet', snippet),
         remove: (snippetId) => ipcRenderer.invoke('delete-snippet', snippetId),
+        // The library changed outside this window: the assistant saved one.
+        onChanged: (callback) => subscribe('snippets-changed', callback),
     },
 
     /**

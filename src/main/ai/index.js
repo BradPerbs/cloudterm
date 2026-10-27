@@ -767,6 +767,9 @@ function ensureProvider(conversation) {
             sessionAction: (payload) => requestAction(conversation, payload),
             // A question to the person, answered on a card. See requestQuestion.
             askUser: (payload) => requestQuestion(conversation, payload || {}),
+            // The model saved a snippet. Every window caches the library, so
+            // each is told to read it again.
+            snippetsChanged: () => notify('snippets-changed', {}),
         }),
         requestApproval: (request) => requestApproval(conversation, request),
         onEvent: (event) => handleProviderEvent(conversation, event),

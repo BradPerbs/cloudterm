@@ -35,12 +35,25 @@ async function reload() {
     }
 }
 
+/**
+ * Main says when the library changed under this window, which happens when the
+ * assistant saves a snippet. Subscribed once for the page, like the cache.
+ */
+let watching = false;
+
+function watch() {
+    if (watching || !window.api?.snippets?.onChanged) return;
+    watching = true;
+    window.api.snippets.onChanged(() => { reload(); });
+}
+
 export function useSnippets() {
     const [snippets, setSnippets] = useState(() => cache || []);
     const [loading, setLoading] = useState(() => cache === null);
 
     useEffect(() => {
         listeners.add(setSnippets);
+        watch();
 
         // One fetch for the first hook to mount; later ones read the cache and
         // are kept current by the same publish.
