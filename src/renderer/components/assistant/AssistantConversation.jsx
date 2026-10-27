@@ -6,6 +6,7 @@ import {
     StopCircleIcon,
     ImageAdd01Icon,
     Note01Icon,
+    Attachment01Icon,
 } from 'hugeicons-react';
 import Tooltip from '../ui/Tooltip';
 import AgentMark from './AgentMark';
@@ -23,6 +24,9 @@ import ApprovalRequest from './ApprovalRequest';
 import QuestionRequest from './QuestionRequest';
 import ModelMenu from './ModelMenu';
 import ApprovalMenu from './ApprovalMenu';
+import AttachmentChips from './AttachmentChips';
+import DropOverlay, { useFileDrop } from './DropZone';
+import useComposerFiles from '../../hooks/useComposerFiles';
 import { useT } from '../../i18n';
 import { groupApprovals } from '../../lib/approvals';
 import { IMAGE_TYPES, imageFiles, readImage } from '../../lib/images';
@@ -257,6 +261,7 @@ export default function AssistantConversation({
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const fileRef = useRef(null);
+    const docRef = useRef(null);
     const stickToBottom = useRef(true);
 
     // `follow` is resolved against the pane in front here, so what goes over
@@ -417,22 +422,6 @@ export default function AssistantConversation({
      */
     const canAttach = canReadImages(settings, { imageProviders, localImageProviders, catalogs });
 
-    const submit = useCallback(() => {
-        const body = text.trim();
-        if ((!body && images.length === 0 && attached.length === 0) || assistant.busy) return;
-        setText('');
-        setImages([]);
-        setImageNotice('');
-        setSpecIds([]);
-        stickToBottom.current = true;
-        if (inputRef.current) inputRef.current.style.height = 'auto';
-        assistant.send(
-            body,
-            images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
-            attached.map(spec => spec.id),
-        );
-    }, [text, images, attached, assistant]);
-
     /**
      * Take in image files, however they arrived. One at a time, so a handful
      * of screenshots land in the order they were given; a file that cannot be
@@ -455,24 +444,46 @@ export default function AssistantConversation({
         setImages(current => current.filter(image => image.id !== id));
     }, []);
 
-    // Ctrl+V with a picture on the clipboard, which is how a screenshot
-    // arrives nine times out of ten. A text paste is left to the textarea.
+    /**
+     * Documents waiting in the composer, and the one road every file takes
+     * in, picked, dropped or pasted: pictures to `addFiles` above when the
+     * agent can read them, everything else read into words. See
+     * `useComposerFiles`.
+     */
+    const focusInput = useCallback(() => inputRef.current?.focus({ preventScroll: true }), []);
+    const attachments = useComposerFiles({ canAttachImages: canAttach, addImages: addFiles, onSettled: focusInput });
+    const { dragging, dropProps } = useFileDrop(attachments.add);
+
+    const submit = useCallback(() => {
+        const body = text.trim();
+        const files = attachments.files;
+        if ((!body && images.length === 0 && attached.length === 0 && files.length === 0) || assistant.busy) return;
+        setText('');
+        setImages([]);
+        setImageNotice('');
+        setSpecIds([]);
+        attachments.clear();
+        stickToBottom.current = true;
+        if (inputRef.current) inputRef.current.style.height = 'auto';
+        assistant.send(
+            body,
+            images.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
+            attached.map(spec => spec.id),
+            files.map(({ name, mediaType, text: words }) => ({ name, mediaType, text: words })),
+        );
+    }, [text, images, attached, attachments, assistant]);
+
+    // Ctrl+V with a file on the clipboard: a screenshot nine times out of ten,
+    // or a file copied in the file manager. A text paste is left to the
+    // textarea, and so is a picture that came with text, which is what
+    // copying cells out of a spreadsheet puts there.
     const onPaste = (event) => {
-        const files = imageFiles(event.clipboardData);
-        if (!files.length || !canAttach) return;
+        const files = Array.from(event.clipboardData?.files || []);
+        if (!files.length) return;
+        const pictures = imageFiles(event.clipboardData);
+        if (pictures.length === files.length && event.clipboardData.getData('text/plain')) return;
         event.preventDefault();
-        addFiles(files);
-    };
-
-    const onDrop = (event) => {
-        const files = imageFiles(event.dataTransfer);
-        if (!files.length || !canAttach) return;
-        event.preventDefault();
-        addFiles(files);
-    };
-
-    const onDragOver = (event) => {
-        if (canAttach && event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+        attachments.add(files);
     };
 
     const onKeyDown = (event) => {
@@ -489,6 +500,8 @@ export default function AssistantConversation({
     );
 
     const empty = assistant.items.length === 0 && !assistant.starting && !assistant.failure;
+    /** Whether there is anything to send: words, or something going with them. */
+    const hasDraft = Boolean(text.trim() || images.length > 0 || attached.length > 0 || attachments.files.length > 0);
     const quickPrompts = settings?.quickPrompts || [];
 
     /**
@@ -500,7 +513,13 @@ export default function AssistantConversation({
     const asking = useMemo(() => groupApprovals(assistant.items), [assistant.items]);
 
     return (
-        <>
+        // The whole conversation takes a dropped file, not only the box: a
+        // file is dropped wherever the pointer happens to be over the panel.
+        // Laid out exactly as the column it sits in, which it replaces as the
+        // frame of the three parts below.
+        <div className="relative flex-1 min-h-0 flex flex-col" {...dropProps}>
+            {dragging && <DropOverlay />}
+
             {/* No header of its own: the tab strip above is the one row of
                 chrome, and which servers this tab is about is a chip on the
                 composer, beside the other things that shape the next
@@ -703,8 +722,6 @@ export default function AssistantConversation({
                     className="rounded-2xl transition-colors
                         border border-gray-300 dark:border-surface-control
                         focus-within:border-gray-400 dark:focus-within:border-neutral-600"
-                    onDrop={onDrop}
-                    onDragOver={onDragOver}
                 >
                     {/* The specs going with the message, as chips. Each can be
                         taken back until it is sent; the menu below toggles the
@@ -769,6 +786,13 @@ export default function AssistantConversation({
                             {imageNotice}
                         </div>
                     )}
+                    {/* Documents going with the message, as words. */}
+                    <AttachmentChips files={attachments.files} onRemove={attachments.remove} />
+                    {attachments.notice && (
+                        <div className="px-3 pt-2 text-xs text-amber-600 dark:text-amber-400">
+                            {attachments.notice}
+                        </div>
+                    )}
                     <textarea
                         ref={inputRef}
                         rows={1}
@@ -803,6 +827,36 @@ export default function AssistantConversation({
                             onToggle={toggleSpec}
                             onCreate={onOpenSnippets}
                         />
+
+                        {/* Any file off the disk: pictures go as pictures where
+                            the agent reads them, everything else as words,
+                            which every agent reads. Drop and paste take the
+                            same road. */}
+                        <input
+                            ref={docRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(event) => {
+                                attachments.add(Array.from(event.target.files || []));
+                                event.target.value = '';
+                            }}
+                        />
+                        <Tooltip label={t('assistant.attachFile')} hint={t('assistant.attachFileHint')} placement="top">
+                            <button
+                                type="button"
+                                aria-label={t('assistant.attachFile')}
+                                onClick={() => docRef.current?.click()}
+                                className={`w-7 h-7 shrink-0 flex items-center justify-center
+                                    rounded-full transition-colors
+                                    ${attachments.files.length > 0
+                                        ? 'bg-gray-100 dark:bg-surface-control text-gray-700 dark:text-gray-200'
+                                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-surface-control '
+                                            + 'hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                                <Attachment01Icon size={15} strokeWidth={2} />
+                            </button>
+                        </Tooltip>
 
                         {/* The picker, for the agents that can read a picture.
                             Paste and drop work without it; this is for the
@@ -875,7 +929,7 @@ export default function AssistantConversation({
                                         <StopCircleIcon size={15} strokeWidth={2} />
                                     </button>
                                 </Tooltip>
-                            ) : (text.trim() || images.length > 0 || attached.length > 0) ? (
+                            ) : hasDraft ? (
                                 <Tooltip label={t('assistant.send')} hint="Enter" placement="top">
                                     <button
                                         type="button"
@@ -894,6 +948,6 @@ export default function AssistantConversation({
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 }

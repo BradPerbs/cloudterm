@@ -8,7 +8,7 @@
  *
  * The items it makes, by `kind`:
  *
- *   user       `{ id, text, images, specs }`: what the user sent.
+ *   user       `{ id, text, images, specs, files }`: what the user sent.
  *   assistant  `{ id, text, thinking }`: a finished block of the reply, with
  *              the thinking that came before it. Either half can be empty.
  *   tool       `{ id, name, local, question, input, status, result, isError,
@@ -121,6 +121,8 @@ function step(state, event, owned) {
                 text: event.text,
                 images: event.images || [],
                 specs: event.specs || [],
+                // Documents by name: their words went to the agent only.
+                files: event.files || [],
             });
             busy = true;
             draft = emptyDraft();

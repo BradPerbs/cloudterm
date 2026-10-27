@@ -5,6 +5,7 @@ const archive = require('./archive');
 const { readImages } = require('./images');
 const { imageRefusal } = require('./image-gate');
 const { readSpecs, specBlock, stripSpecs } = require('./specs');
+const { readFiles, fileBlock, stripFiles } = require('./attachments');
 const pasted = require('./pasted-secrets');
 const store = require('../store');
 const transcript = require('../transcript');
@@ -955,7 +956,7 @@ function summarise(input) {
  * user is exactly the thing that moves while they work. Sending it only on
  * change keeps the cached prefix intact for the turns where nothing moved.
  */
-async function send(conversationId, text, attachments = [], specIds = []) {
+async function send(conversationId, text, attachments = [], specIds = [], attachedFiles = []) {
     hydrate();
 
     const conversation = conversations.get(conversationId);
@@ -964,6 +965,10 @@ async function send(conversationId, text, attachments = [], specIds = []) {
     const body = String(text || '').trim();
     const { images, error } = readImages(attachments);
     if (error) return { success: false, message: error };
+    // Documents arrive already turned into words by the renderer, and are
+    // checked against the same limits here. See `attachments.js`.
+    const { files, error: filesError } = readFiles(attachedFiles);
+    if (filesError) return { success: false, message: filesError };
 
     // Specs are looked up here, against the library as it stands, rather than
     // trusted as text from the renderer. See `specs.js`.
@@ -971,7 +976,7 @@ async function send(conversationId, text, attachments = [], specIds = []) {
     if (attached.error) return { success: false, message: attached.error };
     const { specs } = attached;
 
-    if (!body && images.length === 0 && specs.length === 0) {
+    if (!body && images.length === 0 && specs.length === 0 && files.length === 0) {
         return { success: false, message: 'Nothing to send' };
     }
 
@@ -995,7 +1000,7 @@ async function send(conversationId, text, attachments = [], specIds = []) {
 
     if (!conversation.title) {
         conversation.title = pasted.mask(
-            (body || specs[0]?.name || images[0].name).replace(/\s+/g, ' '),
+            (body || specs[0]?.name || files[0]?.name || images[0]?.name || '').replace(/\s+/g, ' '),
             conversation.secrets
         ).slice(0, 80);
     }
@@ -1007,6 +1012,10 @@ async function send(conversationId, text, attachments = [], specIds = []) {
         text: body,
         ...(images.length ? { images } : {}),
         ...(specs.length ? { specs: stripSpecs(specs) } : {}),
+        // A file by its name only: its words went to the agent with the
+        // message, and a long log kept in the history as well would be the
+        // same log twice.
+        ...(files.length ? { files: stripFiles(files) } : {}),
     });
     conversation.busy = true;
 
@@ -1035,6 +1044,7 @@ async function send(conversationId, text, attachments = [], specIds = []) {
             parts.push(`<app-context>\n${context}\n</app-context>`);
         }
         if (specs.length > 0) parts.push(specBlock(specs));
+        if (files.length > 0) parts.push(fileBlock(files));
         if (body) parts.push(body);
 
         session.send(parts.join('\n\n'), images);
