@@ -177,7 +177,7 @@
         "@vitejs/plugin-react": "^4.2.1",
         "autoprefixer": "^10.4.23",
         "concurrently": "^9.2.1",
-        "electron": "^43.2.0",
+        "electron": "^43.8.10",
         "electron-builder": "^26.15.3",
         "patch-package": "^8.0.1",
         "postcss": "^8.5.6",
